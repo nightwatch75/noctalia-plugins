@@ -1,0 +1,57 @@
+# nnotes — quick notes on the bar. Click the glyph to toggle a floating
+# editor panel on a single notes file, with idle autosave.
+
+id = "nightwatch75/nnotes"
+name = "nnotes"
+version = "0.0.1"
+min_noctalia = "5.0.0"
+author = "nightwatch75"
+license = "MIT"
+tags = ["notes", "editor", "productivity"]
+icon = "notes"
+description = "One-click scratchpad: floating notes panel with autosave."
+
+# Plugin-level settings: shared by the bar widget (tooltip, folder/path
+# actions) and the panel (the file it edits).
+
+[[setting]]
+key = "notes_folder"
+type = "folder"
+label_key = "settings.notes_folder.label"
+description_key = "settings.notes_folder.description"
+
+[[setting]]
+key = "file_name"
+type = "string"
+label_key = "settings.file_name.label"
+description_key = "settings.file_name.description"
+default = "notes.txt"
+
+[[setting]]
+key = "autosave_seconds"
+type = "int"
+label_key = "settings.autosave_seconds.label"
+description_key = "settings.autosave_seconds.description"
+default = 5
+min = 0
+max = 300
+
+[[panel]]
+id = "panel"
+entry = "panel.luau"
+width = 480
+height = 420
+placement = "floating"
+position = "auto"
+open_near_click = true
+
+[[widget]]
+id = "nnotes"
+entry = "nnotes.luau"
+
+  [[widget.setting]]
+  key = "glyph"
+  type = "glyph"
+  label_key = "settings.glyph.label"
+  description_key = "settings.glyph.description"
+  default = "notes"

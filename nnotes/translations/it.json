@@ -1,0 +1,19 @@
+{
+  "title": "nnotes",
+  "tooltip_open": "Note aperte — {path}\nClick per chiudere (salvataggio automatico)",
+  "tooltip_closed": "Note — {path}\nClick per aprire · destro: cartella · centrale: copia percorso",
+  "copied_path": "Percorso delle note copiato negli appunti",
+  "editor_placeholder": "Scrivi le tue note…",
+  "editing": "Modifica in corso…",
+  "saved": "Salvato",
+  "counts": "{words} parole · {chars} caratteri",
+  "save_failed": "Impossibile salvare il file delle note",
+  "settings.notes_folder.label": "Cartella delle note",
+  "settings.notes_folder.description": "Dove risiede il file delle note. Vuoto = ~/Notes.",
+  "settings.file_name.label": "Nome del file",
+  "settings.file_name.description": "Il singolo file di testo modificato dal pannello.",
+  "settings.autosave_seconds.label": "Salvataggio automatico (secondi)",
+  "settings.autosave_seconds.description": "Secondi di inattività prima che le modifiche vengano salvate. 0 salva solo alla chiusura / Ctrl+Invio.",
+  "settings.glyph.label": "Glifo",
+  "settings.glyph.description": "Icona mostrata sulla barra."
+}

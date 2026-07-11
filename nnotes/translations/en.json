@@ -1,0 +1,19 @@
+{
+  "title": "nnotes",
+  "tooltip_open": "Notes open — {path}\nClick to close (autosaved)",
+  "tooltip_closed": "Notes — {path}\nClick to open · right-click: folder · middle-click: copy path",
+  "copied_path": "Notes path copied to clipboard",
+  "editor_placeholder": "Type your notes…",
+  "editing": "Editing…",
+  "saved": "Saved",
+  "counts": "{words} words · {chars} chars",
+  "save_failed": "Could not save the notes file",
+  "settings.notes_folder.label": "Notes folder",
+  "settings.notes_folder.description": "Where the notes file lives. Defaults to ~/Notes when empty.",
+  "settings.file_name.label": "File name",
+  "settings.file_name.description": "Single text file the panel edits.",
+  "settings.autosave_seconds.label": "Autosave (seconds)",
+  "settings.autosave_seconds.description": "Idle seconds before unsaved changes are written. 0 saves only on close / Ctrl+Enter.",
+  "settings.glyph.label": "Glyph",
+  "settings.glyph.description": "Icon shown on the bar."
+}
