@@ -1,0 +1,39 @@
+# This file is auto-generated. Do not edit manually.
+# Do not include it in your commit.
+# Official Noctalia plugins catalog.
+# Index of every plugin this source ships — the minimum needed to render, search,
+# and compat-check the list. The per-plugin plugin.toml stays authoritative; the
+# host re-reads it on enable. Keep one [[plugin]] row per plugin subdirectory.
+
+[[plugin]]
+id = "nightwatch75/dns-switcher"
+name = "DNS Switcher"
+version = "0.0.1"
+author = "nightwatch75"
+license = "MIT"
+icon = "world"
+description = "Switch the system DNS between Google, Cloudflare, OpenDNS, AdGuard, Quad9, custom servers, or the ISP default, from a bar panel (NetworkManager)."
+min_noctalia = "5.0.0"
+tags = ["network", "dns", "bar"]
+
+[[plugin]]
+id = "nightwatch75/file-search"
+name = "File Search"
+version = "0.0.1"
+author = "nightwatch75"
+license = "MIT"
+icon = "search"
+description = "Search files and folders as you type, fuzzy-matched with fzf; open results with the system MIME association."
+min_noctalia = "5.0.0"
+tags = ["search", "files", "fzf", "bar"]
+
+[[plugin]]
+id = "nightwatch75/nnotes"
+name = "nnotes"
+version = "0.0.1"
+author = "nightwatch75"
+license = "MIT"
+icon = "notes"
+description = "One-click scratchpad: floating notes panel with autosave."
+min_noctalia = "5.0.0"
+tags = ["notes", "editor", "productivity"]
