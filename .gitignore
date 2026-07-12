@@ -1,2 +1,5 @@
 # Claude Code local session data (permissions, personal settings)
 .claude/
+
+# Thumbnail SVG sources (local only — rendered to <plugin>/thumbnail.webp)
+assets/
