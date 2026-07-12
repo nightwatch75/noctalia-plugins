@@ -23,6 +23,10 @@ open in your file manager.
 - `Enter` opens the top match; every result row opens on click via the
   system MIME association — files in their default app, folders in the file
   manager
+- Launcher provider for a keyboard-first flow: type `/fs <text>` in the
+  noctalia launcher and navigate the results with the native arrow keys +
+  `Enter` (plugin panels cannot receive arrow keys in the current Luau API,
+  so the launcher is the keyboard way to browse results)
 - Folder results are marked with a trailing `/` and a folder glyph
 - Index rebuilds automatically when the relevant settings change, and on
   demand via the panel's refresh button (external file changes are picked up
@@ -66,10 +70,23 @@ Settings → Bar. Plugin options live in Settings → Plugins.
 
 ## Keys
 
+In the panel:
+
 | Key     | Action                              |
 |---------|-------------------------------------|
 | `Enter` | Open the top match                  |
 | `Esc`   | Close the panel (noctalia default)  |
+
+In the noctalia launcher (keyboard-first flow, native navigation):
+
+| Key         | Action                                    |
+|-------------|-------------------------------------------|
+| `/fs <text>`| Fuzzy search files and folders            |
+| `↑` / `↓`   | Move through the results                  |
+| `Enter`     | Open the selected result (MIME/xdg-open)  |
+
+With an empty `/fs` query the list also offers *Rebuild search index*; the
+index is shared with the panel and built on demand when missing.
 
 The panel can also be driven externally:
 

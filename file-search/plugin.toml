@@ -6,7 +6,7 @@
 
 id = "nightwatch75/file-search"
 name = "File Search"
-version = "0.0.1"
+version = "0.0.2"
 min_noctalia = "5.0.0"
 author = "nightwatch75"
 license = "MIT"
@@ -45,6 +45,15 @@ description_key = "settings.max_results.description"
 default = 50
 min = 10
 max = 200
+
+# Keyboard-first flow: the noctalia launcher provides native arrows + Enter
+# navigation, which plugin panels cannot receive from the current Luau API.
+[[launcher_provider]]
+id = "launcher"
+entry = "launcher.luau"
+prefix = "/fs"
+glyph = "search"
+include_in_global_search = false
 
 [[panel]]
 id = "panel"
