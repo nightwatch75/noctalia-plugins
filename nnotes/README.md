@@ -66,4 +66,4 @@ noctalia msg panel-toggle nightwatch75/nnotes:panel
 
 ## License
 
-MIT — see [LICENSE](LICENSE).
+MIT — see [LICENSE](../LICENSE).

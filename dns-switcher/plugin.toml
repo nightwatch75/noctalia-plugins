@@ -10,6 +10,7 @@ version = "0.0.1"
 min_noctalia = "5.0.0"
 author = "nightwatch75"
 license = "MIT"
+dependencies = ["networkmanager"]
 tags = ["network", "dns", "bar"]
 icon = "world"
 description = "Switch the system DNS between Google, Cloudflare, OpenDNS, AdGuard, Quad9, custom servers, or the ISP default, from a bar panel (NetworkManager)."

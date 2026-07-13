@@ -7,6 +7,7 @@ version = "0.0.1"
 min_noctalia = "5.0.0"
 author = "nightwatch75"
 license = "MIT"
+dependencies = []
 tags = ["notes", "editor", "productivity"]
 icon = "notes"
 description = "One-click scratchpad: floating notes panel with autosave."

@@ -10,6 +10,7 @@ version = "0.0.2"
 min_noctalia = "5.0.0"
 author = "nightwatch75"
 license = "MIT"
+dependencies = ["fzf", "findutils", "xdg-utils"]
 tags = ["search", "files", "fzf", "bar"]
 icon = "search"
 description = "Search files and folders as you type, fuzzy-matched with fzf; open results with the system MIME association."
