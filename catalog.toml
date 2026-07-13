@@ -41,10 +41,10 @@ tags = ["notes", "editor", "productivity"]
 [[plugin]]
 id = "nightwatch75/todo"
 name = "To Do"
-version = "0.0.3"
+version = "0.0.4"
 author = "nightwatch75"
 license = "MIT"
 icon = "checklist"
-description = "A prioritised to-do list in a bar panel: editable tasks with low/medium/important colour chips, a done/to-do toggle that strikes completed text through, and rows kept sorted by priority."
+description = "A prioritised to-do list in a bar panel: editable tasks with low/medium/important colour chips, a done/to-do toggle that strikes completed text through, and ordering that switches between priority-sorted and manual (drag-free ☰ grip reorder)."
 min_noctalia = "5.0.0"
 tags = ["todo", "tasks", "productivity", "bar"]
