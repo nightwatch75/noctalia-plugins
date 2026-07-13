@@ -6,18 +6,21 @@ add tasks with **+**, tick them off (the text is struck through), delete them,
 and set each task's priority. The list is kept sorted by priority and stored as
 a single JSON file; no external commands are run.
 
-| Action                 | Effect                                              |
-|------------------------|-----------------------------------------------------|
-| Left click (bar glyph) | Open/close the To Do panel                          |
-| **+** (panel header)   | Add a new task and start editing it                 |
-| Colour chip (row)      | Cycle the task's priority: important → medium → low |
-| ☐ / ☑ button (row)     | Toggle done/to-do (done tasks are struck through)   |
-| 🗑 button (row)         | Delete the task                                     |
+| Action                       | Effect                                              |
+|-------------------------------|-----------------------------------------------------|
+| Left click (bar glyph)        | Open/close the To Do panel                          |
+| **+** (panel header)          | Add a new task and start typing it                  |
+| Colour chip + word (row)      | Cycle the task's priority: important → medium → low |
+| Click the text, or ✎ (pencil) | Edit the task's text                                |
+| **Enter**, or ✓ (row)         | Commit the edit — the row goes back to a static line |
+| ☐ / ☑ button (row)            | Toggle done/to-do (done tasks are struck through)   |
+| 🗑 button (row)                | Delete the task                                     |
 
 ## Priorities
 
-Each task carries a priority, shown as a small coloured square at the start of
-the row. Click the square to cycle it:
+Each task carries a priority, shown at the start of the row as a small coloured
+square next to its name (**Low** / **Medium** / **Important**). Click the square
+to cycle it:
 
 | Priority  | Colour |
 |-----------|--------|
@@ -25,16 +28,20 @@ the row. Click the square to cycle it:
 | Medium    | amber  |
 | Low       | green  |
 
-Rows are always sorted by priority — important first, then medium, then low —
-keeping, within each group, the order tasks were added.
+Rows are sorted by priority — important first, then medium, then low. Changing
+a task's priority moves it into its new group but keeps its position relative to
+its peers; equal-priority rows are never reshuffled.
 
 ## Editing
 
-An active task is an editable text field: type into it and press **Enter** to
-save immediately, or just keep working (edits are autosaved after a short idle
-pause and on close). Tick a task to complete it — its row turns into a
-struck-through, dimmed line until you un-tick it. The bar glyph's tooltip shows
-how many tasks are still to do.
+Rows are static lines by default. Click a task's text (or its ✎ pencil button)
+to edit it; press **Enter** or the ✓ button to commit back to a static line. A
+new task (**+**) opens straight into edit mode — committing it while still empty
+simply discards it. Edits are also autosaved after a short idle pause and on
+close.
+
+Tick a task (☐ → ☑) to complete it — its text is struck through until you
+un-tick it. The bar glyph's tooltip shows how many tasks are still to do.
 
 ## Storage
 
