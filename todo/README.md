@@ -10,7 +10,7 @@ a single JSON file; no external commands are run.
 |-------------------------------|-----------------------------------------------------|
 | Left click (bar glyph)        | Open/close the To Do panel                          |
 | **+** (panel header)          | Add a new task and start typing it                  |
-| Colour chip + word (row)      | Cycle the task's priority: important → medium → low |
+| Colour chip (row)             | Cycle the task's priority: important → medium → low |
 | Click the text, or ✎ (pencil) | Edit the task's text                                |
 | **Enter**, or ✓ (row)         | Commit the edit — the row goes back to a static line |
 | ☐ / ☑ button (row)            | Toggle done/to-do (done tasks are struck through)   |
@@ -19,8 +19,8 @@ a single JSON file; no external commands are run.
 ## Priorities
 
 Each task carries a priority, shown at the start of the row as a small coloured
-square next to its name (**Low** / **Medium** / **Important**). Click the square
-to cycle it:
+square. Click the square to cycle it. A legend at the foot of the panel maps
+each colour to its category:
 
 | Priority  | Colour |
 |-----------|--------|

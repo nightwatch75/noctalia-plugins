@@ -41,7 +41,7 @@ tags = ["notes", "editor", "productivity"]
 [[plugin]]
 id = "nightwatch75/todo"
 name = "To Do"
-version = "0.0.2"
+version = "0.0.3"
 author = "nightwatch75"
 license = "MIT"
 icon = "checklist"

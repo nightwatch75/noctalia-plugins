@@ -13,9 +13,9 @@
 --
 -- Interaction: a row is a static line by default. Click its text or the pencil
 -- button to edit; press Enter or the ✓ button to commit back to the static
--- line. The coloured chip (with its priority word) cycles the priority. The
--- ☐/☑ button toggles done, which strikes the text through. No external
--- commands are run.
+-- line. The coloured chip cycles the priority (a legend at the foot of the
+-- panel maps each colour to its category). The ☐/☑ button toggles done, which
+-- strikes the text through. No external commands are run.
 --
 -- The bar widget (todo.luau) lights its glyph while the panel is open via the
 -- shared "todo_open" state; it reads todo.json itself for the pending count.
@@ -256,14 +256,7 @@ local function taskRow(item)
             cyclePriority(id)
         end),
     })
-    local prioWord = ui.label({
-        text = tr("prio_" .. item.priority),
-        color = COLORS[item.priority],
-        fontSize = 11,
-        width = 76,
-    })
-
-    local children = { chip, prioWord }
+    local children = { chip }
 
     if editing then
         table.insert(children, ui.input({
@@ -335,11 +328,28 @@ local function taskRow(item)
     }, children)
 end
 
+-- A footer legend mapping each chip colour to its category.
+local function legendEntry(priority)
+    return ui.row({ gap = 6, align = "center" }, {
+        ui.box({ width = 12, height = 12, radius = 3, fill = COLORS[priority] }),
+        ui.label({ text = tr("prio_" .. priority), fontSize = 11, color = "on_surface_variant" }),
+    })
+end
+
 render = function()
     local header = ui.row({ align = "center", gap = 8 }, {
         ui.label({ text = tr("title"), fontSize = 16, fontWeight = "bold", color = "on_surface", flexGrow = 1 }),
         ui.button({ key = "header-add", glyph = "plus", variant = "primary", onClick = "onAdd" }),
         ui.button({ key = "header-close", glyph = "close", variant = "ghost", onClick = "onClosePanel" }),
+    })
+
+    local legend = ui.column({ gap = 8 }, {
+        ui.separator({}),
+        ui.row({ gap = 16, align = "center", justify = "center" }, {
+            legendEntry("important"),
+            legendEntry("medium"),
+            legendEntry("low"),
+        }),
     })
 
     local body
@@ -355,7 +365,7 @@ render = function()
         body = ui.scroll({ flexGrow = 1, gap = 6 }, rows)
     end
 
-    panel.render(ui.column({ flexGrow = 1, gap = 12, align = "stretch" }, { header, body }))
+    panel.render(ui.column({ flexGrow = 1, gap = 12, align = "stretch" }, { header, body, legend }))
 end
 
 function onOpen(_context)
