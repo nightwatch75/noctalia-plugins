@@ -32,8 +32,13 @@ local function pendingCount()
     if type(decoded) ~= "table" then
         return 0
     end
+    -- Object form { version, sort, tasks }; a legacy plain array is read as-is.
+    local list = decoded.tasks ~= nil and decoded.tasks or decoded
+    if type(list) ~= "table" then
+        return 0
+    end
     local n = 0
-    for _, entry in ipairs(decoded) do
+    for _, entry in ipairs(list) do
         if type(entry) == "table" and entry.done ~= true then
             n += 1
         end

@@ -10,7 +10,9 @@ a single JSON file; no external commands are run.
 |-------------------------------|-----------------------------------------------------|
 | Left click (bar glyph)        | Open/close the To Do panel                          |
 | **+** (panel header)          | Add a new task and start typing it                  |
+| Sort toggle (panel header)    | Switch ordering between **Priority** and **Manual** |
 | Colour chip (row)             | Cycle the task's priority: important → medium → low |
+| ☰ grip (row, manual only)     | Pick the row up / drop the held row here (reorder)  |
 | Click the text, or ✎ (pencil) | Edit the task's text                                |
 | **Enter**, or ✓ (row)         | Commit the edit — the row goes back to a static line |
 | ☐ / ☑ button (row)            | Toggle done/to-do (done tasks are struck through)   |
@@ -28,9 +30,26 @@ each colour to its category:
 | Medium    | amber  |
 | Low       | green  |
 
-Rows are sorted by priority — important first, then medium, then low. Changing
-a task's priority moves it into its new group but keeps its position relative to
-its peers; equal-priority rows are never reshuffled.
+## Ordering
+
+The panel header carries a toggle that switches between two ordering modes; the
+choice is remembered.
+
+- **Priority** (default) — rows are sorted by priority: important first, then
+  medium, then low. Changing a task's priority moves it into its new group but
+  keeps its position relative to its peers; equal-priority rows are never
+  reshuffled. No grips are shown.
+- **Manual** — rows keep the order you give them. Each row grows a ☰ grip on the
+  left; here changing a priority only recolours the chip and never moves the row.
+
+### Reordering in manual mode
+
+The noctalia plugin UI exposes no drag callbacks (only clicks), so the ☰ grip
+reorders with two clicks instead of a drag:
+
+1. Click a row's ☰ grip — it lights up; that row is now "held".
+2. Click another row's ☰ grip — the held row drops in just above it.
+3. Click the held row's own grip again to cancel.
 
 ## Editing
 
@@ -46,9 +65,11 @@ un-tick it. The bar glyph's tooltip shows how many tasks are still to do.
 ## Storage
 
 Tasks live in one file, `todo.json`, inside the configured **To Do folder**
-(default `~/Documents/Todo`). It is a plain JSON array of
-`{ id, text, priority, done }` objects — easy to read, hand-edit, sync, or back
-up. The plugin runs no external programs.
+(default `~/Documents/Todo`). It is a small JSON object,
+`{ "version": 2, "sort": "priority" | "manual", "tasks": [ … ] }`, where `tasks`
+is the array of `{ id, text, priority, done }` objects (in manual order) — easy
+to read, hand-edit, sync, or back up. An older plain-array file is still read
+automatically. The plugin runs no external programs.
 
 ## Settings
 

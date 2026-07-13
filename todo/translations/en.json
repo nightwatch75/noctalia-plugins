@@ -7,6 +7,8 @@
   "prio_low": "Low",
   "prio_medium": "Medium",
   "prio_important": "Important",
+  "sort_priority": "Priority",
+  "sort_manual": "Manual",
   "settings.todo_folder.label": "To Do folder",
   "settings.todo_folder.description": "Folder holding the task list (todo.json). Defaults to ~/Documents/Todo.",
   "settings.glyph.label": "Bar glyph",

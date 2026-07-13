@@ -1,15 +1,24 @@
 --!nonstrict
 -- To Do — a prioritised task list in an attached panel.
 --
--- A task is { id, text, priority, done }. The whole list is persisted as one
--- JSON array in <todo_folder>/todo.json (noctalia.json). Empty (blank-text)
--- tasks are never written: they only exist transiently while being entered.
+-- A task is { id, text, priority, done }. The whole list is persisted to
+-- <todo_folder>/todo.json (noctalia.json) as an object { version, sort, tasks }:
+-- `tasks` is the array (in on-disk = manual order) and `sort` records the
+-- chosen ordering mode. A legacy plain-array file is still read (treated as
+-- manual order, sort defaulting to "priority"). Empty (blank-text) tasks are
+-- never written: they only exist transiently while being entered.
 --
--- Display order: a stable sort by priority (important → medium → low). "Stable"
--- means equal-priority rows keep their current relative order, and `items` is
--- always kept in that display order — so changing a task's priority moves it
--- the minimum needed to satisfy the grouping and never reshuffles its peers by
--- id/name.
+-- Ordering has two modes, switched from a header toggle:
+--   * "priority" — a stable sort by priority (important → medium → low).
+--     "Stable" means equal-priority rows keep their current relative order, so
+--     re-prioritising a row only nudges it into its group and never reshuffles
+--     its peers. No drag handles are shown.
+--   * "manual" — the on-disk array order is used verbatim. A ☰ grip on each row
+--     reorders it (see below); changing a priority only recolours the chip and
+--     never moves the row. Because the noctalia plugin UI exposes no pointer
+--     drag callbacks (only onClick), the grip works as a two-click grab/drop:
+--     click a row's grip to pick it up (it highlights), click another row's
+--     grip to drop the held row just above it, or click the held grip to cancel.
 --
 -- Interaction: a row is a static line by default. Click its text or the pencil
 -- button to edit; press Enter or the ✓ button to commit back to the static
@@ -26,7 +35,7 @@ local COLORS = { important = "#e06c75", medium = "#e5c07b", low = "#98c379" }
 local FILE_NAME = "todo.json"
 local AUTOSAVE_IDLE_TICKS = 2 -- 1s panel ticks with no edits before a flush
 
-local items = {} -- array, kept in display order (stable sort by priority)
+local items = {} -- array, kept in display order (priority sort, or manual)
 local nextId = 1 -- monotonic id source (identity only, not a sort key)
 local folder = ""
 local filePath = ""
@@ -34,6 +43,8 @@ local dirty = false -- unsaved inline text edits
 local idleTicks = 0
 local editingId = nil -- id of the row currently in edit mode (at most one)
 local loaded = false -- guard so an early save() can never truncate the file
+local sortMode = "priority" -- "priority" (auto sort) or "manual" (grip reorder)
+local grabbedId = nil -- id of the row "picked up" by its grip, awaiting a drop
 
 local render
 
@@ -129,11 +140,25 @@ end
 local function load()
     items = {}
     nextId = 1
+    sortMode = "priority"
     local raw = noctalia.readFile(filePath)
     if raw ~= nil and raw ~= "" then
         local decoded = noctalia.json.decode(raw)
+        local list = nil
         if type(decoded) == "table" then
-            for _, entry in ipairs(decoded) do
+            -- Object form { version, sort, tasks }; a legacy plain array has no
+            -- `tasks` key and is read as-is (manual order, priority sort).
+            if decoded.tasks ~= nil then
+                if decoded.sort == "manual" or decoded.sort == "priority" then
+                    sortMode = decoded.sort
+                end
+                list = decoded.tasks
+            else
+                list = decoded
+            end
+        end
+        if type(list) == "table" then
+            for _, entry in ipairs(list) do
                 if type(entry) == "table" then
                     local id = tonumber(entry.id) or nextId
                     table.insert(items, {
@@ -149,7 +174,10 @@ local function load()
             end
         end
     end
-    sortItems()
+    -- Manual mode preserves the on-disk order verbatim; only priority mode sorts.
+    if sortMode == "priority" then
+        sortItems()
+    end
     loaded = true
 end
 
@@ -164,7 +192,7 @@ local function save()
             table.insert(toStore, item)
         end
     end
-    local encoded = noctalia.json.encode(toStore, true)
+    local encoded = noctalia.json.encode({ version = 2, sort = sortMode, tasks = toStore }, true)
     if encoded == nil then
         return
     end
@@ -180,7 +208,9 @@ local function addItem()
     local item = { id = nextId, text = "", priority = "medium", done = false }
     nextId += 1
     table.insert(items, item)
-    sortItems()
+    if sortMode == "priority" then
+        sortItems() -- manual mode leaves the new task at the foot, unshuffled
+    end
     editingId = item.id -- new task opens straight into edit mode
     render()
 end
@@ -189,6 +219,9 @@ local function deleteItem(id)
     removeItem(id)
     if editingId == id then
         editingId = nil
+    end
+    if grabbedId == id then
+        grabbedId = nil
     end
     save()
     render()
@@ -235,15 +268,86 @@ local function cyclePriority(id)
     if item ~= nil then
         -- important → medium → low → important
         item.priority = PRIORITIES[(RANK[item.priority] % #PRIORITIES) + 1]
-        sortItems()
+        -- Only priority mode reorders; manual mode just recolours the chip.
+        if sortMode == "priority" then
+            sortItems()
+        end
         save()
         render()
     end
 end
 
+-- Switch ordering mode. Entering priority mode re-sorts immediately; either way
+-- any half-finished grab is dropped and the choice is persisted.
+local function setSortMode(mode)
+    if mode ~= "manual" and mode ~= "priority" then
+        return
+    end
+    sortMode = mode
+    grabbedId = nil
+    if sortMode == "priority" then
+        sortItems()
+    end
+    save()
+    render()
+end
+
+-- Move the grabbed row to sit just above `targetId` (manual reorder via grips).
+-- A drop onto the held row itself, or onto a vanished target, simply cancels.
+local function dropGrabbedOn(targetId)
+    if grabbedId == nil or grabbedId == targetId then
+        grabbedId = nil
+        render()
+        return
+    end
+    local grabbed = nil
+    for i, item in ipairs(items) do
+        if item.id == grabbedId then
+            grabbed = table.remove(items, i)
+            break
+        end
+    end
+    grabbedId = nil
+    if grabbed == nil then
+        render()
+        return
+    end
+    local targetIndex = #items + 1
+    for i, item in ipairs(items) do
+        if item.id == targetId then
+            targetIndex = i
+            break
+        end
+    end
+    table.insert(items, targetIndex, grabbed)
+    save()
+    render()
+end
+
 local function taskRow(item)
     local id = item.id
     local editing = editingId == id
+    local grabbed = grabbedId == id
+
+    -- Manual mode only: a ☰ grip that "picks up" the row, or drops the held one
+    -- here. Same glyph noctalia's own bar reorder uses ("menu-2"); it lights up
+    -- (primary) while this row is the one being held.
+    local grip = nil
+    if sortMode == "manual" then
+        grip = ui.button({
+            key = "grip-" .. id .. (grabbed and "-on" or ""),
+            glyph = "menu-2",
+            variant = grabbed and "primary" or "ghost",
+            onClick = rowCallback("todoGrip", id, function()
+                if grabbedId == nil then
+                    grabbedId = id
+                    render()
+                else
+                    dropGrabbedOn(id)
+                end
+            end),
+        })
+    end
 
     local chip = ui.box({
         -- priority in the key so the retained box picks up the new fill colour
@@ -256,7 +360,11 @@ local function taskRow(item)
             cyclePriority(id)
         end),
     })
-    local children = { chip }
+    local children = {}
+    if grip ~= nil then
+        table.insert(children, grip)
+    end
+    table.insert(children, chip)
 
     if editing then
         table.insert(children, ui.input({
@@ -321,8 +429,13 @@ local function taskRow(item)
     }))
 
     return ui.row({
-        -- edit/done state flips the row's controls; key it so it recreates cleanly
-        key = "row-" .. id .. (editing and "-edit" or "-view") .. (item.done and "-done" or ""),
+        -- edit/done/mode/grab state flips the row's controls; key it to recreate cleanly
+        key = "row-"
+            .. id
+            .. (editing and "-edit" or "-view")
+            .. (item.done and "-done" or "")
+            .. (sortMode == "manual" and "-m" or "")
+            .. (grabbed and "-grab" or ""),
         gap = 8,
         align = "center",
     }, children)
@@ -337,8 +450,19 @@ local function legendEntry(priority)
 end
 
 render = function()
+    -- Ordering toggle: shows the current mode and flips it. "menu-2" (the grip
+    -- glyph) for manual, "palette" for the colour/priority sort.
+    local sortToggle = ui.button({
+        key = "header-sort-" .. sortMode,
+        glyph = sortMode == "manual" and "menu-2" or "palette",
+        text = sortMode == "manual" and tr("sort_manual") or tr("sort_priority"),
+        variant = "ghost",
+        onClick = "onSortToggle",
+    })
+
     local header = ui.row({ align = "center", gap = 8 }, {
         ui.label({ text = tr("title"), fontSize = 16, fontWeight = "bold", color = "on_surface", flexGrow = 1 }),
+        sortToggle,
         ui.button({ key = "header-add", glyph = "plus", variant = "primary", onClick = "onAdd" }),
         ui.button({ key = "header-close", glyph = "close", variant = "ghost", onClick = "onClosePanel" }),
     })
@@ -377,6 +501,7 @@ function onOpen(_context)
     end
     load()
     editingId = nil
+    grabbedId = nil
     dirty = false
     idleTicks = 0
     panel.setWantsSecondTicks(true)
@@ -386,6 +511,7 @@ end
 
 function onClose()
     editingId = nil
+    grabbedId = nil
     if dirty then
         save()
     end
@@ -400,6 +526,7 @@ function onConfigChanged()
     filePath = folder .. "/" .. FILE_NAME
     noctalia.mkdirAll(folder)
     editingId = nil
+    grabbedId = nil
     load()
     render()
 end
@@ -415,6 +542,10 @@ end
 
 function onAdd()
     addItem()
+end
+
+function onSortToggle()
+    setSortMode(sortMode == "manual" and "priority" or "manual")
 end
 
 function onClosePanel()
