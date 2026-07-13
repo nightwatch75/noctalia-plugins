@@ -1,0 +1,11 @@
+{
+  "title": "To Do",
+  "empty": "No tasks yet — add one with +",
+  "placeholder": "New task…",
+  "tooltip": "To Do — {count} to do",
+  "save_failed": "Failed to save the task list",
+  "settings.todo_folder.label": "To Do folder",
+  "settings.todo_folder.description": "Folder holding the task list (todo.json). Defaults to ~/Documents/Todo.",
+  "settings.glyph.label": "Bar glyph",
+  "settings.glyph.description": "The glyph shown for the To Do widget on the bar."
+}

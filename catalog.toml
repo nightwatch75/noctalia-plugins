@@ -37,3 +37,14 @@ icon = "notes"
 description = "One-click scratchpad: floating notes panel with autosave."
 min_noctalia = "5.0.0"
 tags = ["notes", "editor", "productivity"]
+
+[[plugin]]
+id = "nightwatch75/todo"
+name = "To Do"
+version = "0.0.1"
+author = "nightwatch75"
+license = "MIT"
+icon = "checklist"
+description = "A prioritised to-do list in a bar panel: editable tasks with low/medium/important colour chips, a done/to-do toggle that strikes completed text through, and rows kept sorted by priority."
+min_noctalia = "5.0.0"
+tags = ["todo", "tasks", "productivity", "bar"]
