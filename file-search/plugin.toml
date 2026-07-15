@@ -6,7 +6,7 @@
 
 id = "nightwatch75/file-search"
 name = "File Search"
-version = "0.0.3"
+version = "0.0.4"
 min_noctalia = "5.0.0"
 author = "nightwatch75"
 license = "MIT"
@@ -52,7 +52,7 @@ max = 200
 [[launcher_provider]]
 id = "launcher"
 entry = "launcher.luau"
-prefix = "/fs"
+prefix = "fs"
 glyph = "search"
 include_in_global_search = false
 
