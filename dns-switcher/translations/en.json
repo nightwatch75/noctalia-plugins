@@ -13,6 +13,8 @@
   "tooltip_switching": "Applying the DNS change — a password prompt may appear",
   "applied": "DNS switched to {name}",
   "copied": "DNS servers copied: {ip}",
+  "tip_copy": "Copy the active DNS servers",
+  "tip_close": "Close",
   "err_invalid_ip": "Invalid DNS address: {ip}",
   "err_no_connection": "No active NetworkManager connection",
   "err_auth_dismissed": "Authorization dismissed",

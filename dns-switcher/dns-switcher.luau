@@ -17,7 +17,7 @@ local function tr(key, args)
 end
 
 local function setLabel(text)
-    if barWidget.getConfig("show_label") == false then
+    if noctalia.getConfig("show_label") == false then
         barWidget.setText("")
     else
         barWidget.setText(text)

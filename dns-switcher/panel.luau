@@ -68,7 +68,7 @@ local function statusFooter()
     end
     return ui.row({ gap = 6, align = "center" }, {
         ui.label({ text = caption, fontSize = 11, color = "on_surface_variant", flexGrow = 1 }),
-        ui.button({ glyph = "copy", variant = "ghost", onClick = "onCopyServers" }),
+        ui.button({ glyph = "copy", variant = "ghost", tooltip = tr("tip_copy"), onClick = "onCopyServers" }),
     })
 end
 
@@ -82,7 +82,7 @@ render = function()
                 color = "on_surface",
                 flexGrow = 1,
             }),
-            ui.button({ glyph = "close", variant = "ghost", onClick = "onClosePanel" }),
+            ui.button({ glyph = "close", variant = "ghost", tooltip = tr("tip_close"), onClick = "onClosePanel" }),
         }),
     }
 

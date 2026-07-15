@@ -13,6 +13,8 @@
   "tooltip_switching": "Applicazione del cambio DNS — potrebbe comparire la richiesta password",
   "applied": "DNS impostato su {name}",
   "copied": "Server DNS copiati: {ip}",
+  "tip_copy": "Copia i server DNS attivi",
+  "tip_close": "Chiudi",
   "err_invalid_ip": "Indirizzo DNS non valido: {ip}",
   "err_no_connection": "Nessuna connessione NetworkManager attiva",
   "err_auth_dismissed": "Autorizzazione annullata",
