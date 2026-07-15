@@ -8,43 +8,43 @@
 [[plugin]]
 id = "nightwatch75/dns-switcher"
 name = "DNS Switcher"
-version = "0.0.2"
+version = "0.0.3"
 author = "nightwatch75"
 license = "MIT"
 icon = "world"
 description = "Switch the system DNS between Google, Cloudflare, OpenDNS, AdGuard, Quad9, custom servers, or the ISP default, from a bar panel (NetworkManager)."
 min_noctalia = "5.0.0"
-tags = ["network", "dns", "bar"]
+tags = ["bar", "panel", "service", "network", "privacy"]
 
 [[plugin]]
 id = "nightwatch75/file-search"
 name = "File Search"
-version = "0.0.4"
+version = "0.0.5"
 author = "nightwatch75"
 license = "MIT"
 icon = "search"
 description = "Search files and folders as you type, fuzzy-matched with fzf; open results with the system MIME association."
 min_noctalia = "5.0.0"
-tags = ["search", "files", "fzf", "bar"]
+tags = ["bar", "launcher", "panel", "utility", "productivity"]
 
 [[plugin]]
 id = "nightwatch75/nnotes"
 name = "nnotes"
-version = "0.0.2"
+version = "0.0.3"
 author = "nightwatch75"
 license = "MIT"
 icon = "notes"
 description = "One-click scratchpad: floating notes panel with autosave."
 min_noctalia = "5.0.0"
-tags = ["notes", "editor", "productivity"]
+tags = ["bar", "panel", "productivity"]
 
 [[plugin]]
 id = "nightwatch75/todo"
 name = "To Do"
-version = "0.0.5"
+version = "0.0.6"
 author = "nightwatch75"
 license = "MIT"
 icon = "checklist"
 description = "A prioritised to-do list in a bar panel: editable tasks with low/medium/important colour chips, a done/to-do toggle that strikes completed text through, and ordering that switches between priority-sorted and manual (drag-free ☰ grip reorder)."
 min_noctalia = "5.0.0"
-tags = ["todo", "tasks", "productivity", "bar"]
+tags = ["bar", "panel", "productivity"]
