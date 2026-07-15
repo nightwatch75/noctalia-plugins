@@ -19,7 +19,7 @@ tags = ["network", "dns", "bar"]
 [[plugin]]
 id = "nightwatch75/file-search"
 name = "File Search"
-version = "0.0.3"
+version = "0.0.4"
 author = "nightwatch75"
 license = "MIT"
 icon = "search"
