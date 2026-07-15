@@ -43,27 +43,16 @@ immediately: one `nmcli` profile change pushed onto the live connection with
 
 ## Install
 
-Add the [noctalia-plugins](../) repo as a git source and enable the plugin in
-`~/.config/noctalia/config.toml`:
+Install **DNS Switcher** from Noctalia's plugin store (*Settings → Plugins*),
+then add the widget to a bar from *Settings → Bar*. Plugin options live in
+*Settings → Plugins*.
 
-```toml
-[plugins]
-enabled = ["nightwatch75/dns-switcher"]
+For local development, add your working copy as a path source instead
+(`.luau` edits hot-reload):
 
-[[plugins.source]]
-kind = "git"
-name = "nightwatch75"
-location = "https://github.com/nightwatch75/noctalia-plugins.git"
-```
-
-For local development, point a path source at your working copy instead
-(noctalia hot-reloads `.luau` changes):
-
-```toml
-[[plugins.source]]
-kind = "path"
-name = "dev"
-location = "/path/to/noctalia-plugins"
+```sh
+noctalia msg plugins source add dev path /path/to/plugins
+noctalia msg plugins enable nightwatch75/dns-switcher
 ```
 
 Restart noctalia, then add the **DNS Switcher** widget to a bar from
@@ -127,4 +116,4 @@ apply your usual judgement on shared machines.
 
 ## License
 
-MIT — see [LICENSE](../LICENSE).
+MIT.
