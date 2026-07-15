@@ -6,12 +6,12 @@
 
 id = "nightwatch75/file-search"
 name = "File Search"
-version = "0.0.4"
+version = "0.0.5"
 min_noctalia = "5.0.0"
 author = "nightwatch75"
 license = "MIT"
 dependencies = ["fzf", "findutils", "xdg-utils"]
-tags = ["search", "files", "fzf", "bar"]
+tags = ["bar", "launcher", "panel", "utility", "productivity"]
 icon = "search"
 description = "Search files and folders as you type, fuzzy-matched with fzf; open results with the system MIME association."
 
