@@ -3,12 +3,12 @@
 
 id = "nightwatch75/nnotes"
 name = "nnotes"
-version = "0.0.2"
+version = "0.0.3"
 min_noctalia = "5.0.0"
 author = "nightwatch75"
 license = "MIT"
-dependencies = []
-tags = ["notes", "editor", "productivity"]
+dependencies = ["xdg-utils"]
+tags = ["bar", "panel", "productivity"]
 icon = "notes"
 description = "One-click scratchpad: floating notes panel with autosave."
 

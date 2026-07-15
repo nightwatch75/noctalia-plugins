@@ -20,32 +20,24 @@ Click the bar glyph to toggle a floating editor panel on a single notes file
 - Panel placement (attached/floating), position and open-near-click are the
   standard per-panel settings noctalia exposes in Settings → Plugins
 
+## Requirements
+
+- noctalia ≥ 5.0.0
+- `xdg-open` (`xdg-utils`) — used to open the notes folder in your file
+  manager (right-click on the bar widget, folder button in the panel)
+
 ## Install
 
-noctalia discovers plugins from configured sources. By convention the plugin
-id `nightwatch75/nnotes` maps to the `nnotes/` subdirectory of the source repo.
+Install **nnotes** from Noctalia's plugin store (*Settings → Plugins*), then
+add the widget to a bar from *Settings → Bar*. Plugin options live in
+*Settings → Plugins*.
 
-Add the [noctalia-plugins](../) repo as a git source and enable the plugin in
-`~/.config/noctalia/config.toml`:
+For local development, add your working copy as a path source instead
+(`.luau` edits hot-reload):
 
-```toml
-[plugins]
-enabled = ["nightwatch75/nnotes"]
-
-[[plugins.source]]
-kind = "git"
-name = "nightwatch75"
-location = "https://github.com/nightwatch75/noctalia-plugins.git"
-```
-
-For local development, point a path source at your working copy instead
-(noctalia hot-reloads `.luau` changes):
-
-```toml
-[[plugins.source]]
-kind = "path"
-name = "dev"
-location = "/path/to/noctalia-plugins"
+```sh
+noctalia msg plugins source add dev path /path/to/plugins
+noctalia msg plugins enable nightwatch75/nnotes
 ```
 
 Restart noctalia, then add the **nnotes** widget to a bar from
@@ -66,4 +58,4 @@ noctalia msg panel-toggle nightwatch75/nnotes:panel
 
 ## License
 
-MIT — see [LICENSE](../LICENSE).
+MIT.
