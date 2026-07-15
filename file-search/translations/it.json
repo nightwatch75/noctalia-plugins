@@ -10,6 +10,8 @@
   "err_index": "Impossibile indicizzare la cartella di ricerca",
   "err_no_fzf": "fzf non trovato — installa fzf per usare questo plugin",
   "err_spawn": "Impossibile eseguire il comando di ricerca",
+  "tip_refresh": "Ricostruisci l'indice dei file",
+  "tip_close": "Chiudi",
   "launcher.indexing": "Indicizzazione file…",
   "launcher.no_results": "Nessun risultato",
   "launcher.reindex_title": "Ricostruisci l'indice di ricerca",

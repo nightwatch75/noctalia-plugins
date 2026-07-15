@@ -32,7 +32,7 @@ local function searchRoot()
 end
 
 local function render()
-    barWidget.setGlyph(barWidget.getConfig("glyph"))
+    barWidget.setGlyph(noctalia.getConfig("glyph"))
     local root = searchRoot()
     if open then
         barWidget.setGlyphColor("primary")

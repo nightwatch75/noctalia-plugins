@@ -225,8 +225,8 @@ render = function()
                 color = "on_surface",
                 flexGrow = 1,
             }),
-            ui.button({ glyph = "refresh", variant = "ghost", onClick = "onRefreshIndex" }),
-            ui.button({ glyph = "close", variant = "ghost", onClick = "onClosePanel" }),
+            ui.button({ glyph = "refresh", variant = "ghost", tooltip = tr("tip_refresh"), onClick = "onRefreshIndex" }),
+            ui.button({ glyph = "close", variant = "ghost", tooltip = tr("tip_close"), onClick = "onClosePanel" }),
         }),
         ui.input({
             key = "query-" .. inputRev,

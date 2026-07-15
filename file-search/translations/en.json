@@ -10,6 +10,8 @@
   "err_index": "Failed to index the search folder",
   "err_no_fzf": "fzf not found — install fzf to use this plugin",
   "err_spawn": "Could not run the search command",
+  "tip_refresh": "Rebuild the file index",
+  "tip_close": "Close",
   "launcher.indexing": "Indexing files…",
   "launcher.no_results": "No matches",
   "launcher.reindex_title": "Rebuild search index",
