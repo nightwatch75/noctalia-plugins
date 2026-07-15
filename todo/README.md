@@ -80,34 +80,17 @@ automatically. The plugin runs no external programs.
 
 ## Install
 
-noctalia discovers plugins from configured sources. By convention the plugin
-id `nightwatch75/todo` maps to the `todo/` subdirectory of the source repo.
+Install **To Do** from Noctalia's plugin store (*Settings → Plugins*), then add
+the widget to a bar from *Settings → Bar*. Plugin options live in
+*Settings → Plugins*.
 
-Add the [noctalia-plugins](../) repo as a git source and enable the plugin in
-`~/.config/noctalia/config.toml`:
+For local development, add your working copy as a path source instead
+(`.luau` edits hot-reload):
 
-```toml
-[plugins]
-enabled = ["nightwatch75/todo"]
-
-[[plugins.source]]
-kind = "git"
-name = "nightwatch75"
-location = "https://github.com/nightwatch75/noctalia-plugins.git"
+```sh
+noctalia msg plugins source add dev path /path/to/plugins
+noctalia msg plugins enable nightwatch75/todo
 ```
-
-For local development, point a path source at your working copy instead
-(noctalia hot-reloads `.luau` changes):
-
-```toml
-[[plugins.source]]
-kind = "path"
-name = "dev"
-location = "/path/to/noctalia-plugins"
-```
-
-Restart noctalia, then add the **To Do** widget to a bar from Settings → Bar.
-Plugin options live in Settings → Plugins.
 
 ## Requirements
 
@@ -116,4 +99,4 @@ Plugin options live in Settings → Plugins.
 
 ## License
 
-MIT — see [LICENSE](../LICENSE).
+MIT.
