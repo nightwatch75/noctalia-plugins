@@ -8,7 +8,7 @@
 [[plugin]]
 id = "nightwatch75/dns-switcher"
 name = "DNS Switcher"
-version = "0.0.3"
+version = "0.0.4"
 author = "nightwatch75"
 license = "MIT"
 icon = "world"
@@ -19,7 +19,7 @@ tags = ["bar", "panel", "service", "network", "privacy"]
 [[plugin]]
 id = "nightwatch75/file-search"
 name = "File Search"
-version = "0.0.5"
+version = "0.0.6"
 author = "nightwatch75"
 license = "MIT"
 icon = "search"
