@@ -36,7 +36,7 @@ local function notesFile()
 end
 
 local function render()
-    barWidget.setGlyph(barWidget.getConfig("glyph"))
+    barWidget.setGlyph(noctalia.getConfig("glyph"))
     local file = notesFile()
     if open then
         barWidget.setGlyphColor("primary")

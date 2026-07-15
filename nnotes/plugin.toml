@@ -3,7 +3,7 @@
 
 id = "nightwatch75/nnotes"
 name = "nnotes"
-version = "0.0.1"
+version = "0.0.2"
 min_noctalia = "5.0.0"
 author = "nightwatch75"
 license = "MIT"

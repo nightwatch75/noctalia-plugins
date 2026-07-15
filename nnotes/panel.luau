@@ -67,9 +67,9 @@ render = function()
                 color = "on_surface",
                 flexGrow = 1,
             }),
-            ui.button({ glyph = "folder", variant = "ghost", onClick = "onOpenFolder" }),
-            ui.button({ glyph = "copy", variant = "ghost", onClick = "onCopyPath" }),
-            ui.button({ glyph = "close", variant = "ghost", onClick = "onClosePanel" }),
+            ui.button({ glyph = "folder", variant = "ghost", tooltip = noctalia.tr("tip_folder"), onClick = "onOpenFolder" }),
+            ui.button({ glyph = "copy", variant = "ghost", tooltip = noctalia.tr("tip_copy"), onClick = "onCopyPath" }),
+            ui.button({ glyph = "close", variant = "ghost", tooltip = noctalia.tr("tip_close"), onClick = "onClosePanel" }),
         }),
         ui.input({
             key = "editor-" .. editorRev,
