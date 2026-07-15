@@ -47,7 +47,7 @@ local function pendingCount()
 end
 
 local function render()
-    barWidget.setGlyph(barWidget.getConfig("glyph"))
+    barWidget.setGlyph(noctalia.getConfig("glyph"))
     barWidget.setGlyphColor(open and "primary" or "on_surface")
     barWidget.setTooltip(noctalia.tr("tooltip", { count = pending }))
 end

@@ -24,7 +24,9 @@
 -- button to edit; press Enter or the ✓ button to commit back to the static
 -- line. The coloured chip cycles the priority (a legend at the foot of the
 -- panel maps each colour to its category). The ☐/☑ button toggles done, which
--- strikes the text through. No external commands are run.
+-- strikes the text through. A header trash button deletes every done row after
+-- an inline confirmation strip (confirm/cancel) — the plugin UI has no dialog
+-- primitive. No external commands are run.
 --
 -- The bar widget (todo.luau) lights its glyph while the panel is open via the
 -- shared "todo_open" state; it reads todo.json itself for the pending count.
@@ -45,6 +47,7 @@ local editingId = nil -- id of the row currently in edit mode (at most one)
 local loaded = false -- guard so an early save() can never truncate the file
 local sortMode = "priority" -- "priority" (auto sort) or "manual" (grip reorder)
 local grabbedId = nil -- id of the row "picked up" by its grip, awaiting a drop
+local confirmingClear = false -- header trash pressed, awaiting confirm/cancel
 
 local render
 
@@ -324,6 +327,39 @@ local function dropGrabbedOn(targetId)
     render()
 end
 
+local function doneCount()
+    local n = 0
+    for _, item in ipairs(items) do
+        if item.done then
+            n += 1
+        end
+    end
+    return n
+end
+
+-- Remove every done row (the header trash, after confirmation). Editing or
+-- grab state pointing at a removed row is dropped with it.
+local function clearDone()
+    local kept = {}
+    for _, item in ipairs(items) do
+        if not item.done then
+            table.insert(kept, item)
+        end
+    end
+    if #kept ~= #items then
+        items = kept
+        if editingId ~= nil and findItem(editingId) == nil then
+            editingId = nil
+        end
+        if grabbedId ~= nil and findItem(grabbedId) == nil then
+            grabbedId = nil
+        end
+        save()
+    end
+    confirmingClear = false
+    render()
+end
+
 local function taskRow(item)
     local id = item.id
     local editing = editingId == id
@@ -338,6 +374,7 @@ local function taskRow(item)
             key = "grip-" .. id .. (grabbed and "-on" or ""),
             glyph = "menu-2",
             variant = grabbed and "primary" or "ghost",
+            tooltip = tr(grabbed and "tip_grip_drop" or "tip_grip"),
             onClick = rowCallback("todoGrip", id, function()
                 if grabbedId == nil then
                     grabbedId = id
@@ -386,6 +423,7 @@ local function taskRow(item)
         table.insert(children, ui.button({
             glyph = "check",
             variant = "primary",
+            tooltip = tr("tip_commit"),
             onClick = rowCallback("todoOk", id, function()
                 commitEdit(id, item.text)
             end),
@@ -406,6 +444,7 @@ local function taskRow(item)
         table.insert(children, ui.button({
             glyph = item.done and "square-check" or "square",
             variant = "ghost",
+            tooltip = tr(item.done and "tip_undone" or "tip_done"),
             onClick = rowCallback("todoDone", id, function()
                 toggleDone(id)
             end),
@@ -414,6 +453,7 @@ local function taskRow(item)
         table.insert(children, ui.button({
             glyph = "pencil",
             variant = "ghost",
+            tooltip = tr("tip_edit"),
             onClick = rowCallback("todoPencil", id, function()
                 enterEdit(id)
             end),
@@ -423,6 +463,7 @@ local function taskRow(item)
     table.insert(children, ui.button({
         glyph = "trash",
         variant = "ghost",
+        tooltip = tr("tip_delete"),
         onClick = rowCallback("todoDel", id, function()
             deleteItem(id)
         end),
@@ -457,15 +498,44 @@ render = function()
         glyph = sortMode == "manual" and "menu-2" or "palette",
         text = sortMode == "manual" and tr("sort_manual") or tr("sort_priority"),
         variant = "ghost",
+        tooltip = tr("tip_sort"),
         onClick = "onSortToggle",
     })
+
+    -- With nothing done the trash has nothing to clear; keep it visible but
+    -- disabled, and fold away a confirmation left open while the last done
+    -- row was toggled back.
+    local done = doneCount()
+    if done == 0 then
+        confirmingClear = false
+    end
 
     local header = ui.row({ align = "center", gap = 8 }, {
         ui.label({ text = tr("title"), fontSize = 16, fontWeight = "bold", color = "on_surface", flexGrow = 1 }),
         sortToggle,
-        ui.button({ key = "header-add", glyph = "plus", variant = "primary", onClick = "onAdd" }),
-        ui.button({ key = "header-close", glyph = "close", variant = "ghost", onClick = "onClosePanel" }),
+        ui.button({
+            key = "header-clear-done" .. (done == 0 and "-off" or ""),
+            glyph = "trash",
+            variant = "ghost",
+            enabled = done > 0,
+            tooltip = tr("tip_clear_done"),
+            onClick = "onClearDone",
+        }),
+        ui.button({ key = "header-add", glyph = "plus", variant = "primary", tooltip = tr("tip_add"), onClick = "onAdd" }),
+        ui.button({ key = "header-close", glyph = "close", variant = "ghost", tooltip = tr("tip_close"), onClick = "onClosePanel" }),
     })
+
+    -- Confirmation strip for the header trash: the question plus an explicit
+    -- destructive confirm and a cancel, in place of a modal (the plugin UI has
+    -- no dialog primitive).
+    local confirmStrip = nil
+    if confirmingClear then
+        confirmStrip = ui.row({ key = "confirm-clear", gap = 8, align = "center" }, {
+            ui.label({ text = tr("clear_done_confirm"), color = "on_surface", flexGrow = 1 }),
+            ui.button({ text = tr("clear_done_yes"), variant = "destructive", onClick = "onClearDoneConfirm" }),
+            ui.button({ text = tr("clear_done_no"), variant = "ghost", onClick = "onClearDoneCancel" }),
+        })
+    end
 
     local legend = ui.column({ gap = 8 }, {
         ui.separator({}),
@@ -489,7 +559,13 @@ render = function()
         body = ui.scroll({ flexGrow = 1, gap = 6 }, rows)
     end
 
-    panel.render(ui.column({ flexGrow = 1, gap = 12, align = "stretch" }, { header, body, legend }))
+    local parts = { header }
+    if confirmStrip ~= nil then
+        table.insert(parts, confirmStrip)
+    end
+    table.insert(parts, body)
+    table.insert(parts, legend)
+    panel.render(ui.column({ flexGrow = 1, gap = 12, align = "stretch" }, parts))
 end
 
 function onOpen(_context)
@@ -502,6 +578,7 @@ function onOpen(_context)
     load()
     editingId = nil
     grabbedId = nil
+    confirmingClear = false
     dirty = false
     idleTicks = 0
     panel.setWantsSecondTicks(true)
@@ -512,6 +589,7 @@ end
 function onClose()
     editingId = nil
     grabbedId = nil
+    confirmingClear = false
     if dirty then
         save()
     end
@@ -527,6 +605,7 @@ function onConfigChanged()
     noctalia.mkdirAll(folder)
     editingId = nil
     grabbedId = nil
+    confirmingClear = false
     load()
     render()
 end
@@ -546,6 +625,20 @@ end
 
 function onSortToggle()
     setSortMode(sortMode == "manual" and "priority" or "manual")
+end
+
+function onClearDone()
+    confirmingClear = true
+    render()
+end
+
+function onClearDoneConfirm()
+    clearDone()
+end
+
+function onClearDoneCancel()
+    confirmingClear = false
+    render()
 end
 
 function onClosePanel()
