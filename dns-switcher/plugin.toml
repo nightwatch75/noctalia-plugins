@@ -6,14 +6,14 @@
 
 id = "nightwatch75/dns-switcher"
 name = "DNS Switcher"
-version = "0.0.4"
+version = "0.0.5"
 min_noctalia = "5.0.0"
 author = "nightwatch75"
 license = "MIT"
 dependencies = ["networkmanager"]
 tags = ["bar", "panel", "service", "network", "privacy"]
 icon = "world"
-description = "Switch the system DNS between Google, Cloudflare, OpenDNS, AdGuard, Quad9, custom servers, or the ISP default, from a bar panel (NetworkManager)."
+description = "Switch the system DNS between popular providers, custom servers, or the ISP default (NetworkManager)."
 
 # Plugin-level settings: shared by the widget engine (detection/apply) and
 # the panel (provider list).

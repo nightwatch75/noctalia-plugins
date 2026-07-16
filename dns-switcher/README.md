@@ -10,6 +10,23 @@ panel listing the configured providers — pick one and it is applied
 immediately: one `nmcli` profile change pushed onto the live connection with
 `nmcli device reapply`, so the network never drops or reconnects.
 
+## Plugin
+
+| Field | Value |
+| --- | --- |
+| ID | `nightwatch75/dns-switcher` |
+| Entries | Bar widget: `dns-switcher`; panel: `panel`; service: `service` |
+
+## Usage
+
+Add the `dns-switcher` widget from Noctalia's widget picker and click it to
+open the provider panel — pick a provider and it is applied immediately. You
+can also open the panel directly or bind it in your compositor:
+
+```sh
+noctalia msg panel-toggle nightwatch75/dns-switcher:panel
+```
+
 | Action       | Effect                                        |
 |--------------|-----------------------------------------------|
 | Left click   | Open/close the provider panel                 |
@@ -29,11 +46,33 @@ immediately: one `nmcli` profile change pushed onto the live connection with
 - Live footer in the panel: connection name and active resolver IPs, with a
   copy button
 - Glyph-only mode (*Show provider name* off) for compact bars
-- Scriptable via IPC:
-  `noctalia msg plugin nightwatch75/dns-switcher:service all apply cloudflare`
-  (provider id, `default`, or `custom:<name>`); `… all poll` forces a re-check
 - Singleton service entry: with multiple bars/monitors the engine runs once —
   widgets and panel are pure renderers over its shared state
+
+## Settings
+
+| Setting | Type | Default | Description |
+| --- | --- | --- | --- |
+| `providers` | `string` | `google,cloudflare,opendns,adguard,quad9` | Comma-separated built-in provider ids shown in the panel. Empty = none (custom servers and ISP default only). |
+| `custom_servers` | `string` | *(empty)* | `Name = IP [IP2]` entries separated by `;` or `,`, e.g. `Pi-hole = 192.168.1.5; NextDNS = 45.90.28.0 45.90.30.0`. |
+| `poll_seconds` | `int` | `10` | How often the active DNS is re-read with `nmcli` (2–120). |
+| `privilege_command` | `string` | *(empty)* | Prefix to run `nmcli` changes as root (e.g. `pkexec`, `sudo -n`). Empty runs `nmcli` directly — see *Privileges*. |
+| `show_label` (widget) | `bool` | `true` | Show the provider name next to the glyph (off = glyph only). |
+
+## IPC
+
+Beyond opening the panel, the service entry accepts events:
+
+```sh
+noctalia msg plugin nightwatch75/dns-switcher:service all apply cloudflare
+```
+
+`apply` takes a built-in provider id, `default` (ISP), or `custom:<name>`;
+`poll` forces an immediate re-check of the active DNS:
+
+```sh
+noctalia msg plugin nightwatch75/dns-switcher:service all poll
+```
 
 ## Requirements
 
@@ -54,9 +93,6 @@ For local development, add your working copy as a path source instead
 noctalia msg plugins source add dev path /path/to/plugins
 noctalia msg plugins enable nightwatch75/dns-switcher
 ```
-
-Restart noctalia, then add the **DNS Switcher** widget to a bar from
-Settings → Bar. Plugin options live in Settings → Plugins.
 
 ## How it changes the DNS
 
