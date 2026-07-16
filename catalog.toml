@@ -8,18 +8,18 @@
 [[plugin]]
 id = "nightwatch75/dns-switcher"
 name = "DNS Switcher"
-version = "0.0.4"
+version = "0.0.5"
 author = "nightwatch75"
 license = "MIT"
 icon = "world"
-description = "Switch the system DNS between Google, Cloudflare, OpenDNS, AdGuard, Quad9, custom servers, or the ISP default, from a bar panel (NetworkManager)."
+description = "Switch the system DNS between popular providers, custom servers, or the ISP default (NetworkManager)."
 min_noctalia = "5.0.0"
 tags = ["bar", "panel", "service", "network", "privacy"]
 
 [[plugin]]
 id = "nightwatch75/file-search"
 name = "File Search"
-version = "0.0.6"
+version = "0.0.7"
 author = "nightwatch75"
 license = "MIT"
 icon = "search"
@@ -30,7 +30,7 @@ tags = ["bar", "launcher", "panel", "utility", "productivity"]
 [[plugin]]
 id = "nightwatch75/nnotes"
 name = "nnotes"
-version = "0.0.3"
+version = "0.0.4"
 author = "nightwatch75"
 license = "MIT"
 icon = "notes"
@@ -45,6 +45,6 @@ version = "0.0.7"
 author = "nightwatch75"
 license = "MIT"
 icon = "checklist"
-description = "A prioritised to-do list in a bar panel: editable tasks with low/medium/important colour chips, a done/to-do toggle that strikes completed text through, and ordering that switches between priority-sorted and manual (drag-free ☰ grip reorder)."
+description = "A prioritised task list with a bar widget and editable panel."
 min_noctalia = "5.0.0"
 tags = ["bar", "panel", "productivity"]
