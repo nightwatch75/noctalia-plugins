@@ -6,7 +6,7 @@
 
 id = "nightwatch75/file-search"
 name = "File Search"
-version = "0.0.6"
+version = "0.0.7"
 min_noctalia = "5.0.0"
 author = "nightwatch75"
 license = "MIT"
