@@ -83,9 +83,12 @@ end
 
 -- Overlay every character with U+0336 (combining long stroke) so a plain label
 -- renders struck through — labels/buttons have no line-through prop.
+-- utf8.codes THROWS on invalid UTF-8, and render() would re-raise it on every
+-- frame until the host disables the plugin; utf8.len returns nil instead, so
+-- gate on it and fall back to the plain text (the ☑ still marks it done).
 local function strike(text)
-    if text == "" then
-        return ""
+    if text == "" or utf8.len(text) == nil then
+        return text
     end
     local out = {}
     for _, code in utf8.codes(text) do
