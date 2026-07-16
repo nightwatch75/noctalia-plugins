@@ -6,6 +6,22 @@ add tasks with **+**, tick them off (the text is struck through), delete them,
 and set each task's priority. The list is kept sorted by priority and stored as
 a single JSON file; no external commands are run.
 
+## Plugin
+
+| Field | Value |
+| --- | --- |
+| ID | `nightwatch75/todo` |
+| Entries | Bar widget: `todo`; panel: `panel` |
+
+## Usage
+
+Add the `todo` widget from Noctalia's widget picker and click it to open the
+task panel. You can also open the panel directly or bind it in your compositor:
+
+```sh
+noctalia msg panel-toggle nightwatch75/todo:panel
+```
+
 | Action                       | Effect                                              |
 |-------------------------------|-----------------------------------------------------|
 | Left click (bar glyph)        | Open/close the To Do panel                          |

@@ -15,7 +15,7 @@ license = "MIT"
 dependencies = []
 tags = ["bar", "panel", "productivity"]
 icon = "checklist"
-description = "A prioritised to-do list in a bar panel: editable tasks with low/medium/important colour chips, a done/to-do toggle that strikes completed text through, and ordering that switches between priority-sorted and manual (drag-free ☰ grip reorder)."
+description = "A prioritised task list with a bar widget and editable panel."
 
 # Plugin-level setting: the folder holding the task file, shared by the panel
 # (reads/writes it) and the bar widget (reads it for the pending count).
