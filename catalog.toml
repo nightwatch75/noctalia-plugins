@@ -13,7 +13,7 @@ author = "nightwatch75"
 license = "MIT"
 icon = "world"
 description = "Switch the system DNS between popular providers, custom servers, or the ISP default (NetworkManager)."
-min_noctalia = "5.0.0"
+plugin_api = 3
 tags = ["bar", "panel", "service", "network", "privacy"]
 
 [[plugin]]
@@ -24,7 +24,7 @@ author = "nightwatch75"
 license = "MIT"
 icon = "search"
 description = "Search files and folders as you type, fuzzy-matched with fzf; open results with the system MIME association."
-min_noctalia = "5.0.0"
+plugin_api = 3
 tags = ["bar", "launcher", "panel", "utility", "productivity"]
 
 [[plugin]]
@@ -35,7 +35,7 @@ author = "nightwatch75"
 license = "MIT"
 icon = "notes"
 description = "One-click scratchpad: floating notes panel with autosave."
-min_noctalia = "5.0.0"
+plugin_api = 3
 tags = ["bar", "panel", "productivity"]
 
 [[plugin]]
@@ -46,5 +46,5 @@ author = "nightwatch75"
 license = "MIT"
 icon = "checklist"
 description = "A prioritised task list with a bar widget and editable panel."
-min_noctalia = "5.0.0"
+plugin_api = 3
 tags = ["bar", "panel", "productivity"]
