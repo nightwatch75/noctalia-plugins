@@ -77,7 +77,7 @@ noctalia msg plugin nightwatch75/dns-switcher:service all poll
 ## Requirements
 
 - noctalia ≥ 5.0.0
-- NetworkManager (`nmcli`) with an active connection
+- NetworkManager (`networkmanager`, provides `nmcli`) with an active connection
 - Permission to modify system connections (see *Privileges* below)
 
 ## Install
