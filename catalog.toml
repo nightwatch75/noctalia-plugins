@@ -19,7 +19,7 @@ tags = ["bar", "panel", "service", "network", "privacy"]
 [[plugin]]
 id = "nightwatch75/file-search"
 name = "File Search"
-version = "0.0.8"
+version = "0.0.9"
 author = "nightwatch75"
 license = "MIT"
 icon = "search"
