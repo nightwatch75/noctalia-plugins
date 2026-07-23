@@ -8,12 +8,12 @@
 [[plugin]]
 id = "nightwatch75/dns-switcher"
 name = "DNS Switcher"
-version = "0.0.5"
+version = "0.0.6"
 author = "nightwatch75"
 license = "MIT"
 icon = "world"
 description = "Switch the system DNS between popular providers, custom servers, or the ISP default (NetworkManager)."
-plugin_api = 3
+plugin_api = 6
 tags = ["bar", "panel", "service", "network", "privacy"]
 
 [[plugin]]
