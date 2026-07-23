@@ -82,29 +82,41 @@ local function validDnsSpec(spec)
     return count > 0
 end
 
--- Custom servers setting: "Name = 1.2.3.4 5.6.7.8; Other = 9.9.9.10".
--- Entries split on ';' or ','. Parsed lazily and cached on the raw string,
--- so invalid entries are only logged when the setting actually changes.
-local customCacheRaw = nil
+-- Custom servers setting (string_map, plugin_api >= 6): getConfig returns a
+-- { [name] = "1.2.3.4 5.6.7.8" } table, one or two IPv4 addresses per entry.
+-- Names are sorted for a stable panel order and to build a canonical cache
+-- signature, so invalid specs are only logged when the map actually changes.
+local customCacheSig = nil
 local customCacheList = {}
 local function customProviders()
     local raw = cfg("custom_servers")
-    if type(raw) ~= "string" then
-        raw = ""
+    if type(raw) ~= "table" then
+        raw = {}
     end
-    if raw == customCacheRaw then
+    local names = {}
+    for name in pairs(raw) do
+        if type(name) == "string" and type(raw[name]) == "string" then
+            table.insert(names, name)
+        end
+    end
+    table.sort(names)
+    local sigParts = {}
+    for _, name in ipairs(names) do
+        table.insert(sigParts, name .. "\0" .. raw[name])
+    end
+    local sig = table.concat(sigParts, "\n")
+    if sig == customCacheSig then
         return customCacheList
     end
-    customCacheRaw = raw
+    customCacheSig = sig
     customCacheList = {}
-    for entry in raw:gmatch("[^;,]+") do
-        local name, spec = entry:match("^(.-)=(.*)$")
-        name = name ~= nil and trim(name) or ""
-        spec = spec ~= nil and trim(spec) or ""
-        if name ~= "" and validDnsSpec(spec) then
-            table.insert(customCacheList, { id = "custom:" .. name, label = name, ip = spec, glyph = GLYPH_CUSTOM })
-        elseif trim(entry) ~= "" then
-            noctalia.log("dns-switcher: ignoring invalid custom server entry '" .. trim(entry) .. "'")
+    for _, name in ipairs(names) do
+        local cleanName = trim(name)
+        local spec = trim(raw[name])
+        if cleanName ~= "" and validDnsSpec(spec) then
+            table.insert(customCacheList, { id = "custom:" .. cleanName, label = cleanName, ip = spec, glyph = GLYPH_CUSTOM })
+        elseif cleanName ~= "" then
+            noctalia.log("dns-switcher: ignoring invalid custom server '" .. cleanName .. "' = '" .. spec .. "'")
         end
     end
     return customCacheList

@@ -38,8 +38,8 @@ noctalia msg panel-toggle nightwatch75/dns-switcher:panel
 - Pre-configured providers: Google, Cloudflare, OpenDNS, AdGuard, Quad9
   (pick which ones appear via the *Built-in providers* setting; clear it to
   use only your custom servers)
-- Custom servers via the *Custom servers* setting, separated by `;` or `,`:
-  `Pi-hole = 192.168.1.5; NextDNS = 45.90.28.0 45.90.30.0`
+- Custom servers via the *Custom servers* setting — a name → servers map, e.g.
+  `Pi-hole` → `192.168.1.5`, `NextDNS` → `45.90.28.0 45.90.30.0`
 - Detection reads the connection profile (`ipv4.dns` + `ipv4.ignore-auto-dns`),
   so a manually configured resolver — LAN ones included — shows as its
   provider (or *Custom (ip)*), and DHCP-assigned DNS shows as *Default (ISP)*
@@ -54,7 +54,7 @@ noctalia msg panel-toggle nightwatch75/dns-switcher:panel
 | Setting | Type | Default | Description |
 | --- | --- | --- | --- |
 | `providers` | `string` | `google,cloudflare,opendns,adguard,quad9` | Comma-separated built-in provider ids shown in the panel. Empty = none (custom servers and ISP default only). |
-| `custom_servers` | `string` | *(empty)* | `Name = IP [IP2]` entries separated by `;` or `,`, e.g. `Pi-hole = 192.168.1.5; NextDNS = 45.90.28.0 45.90.30.0`. |
+| `custom_servers` | `string_map` | *(empty)* | A map of name → DNS servers (one or two IPv4 addresses per entry), e.g. `Pi-hole` → `192.168.1.5`, `NextDNS` → `45.90.28.0 45.90.30.0`. Invalid addresses are skipped. |
 | `poll_seconds` | `int` | `10` | How often the active DNS is re-read with `nmcli` (2–120). |
 | `privilege_command` | `string` | *(empty)* | Prefix to run `nmcli` changes as root (e.g. `pkexec`, `sudo -n`). Empty runs `nmcli` directly — see *Privileges*. |
 | `show_label` (widget) | `bool` | `true` | Show the provider name next to the glyph (off = glyph only). |
@@ -76,7 +76,7 @@ noctalia msg plugin nightwatch75/dns-switcher:service all poll
 
 ## Requirements
 
-- noctalia ≥ 5.0.0
+- noctalia with plugin API ≥ 6 (`string_map` settings)
 - NetworkManager (`networkmanager`, provides `nmcli`) with an active connection
 - Permission to modify system connections (see *Privileges* below)
 
@@ -149,6 +149,9 @@ apply your usual judgement on shared machines.
   not touched.
 - Custom server entries accept one or two space-separated IPv4 addresses;
   invalid entries are skipped and logged.
+- The *Custom servers* setting is a `string_map` (plugin API ≥ 6). If you used
+  an earlier version's single-string form, re-enter your servers as name →
+  address entries after updating.
 
 ## License
 

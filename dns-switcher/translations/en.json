@@ -25,7 +25,7 @@
   "settings.providers.label": "Built-in providers",
   "settings.providers.description": "Comma-separated ids included in the click cycle: google, cloudflare, opendns, adguard, quad9. Empty = none (custom servers and ISP default only).",
   "settings.custom_servers.label": "Custom servers",
-  "settings.custom_servers.description": "'Name = IP [IP2]' entries separated by ';' or ',', e.g. 'Pi-hole = 192.168.1.5; NextDNS = 45.90.28.0 45.90.30.0'.",
+  "settings.custom_servers.description": "A map of name → DNS servers (one or two IPv4 addresses per entry). E.g. 'Pi-hole' → '192.168.1.5', 'NextDNS' → '45.90.28.0 45.90.30.0'. Invalid addresses are skipped.",
   "settings.show_label.label": "Show provider name",
   "settings.show_label.description": "Show the provider name next to the glyph (off = glyph only).",
   "settings.poll_seconds.label": "Poll interval (seconds)",

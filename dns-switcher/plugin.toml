@@ -6,8 +6,8 @@
 
 id = "nightwatch75/dns-switcher"
 name = "DNS Switcher"
-version = "0.0.5"
-plugin_api = 3
+version = "0.0.6"
+plugin_api = 6
 author = "nightwatch75"
 license = "MIT"
 dependencies = ["networkmanager"]
@@ -27,10 +27,10 @@ default = "google,cloudflare,opendns,adguard,quad9"
 
 [[setting]]
 key = "custom_servers"
-type = "string"
+type = "string_map"
 label_key = "settings.custom_servers.label"
 description_key = "settings.custom_servers.description"
-default = ""
+default = {}
 
 [[setting]]
 key = "poll_seconds"
