@@ -41,10 +41,10 @@ tags = ["bar", "panel", "productivity"]
 [[plugin]]
 id = "nightwatch75/todo"
 name = "To Do"
-version = "0.0.8"
+version = "0.0.9"
 author = "nightwatch75"
 license = "MIT"
 icon = "checklist"
 description = "A prioritised task list with a bar widget and editable panel."
-plugin_api = 3
+plugin_api = 5
 tags = ["bar", "panel", "productivity"]
