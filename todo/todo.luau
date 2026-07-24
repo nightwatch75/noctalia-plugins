@@ -13,18 +13,37 @@ local FILE_NAME = "todo.json"
 local open = false
 local pending = 0
 
-local function todoFile()
+local function todoDir()
     local dir = noctalia.getConfig("todo_folder")
     if dir == nil or dir == "" then
         dir = noctalia.expandPath("~/Documents/Todo")
     else
         dir = noctalia.expandPath(dir)
     end
-    return (dir:gsub("/+$", "")) .. "/" .. FILE_NAME
+    return (dir:gsub("/+$", ""))
 end
 
+-- Pending (not-done) task count, read straight from disk so it is correct
+-- before the panel is ever opened. Mirrors the panel's two storage backends.
 local function pendingCount()
-    local raw = noctalia.readFile(todoFile())
+    local dir = todoDir()
+    if noctalia.getConfig("storage") == "ical" then
+        -- iCal vdir: count VTODO files that are not completed. Lightweight scan
+        -- (no full parse); skips dotfiles and sync-conflict copies.
+        local n = 0
+        for _, name in ipairs(noctalia.listDir(dir) or {}) do
+            if name:sub(-4) == ".ics" and name:sub(1, 1) ~= "." and not name:find("sync%-conflict") then
+                local raw = noctalia.readFile(dir .. "/" .. name) or ""
+                if raw:find("BEGIN:VTODO", 1, true)
+                    and not raw:upper():find("STATUS:COMPLETED", 1, true)
+                    and not raw:find("PERCENT-COMPLETE:100", 1, true) then
+                    n += 1
+                end
+            end
+        end
+        return n
+    end
+    local raw = noctalia.readFile(dir .. "/" .. FILE_NAME)
     if raw == nil or raw == "" then
         return 0
     end

@@ -3,6 +3,8 @@
   "clear_done_no": "Cancel",
   "clear_done_yes": "Delete",
   "empty": "No tasks yet — add one with +",
+  "mode_ical": "iCal mode",
+  "mode_json": "JSON mode",
   "placeholder": "New task…",
   "prio_important": "Important",
   "prio_low": "Low",
@@ -13,8 +15,16 @@
       "description": "The glyph shown for the To Do widget on the bar.",
       "label": "Bar glyph"
     },
+    "storage": {
+      "description": "How tasks are stored: one JSON file, or one iCalendar (VTODO) file per task for CalDAV-compatible sync (Syncthing, Radicale). Switching format does not migrate existing tasks.",
+      "label": "Storage format",
+      "options": {
+        "ical": "iCalendar files (VTODO)",
+        "json": "Single JSON file"
+      }
+    },
     "todo_folder": {
-      "description": "Folder holding the task list (todo.json). Defaults to ~/Documents/Todo.",
+      "description": "Folder holding the task list. Defaults to ~/Documents/Todo.",
       "label": "To Do folder"
     }
   },
@@ -28,6 +38,7 @@
   "tip_done": "Mark as done",
   "tip_edit": "Edit",
   "tip_grip": "Drag to reorder",
+  "tip_refresh": "Reload from storage",
   "tip_sort": "Switch ordering mode",
   "tip_undone": "Mark as to do",
   "title": "To Do",

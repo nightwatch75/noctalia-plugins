@@ -3,8 +3,9 @@
 A [noctalia](https://github.com/noctalia-dev/noctalia) v5 bar plugin: a
 prioritised to-do list. Click the bar glyph to toggle a panel of task rows —
 add tasks with **+**, tick them off (the text is struck through), delete them,
-and set each task's priority. The list is kept sorted by priority and stored as
-a single JSON file; no external commands are run.
+and set each task's priority. Order tasks by priority or by hand (drag-and-drop),
+and store them as a single JSON file or as iCalendar files for CalDAV-compatible
+sync; no external commands are run.
 
 ## Plugin
 
@@ -27,6 +28,7 @@ noctalia msg panel-toggle nightwatch75/todo:panel
 | Left click (bar glyph)        | Open/close the To Do panel                          |
 | **+** (panel header)          | Add a new task and start typing it                  |
 | Sort toggle (panel header)    | Switch ordering between **Priority** and **Manual** |
+| ↻ refresh (panel header)      | Reload tasks from storage (pick up external changes) |
 | Colour chip (row)             | Cycle the task's priority: important → medium → low |
 | ☰ grip (row, manual only)     | Drag the row to a new position (reorder)            |
 | Click the text, or ✎ (pencil) | Edit the task's text                                |
@@ -81,19 +83,51 @@ un-tick it. The bar glyph's tooltip shows how many tasks are still to do.
 
 ## Storage
 
-Tasks live in one file, `todo.json`, inside the configured **To Do folder**
-(default `~/Documents/Todo`). It is a small JSON object,
-`{ "version": 2, "sort": "priority" | "manual", "tasks": [ … ] }`, where `tasks`
-is the array of `{ id, text, priority, done }` objects (in manual order) — easy
-to read, hand-edit, sync, or back up. An older plain-array file is still read
-automatically. The plugin runs no external programs.
+Tasks live inside the configured **To Do folder** (default `~/Documents/Todo`),
+in one of two formats set by the **Storage format** option. The plugin runs no
+external programs.
+
+### JSON (default)
+
+A single `todo.json`: `{ "version": 2, "sort": "priority" | "manual", "tasks":
+[ … ] }`, where `tasks` is the array of `{ id, text, priority, done }` objects in
+manual order — easy to read, hand-edit, or back up. An older plain-array file is
+still read automatically.
+
+### iCalendar (CalDAV-compatible)
+
+One [iCalendar](https://www.rfc-editor.org/rfc/rfc5545) `VTODO` file per task,
+`<uid>.ics` — the same on-disk layout ("vdir") that Radicale and vdirsyncer use.
+`SUMMARY` is the text, `PRIORITY` is `1`/`5`/`9` for important/medium/low, and
+`STATUS`/`PERCENT-COMPLETE` mark completion. Manual order and the sort mode live
+in a small `.order.json` sidecar (VTODO has no ordering property), so ordering
+is preserved between this plugin's own instances but does not travel over CalDAV.
+Files are written atomically (temp + rename); `*.sync-conflict*` copies left by
+sync tools are ignored, never read or deleted. Switching format does not migrate
+existing tasks.
+
+**Sync across devices.** Point the To Do folder at a directory shared by
+**Syncthing** / Nextcloud / Dropbox: the per-file layout means edits to different
+tasks on different devices merge cleanly, and only the *same* task edited at once
+produces a conflict copy. For **CalDAV apps** (e.g. tasks.org via DAVx⁵ on
+Android) the plain folder is not enough — run a CalDAV server such as
+**Radicale** over the folder (its native storage is exactly this vdir), then sync
+the mobile app against it; **vdirsyncer** can likewise bridge the folder to any
+CalDAV server.
+
+The panel footer shows the active mode (**iCal mode** / **JSON mode**). Use the
+**↻** button in the header to reload from storage — it pulls in tasks that
+arrived from another device while the panel is open (the plugin writes locally;
+pushing to other devices is the CalDAV client's / file-sync tool's job, not the
+plugin's).
 
 ## Settings
 
-| Setting      | What it does                                             |
-|--------------|----------------------------------------------------------|
-| To Do folder | Where `todo.json` is stored (default `~/Documents/Todo`).|
-| Bar glyph    | The glyph shown for the widget on the bar.               |
+| Setting        | What it does                                                    |
+|----------------|-----------------------------------------------------------------|
+| To Do folder   | Where tasks are stored (default `~/Documents/Todo`).            |
+| Storage format | `Single JSON file` (default) or `iCalendar files (VTODO)`.      |
+| Bar glyph      | The glyph shown for the widget on the bar.                      |
 
 ## Install
 
