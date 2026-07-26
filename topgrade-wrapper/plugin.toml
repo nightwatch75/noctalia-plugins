@@ -11,8 +11,8 @@
 
 id = "nightwatch75/topgrade-wrapper"
 name = "Topgrade Wrapper"
-version = "0.0.1"
-plugin_api = 3
+version = "0.0.2"
+plugin_api = 9
 author = "nightwatch75"
 license = "MIT"
 dependencies = ["topgrade"]

@@ -15,7 +15,8 @@ count at a glance without giving up the interactive upgrade.
 
 ## Requirements
 
-Install `topgrade` on `PATH`. A terminal emulator is needed for the update run:
+Noctalia with plugin API 9 or newer (the panel wires its callbacks as closures),
+and `topgrade` on `PATH`. A terminal emulator is needed for the update run:
 the plugin uses Noctalia's own detection (`$TERMINAL`, then `ghostty`, `kitty`,
 `alacritty`, `wezterm`, `foot`, `konsole`, `gnome-terminal`, `ptyxis`, `xterm`),
 or the one named in the **Terminal** setting.
@@ -60,7 +61,6 @@ noctalia msg panel-toggle nightwatch75/topgrade-wrapper:panel
 |-----------------------------------|-------------------------------------------------------------|
 | Left click (bar glyph)            | Open/close the panel                                        |
 | Right click (bar glyph)           | Check for updates now                                       |
-| Middle click (bar glyph)          | Copy the pending-update summary to the clipboard            |
 | **Check Updates** (panel)         | Count what topgrade would upgrade                           |
 | Click a manager row (panel)       | Expand or collapse the packages behind its number            |
 | Hover a package (panel)           | Show its full `installed → available` versions below the list |
@@ -72,7 +72,8 @@ The glyph turns to the accent colour with the pending count next to it once a
 check finds something, stays neutral while everything is up to date or after
 **Dismiss**, and turns red when `topgrade` is missing or a check failed. Its
 tooltip carries the status, the per-manager breakdown, and the time of the last
-check.
+check. Middle click is not used: every bar widget carries a built-in binding for
+it that opens the widget's own settings.
 
 ### Checking
 

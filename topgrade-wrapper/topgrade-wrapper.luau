@@ -10,7 +10,11 @@
 -- Click mapping:
 --   Left click   — open/close the panel
 --   Right click  — check for updates now
---   Middle click — copy the pending-update summary to the clipboard
+--
+-- There is deliberately no middle-click handler: every bar widget carries a
+-- built-in `middle` binding that opens its own settings, and a user binding wins
+-- over a script callback, so one here would be dead code. Claiming the gesture
+-- back needs [widget.actions], which is plugin_api 14.
 
 local PANEL_ID = "nightwatch75/topgrade-wrapper:panel"
 local REQUEST_KEY = "topgrade_request"
@@ -132,16 +136,6 @@ end
 
 function onRightClick()
     request("check")
-end
-
-function onMiddleClick()
-    local detail = breakdown()
-    local text = statusLabel()
-    if detail ~= "" then
-        text = text .. " — " .. detail
-    end
-    noctalia.copyToClipboard(text, "text/plain")
-    noctalia.notify(tr("title"), tr("copied_summary"))
 end
 
 noctalia.setUpdateInterval(1000)

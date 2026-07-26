@@ -9,7 +9,6 @@
     "one": "1 step excluded",
     "other": "{count} steps excluded"
   },
-  "copied_summary": "Update summary copied to the clipboard",
   "count": {
     "apt": "APT",
     "aur_paru": "AUR (paru)",
@@ -108,7 +107,7 @@
   "tip_update": "Run topgrade in a terminal window",
   "title": "Topgrade Wrapper",
   "tooltip_checked": "Checked",
-  "tooltip_hints": "click: panel · right: check now · middle: copy",
+  "tooltip_hints": "click: panel · right: check now",
   "tooltip_pending": "Pending",
   "tooltip_status": "Status",
   "uncounted": "Not counted: {steps}",

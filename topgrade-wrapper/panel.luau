@@ -14,23 +14,11 @@ local REQUEST_KEY = "topgrade_request"
 
 local snapshot = nil
 local expanded = {} -- manager key -> the package list is open
-local hoverDetails = {} -- package row key -> its full, unelided detail line
 local hoverKey = nil -- package row currently under the pointer
 local hoverText = "" -- what the detail line shows
 local listOpen = false -- at least one manager is expanded this render
 
 local render
-
--- Per-row callbacks need distinct global names; the reconciler dispatches
--- callbacks by name only. getfenv() is the script environment lua_getglobal
--- reads from, so assigning into it defines the callback the host will find.
--- Keyed by the manager, so a callback stays valid as rows reorder by count.
-local env = getfenv()
-local function rowCallback(prefix, key, fn)
-    local name = prefix .. "_" .. key
-    env[name] = fn
-    return name
-end
 
 local function tr(key, args)
     return noctalia.tr(key, args)
@@ -103,9 +91,13 @@ local VERSION_WIDTH = 82
 
 -- A single package inside an expanded manager: name, then — unless the versions
 -- are switched off — `installed → available` with the incoming version in the
--- accent colour so the eye lands on what changes. Hovering the row publishes
--- nothing; it fills the detail line, which is the only place a long version pair
--- fits unelided, and which every row feeds whether or not it shows the pair.
+-- accent colour so the eye lands on what changes.
+--
+-- The hover callback is a closure over this row's own package, which is why it
+-- needs no lookup table and no key argument: it already holds the text it will
+-- show. It fills the detail line below the list, the only place a long version
+-- pair fits unelided (a tooltip is not an option — the UI offers that on
+-- ui.button alone), and every row feeds it whether or not it shows the pair.
 local function packageRow(managerKey, index, item)
     local key = "pkg-" .. managerKey .. "-" .. index
     local children = {
@@ -136,8 +128,26 @@ local function packageRow(managerKey, index, item)
             maxLines = 1,
         }))
     end
-    hoverDetails[key] = detailFor(item)
-    return ui.row({ key = key, paddingH = 18, gap = 4, align = "center", onHover = "onPackageHover" }, children)
+    -- Only the leave of the row that is still the hovered one clears the line, so
+    -- an enter that beats its predecessor's leave is not undone by it.
+    return ui.row({
+        key = key,
+        paddingH = 18,
+        gap = 4,
+        align = "center",
+        onHover = function(state)
+            if state == "true" then
+                hoverKey = key
+                hoverText = detailFor(item)
+            elseif hoverKey == key then
+                hoverKey = nil
+                hoverText = ""
+            else
+                return
+            end
+            render()
+        end,
+    }, children)
 end
 
 -- One row per manager that answered, biggest first so the row that matters is
@@ -172,12 +182,14 @@ local function countRows()
         listOpen = listOpen or open
         local header = { gap = 8, align = "center", key = "count-" .. entry.key .. (open and "-open" or "") }
         if #names > 0 then
-            header.onClick = rowCallback("toggle", entry.key, function()
-                expanded[entry.key] = not expanded[entry.key]
+            local managerKey = entry.key
+            header.onClick = function()
+                expanded[managerKey] = not expanded[managerKey]
+                -- Folding removes the rows the detail line was describing.
                 hoverKey = nil
                 hoverText = ""
                 render()
-            end)
+            end
         end
         table.insert(rows, ui.row(header, {
             ui.glyph({
@@ -311,8 +323,7 @@ local function configCaption()
 end
 
 render = function()
-    -- Both are rebuilt from the tree that is about to be produced.
-    hoverDetails = {}
+    -- Recomputed from the tree that is about to be produced.
     listOpen = false
 
     local text, color = headline()
@@ -334,9 +345,18 @@ render = function()
                 variant = "ghost",
                 enabled = not busy() and phase ~= "missing",
                 tooltip = tr("tip_check"),
-                onClick = "onCheck",
+                onClick = function()
+                    request("check")
+                end,
             }),
-            ui.button({ glyph = "close", variant = "ghost", tooltip = tr("tip_close"), onClick = "onClosePanel" }),
+            ui.button({
+                glyph = "close",
+                variant = "ghost",
+                tooltip = tr("tip_close"),
+                onClick = function()
+                    panel.close()
+                end,
+            }),
         }),
         ui.label({ text = text, color = color, maxLines = 2 }),
     }
@@ -360,14 +380,18 @@ render = function()
                 variant = "ghost",
                 enabled = not busy(),
                 flexGrow = 1,
-                onClick = "onCheck",
+                onClick = function()
+                    request("check")
+                end,
             }),
             ui.button({
                 key = "dismiss" .. (hasUpdates and "" or "-off"),
                 text = tr("action_dismiss"),
                 variant = "ghost",
                 enabled = hasUpdates and snapshot.dismissed ~= true,
-                onClick = "onDismiss",
+                onClick = function()
+                    request("dismiss")
+                end,
             }),
             ui.button({
                 key = "update" .. (hasUpdates and not busy() and "" or "-off"),
@@ -376,7 +400,9 @@ render = function()
                 variant = "primary",
                 enabled = hasUpdates and not busy(),
                 tooltip = tr("tip_update"),
-                onClick = "onUpdate",
+                onClick = function()
+                    request("update")
+                end,
             }),
         }))
     end
@@ -405,36 +431,3 @@ noctalia.state.watch(STATE_KEY, function(value)
     snapshot = value
     render()
 end)
-
--- Hover callback for every package row: the host passes "true"/"false" and the
--- node's key, so one handler serves the whole list. The leave is only honoured
--- for the row that opened, so an enter that beats its predecessor's leave is not
--- undone by it.
-function onPackageHover(state, key)
-    if state == "true" then
-        hoverKey = key
-        hoverText = hoverDetails[key] or ""
-    elseif hoverKey == key then
-        hoverKey = nil
-        hoverText = ""
-    else
-        return
-    end
-    render()
-end
-
-function onCheck()
-    request("check")
-end
-
-function onUpdate()
-    request("update")
-end
-
-function onDismiss()
-    request("dismiss")
-end
-
-function onClosePanel()
-    panel.close()
-end
