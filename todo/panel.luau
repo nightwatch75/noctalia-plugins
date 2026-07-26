@@ -50,17 +50,6 @@ local confirmingClear = false -- header trash pressed, awaiting confirm/cancel
 
 local render
 
--- Per-row callbacks need distinct global names; the reconciler dispatches
--- callbacks by name only. getfenv() is the script environment lua_getglobal
--- reads from, so assigning into it defines the callback the host will find.
--- Keyed by the stable id, so a callback stays valid as rows reorder.
-local env = getfenv()
-local function rowCallback(prefix, id, fn)
-    local name = prefix .. "_" .. id
-    env[name] = fn
-    return name
-end
-
 local function tr(key, args)
     return noctalia.tr(key, args)
 end
@@ -663,9 +652,9 @@ local function taskRow(item)
         height = 16,
         radius = 4,
         fill = COLORS[item.priority],
-        onClick = rowCallback("todoPrio", id, function()
+        onClick = function()
             cyclePriority(id)
-        end),
+        end,
     })
     local children = {}
     if grip ~= nil then
@@ -680,23 +669,23 @@ local function taskRow(item)
             placeholder = tr("placeholder"),
             focus = true,
             flexGrow = 1,
-            onChange = rowCallback("todoText", id, function(value)
+            onChange = function(value)
                 item.text = value
                 dirty = true
                 idleTicks = 0
-            end),
-            onSubmit = rowCallback("todoSubmit", id, function(value)
+            end,
+            onSubmit = function(value)
                 commitEdit(id, value)
-            end),
+            end,
         }))
         -- ✓ commits the edit, mirroring Enter.
         table.insert(children, ui.button({
             glyph = "check",
             variant = "primary",
             tooltip = tr("tip_commit"),
-            onClick = rowCallback("todoOk", id, function()
+            onClick = function()
                 commitEdit(id, item.text)
-            end),
+            end,
         }))
     else
         -- Static text; clicking it re-opens the editor ("press on the text").
@@ -706,27 +695,27 @@ local function taskRow(item)
             variant = "ghost",
             contentAlign = "start",
             flexGrow = 1,
-            onClick = rowCallback("todoEdit", id, function()
+            onClick = function()
                 enterEdit(id)
-            end),
+            end,
         }))
         -- Done toggle: strikes the text through.
         table.insert(children, ui.button({
             glyph = item.done and "square-check" or "square",
             variant = "ghost",
             tooltip = tr(item.done and "tip_undone" or "tip_done"),
-            onClick = rowCallback("todoDone", id, function()
+            onClick = function()
                 toggleDone(id)
-            end),
+            end,
         }))
         -- Explicit edit affordance next to the row.
         table.insert(children, ui.button({
             glyph = "pencil",
             variant = "ghost",
             tooltip = tr("tip_edit"),
-            onClick = rowCallback("todoPencil", id, function()
+            onClick = function()
                 enterEdit(id)
-            end),
+            end,
         }))
     end
 
@@ -734,9 +723,9 @@ local function taskRow(item)
         glyph = "trash",
         variant = "ghost",
         tooltip = tr("tip_delete"),
-        onClick = rowCallback("todoDel", id, function()
+        onClick = function()
             deleteItem(id)
-        end),
+        end,
     }))
 
     return ui.row({

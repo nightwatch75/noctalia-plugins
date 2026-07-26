@@ -68,7 +68,8 @@ ordering.
 
 Grab a row by its ☰ grip and drag it. Thin insertion zones open up between the
 rows as you drag; drop the row on one to move it there. This uses noctalia's
-declarative drag-and-drop, which needs plugin API ≥ 5.
+declarative drag-and-drop, which needs plugin API ≥ 5. The panel also wires its
+per-row callbacks as closures, which needs plugin API ≥ 9.
 
 ## Editing
 
@@ -145,7 +146,7 @@ noctalia msg plugins enable nightwatch75/todo
 
 ## Requirements
 
-- noctalia with plugin API ≥ 5 (declarative drag-and-drop)
+- noctalia with plugin API ≥ 9 (declarative drag-and-drop, UI callback closures)
 - No external dependencies
 
 ## License
