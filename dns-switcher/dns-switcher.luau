@@ -5,7 +5,10 @@
 -- Click mapping:
 --   Left click   — open/close the provider panel
 --   Right click  — reset to the connection default (ISP)
---   Middle click — copy the active DNS servers to the clipboard
+--
+-- No middle-click handler: every bar widget carries a built-in `middle` binding
+-- that opens its own settings, and a user binding wins over a script callback,
+-- so one here would never fire. The panel's copy button does the same job.
 
 local PANEL_ID = "nightwatch75/dns-switcher:panel"
 local GLYPH_UNKNOWN = "globe"
@@ -88,21 +91,6 @@ function onRightClick()
         return
     end
     requestApply("default", tr("status_default"), "")
-end
-
-function onMiddleClick()
-    if snapshot == nil then
-        return
-    end
-    local text = snapshot.servers
-    if (text == nil or text == "") and snapshot.current ~= nil then
-        text = snapshot.current.ip
-    end
-    if text == nil or text == "" then
-        return
-    end
-    noctalia.copyToClipboard(text, "text/plain")
-    noctalia.notify(tr("title"), tr("copied", { ip = text }))
 end
 
 snapshot = noctalia.state.get("dns_state")

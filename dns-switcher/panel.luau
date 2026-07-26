@@ -8,16 +8,6 @@ local snapshot = nil -- last "dns_state" published by the service
 
 local render
 
--- Per-row callbacks need distinct global names; the reconciler dispatches
--- callbacks by name only. getfenv() is the script environment lua_getglobal
--- reads from, so assigning into it defines the callback the host will find.
-local env = getfenv()
-local function rowCallback(prefix, index, fn)
-    local name = prefix .. "_" .. index
-    env[name] = fn
-    return name
-end
-
 local function tr(key, args)
     return noctalia.tr(key, args)
 end
@@ -38,7 +28,7 @@ local function requestApply(entry)
     })
 end
 
-local function providerRow(entry, index)
+local function providerRow(entry)
     local active = snapshot.current ~= nil and snapshot.current.id == entry.id
     return ui.button({
         key = "dns-" .. entry.id .. (active and "-on" or ""),
@@ -46,11 +36,11 @@ local function providerRow(entry, index)
         text = entry.label,
         variant = active and "primary" or "ghost",
         contentAlign = "start",
-        onClick = rowCallback("dnsPick", index, function()
+        onClick = function()
             if not active then
                 requestApply(entry)
             end
-        end),
+        end,
     })
 end
 
@@ -92,8 +82,8 @@ render = function()
         table.insert(children, ui.label({ text = snapshot.error, color = "error" }))
     else
         local rows = {}
-        for index, entry in ipairs(snapshot.list) do
-            table.insert(rows, providerRow(entry, index))
+        for _, entry in ipairs(snapshot.list) do
+            table.insert(rows, providerRow(entry))
         end
         table.insert(children, ui.scroll({ flexGrow = 1, gap = 4 }, rows))
         table.insert(children, statusFooter())

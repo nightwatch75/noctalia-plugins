@@ -82,41 +82,70 @@ local function validDnsSpec(spec)
     return count > 0
 end
 
--- Custom servers setting (string_map, plugin_api >= 6): getConfig returns a
--- { [name] = "1.2.3.4 5.6.7.8" } table, one or two IPv4 addresses per entry.
--- Names are sorted for a stable panel order and to build a canonical cache
--- signature, so invalid specs are only logged when the map actually changes.
+-- Custom servers setting (string_list): one `Name = 1.2.3.4 5.6.7.8` row per
+-- server, with one or two IPv4 addresses. A list rather than a map because the
+-- community store's validator does not accept string_map, and it reads better
+-- anyway: the rows keep the order the user put them in, and that is the order
+-- the panel shows. The raw rows are the cache signature, so an invalid entry is
+-- logged when the list changes rather than on every poll.
 local customCacheSig = nil
 local customCacheList = {}
+local legacyWarned = false
 local function customProviders()
     local raw = cfg("custom_servers")
     if type(raw) ~= "table" then
         raw = {}
     end
-    local names = {}
-    for name in pairs(raw) do
-        if type(name) == "string" and type(raw[name]) == "string" then
-            table.insert(names, name)
+    local rows = {}
+    for _, row in ipairs(raw) do
+        if type(row) == "string" then
+            table.insert(rows, row)
         end
     end
-    table.sort(names)
-    local sigParts = {}
-    for _, name in ipairs(names) do
-        table.insert(sigParts, name .. "\0" .. raw[name])
+    -- 0.0.6 stored this as a name -> address map and earlier versions as one
+    -- packed string. Neither survives the type change, and reading them anyway
+    -- would put servers in the panel that the settings list cannot show. So the
+    -- old value is reported instead of used: the list is the only source of
+    -- truth, and the loss is never silent.
+    if #rows == 0 and legacyWarned ~= true then
+        local legacy = nil
+        if type(raw) == "string" and trim(raw) ~= "" then
+            legacy = raw
+        elseif type(raw) == "table" then
+            local names = {}
+            for name, spec in pairs(raw) do
+                if type(name) == "string" then
+                    table.insert(names, name .. " = " .. tostring(spec))
+                end
+            end
+            legacy = #names > 0 and table.concat(names, ", ") or nil
+        end
+        if legacy ~= nil then
+            legacyWarned = true
+            noctalia.log(
+                "dns-switcher: the Custom servers setting is now a list of 'Name = address' rows; "
+                    .. "re-enter these, they are not read any more: "
+                    .. legacy
+            )
+        end
     end
-    local sig = table.concat(sigParts, "\n")
+    local sig = table.concat(rows, "\n")
     if sig == customCacheSig then
         return customCacheList
     end
     customCacheSig = sig
     customCacheList = {}
-    for _, name in ipairs(names) do
-        local cleanName = trim(name)
-        local spec = trim(raw[name])
-        if cleanName ~= "" and validDnsSpec(spec) then
-            table.insert(customCacheList, { id = "custom:" .. cleanName, label = cleanName, ip = spec, glyph = GLYPH_CUSTOM })
-        elseif cleanName ~= "" then
-            noctalia.log("dns-switcher: ignoring invalid custom server '" .. cleanName .. "' = '" .. spec .. "'")
+    for _, row in ipairs(rows) do
+        -- The name is everything before the first '='; the rest is the address
+        -- list. A name may therefore not contain '=' itself — such a row fails
+        -- the address check below and is skipped with a log line.
+        local name, spec = row:match("^([^=]*)=(.*)$")
+        local cleanName = trim(name or "")
+        local cleanSpec = trim(spec or "")
+        if cleanName ~= "" and validDnsSpec(cleanSpec) then
+            table.insert(customCacheList, { id = "custom:" .. cleanName, label = cleanName, ip = cleanSpec, glyph = GLYPH_CUSTOM })
+        elseif trim(row) ~= "" then
+            noctalia.log("dns-switcher: ignoring invalid custom server row '" .. row .. "'")
         end
     end
     return customCacheList
