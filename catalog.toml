@@ -52,10 +52,10 @@ tags = ["bar", "panel", "productivity"]
 [[plugin]]
 id = "nightwatch75/topgrade-wrapper"
 name = "Topgrade Wrapper"
-version = "0.0.1"
+version = "0.0.2"
 author = "nightwatch75"
 license = "MIT"
 icon = "package"
 description = "Check how many packages topgrade would upgrade, then run the upgrade in a terminal window."
-plugin_api = 3
+plugin_api = 9
 tags = ["bar", "panel", "service", "system", "utility"]
