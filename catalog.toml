@@ -19,12 +19,12 @@ tags = ["bar", "panel", "service", "network", "privacy"]
 [[plugin]]
 id = "nightwatch75/file-search"
 name = "File Search"
-version = "0.0.10"
+version = "0.0.11"
 author = "nightwatch75"
 license = "MIT"
 icon = "search"
 description = "Search files and folders as you type, fuzzy-matched with fzf; open results with the system MIME association."
-plugin_api = 3
+plugin_api = 9
 tags = ["bar", "launcher", "panel", "utility", "productivity"]
 
 [[plugin]]
@@ -46,7 +46,7 @@ author = "nightwatch75"
 license = "MIT"
 icon = "checklist"
 description = "A prioritised task list with a bar widget and editable panel."
-plugin_api = 5
+plugin_api = 9
 tags = ["bar", "panel", "productivity"]
 
 [[plugin]]
