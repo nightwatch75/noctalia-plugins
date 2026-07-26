@@ -53,7 +53,7 @@ noctalia msg panel-toggle nightwatch75/dns-switcher:panel
 | Setting | Type | Default | Description |
 | --- | --- | --- | --- |
 | `providers` | `string` | `google,cloudflare,opendns,adguard,quad9` | Comma-separated built-in provider ids shown in the panel. Empty = none (custom servers and ISP default only). |
-| `custom_servers` | `string_list` | *(empty)* | One row per server, written `Name = address`, with one or two IPv4 addresses: `Pi-hole = 192.168.1.5`, `NextDNS = 45.90.28.0 45.90.30.0`. Rows show in the panel in the order you list them; invalid rows are skipped. |
+| `custom_dns` | `string_list` | *(empty)* | One row per server, written `Name = address`, with one or two IPv4 addresses: `Pi-hole = 192.168.1.5`, `NextDNS = 45.90.28.0 45.90.30.0`. Rows show in the panel in the order you list them; invalid rows are skipped. |
 | `poll_seconds` | `int` | `10` | How often the active DNS is re-read with `nmcli` (2–120). |
 | `privilege_command` | `string` | *(empty)* | Prefix to run `nmcli` changes as root (e.g. `pkexec`, `sudo -n`). Empty runs `nmcli` directly — see *Privileges*. |
 | `show_label` (widget) | `bool` | `true` | Show the provider name next to the glyph (off = glyph only). |
@@ -148,10 +148,17 @@ apply your usual judgement on shared machines.
   not touched.
 - Custom server entries accept one or two space-separated IPv4 addresses;
   invalid entries are skipped and logged.
-- The *Custom servers* setting is a `string_list` of `Name = address` rows. It
-  was a `string_map` in 0.0.6 and a single packed string before that. Neither
-  survives the type change, so re-enter your servers as rows after updating; the
-  old value is named in Noctalia's log so nothing is lost silently.
+- The *Custom servers* setting is a `string_list` of `Name = address` rows,
+  stored under the key `custom_dns`. It was a `string_map` under `custom_servers`
+  in 0.0.6, and a single packed string before that, so re-enter your servers as
+  rows after updating from either.
+
+  The key was renamed rather than reused because of how Noctalia validates its
+  settings file: a stored value whose type no longer matches its declaration
+  makes every settings write fail, so the whole file stops saving and nothing can
+  be enabled or configured until it is fixed by hand. A key that simply no longer
+  exists is only a warning. The old `custom_servers` value is therefore left
+  alone and ignored; delete it by hand if you want the warning gone.
 - A server name may not contain `=`: everything before the first one is the
   name, the rest is the address list. Such a row is skipped and logged.
 - The bar glyph has no middle-click action: that gesture is bound by default to

@@ -90,9 +90,8 @@ end
 -- logged when the list changes rather than on every poll.
 local customCacheSig = nil
 local customCacheList = {}
-local legacyWarned = false
 local function customProviders()
-    local raw = cfg("custom_servers")
+    local raw = cfg("custom_dns")
     if type(raw) ~= "table" then
         raw = {}
     end
@@ -100,33 +99,6 @@ local function customProviders()
     for _, row in ipairs(raw) do
         if type(row) == "string" then
             table.insert(rows, row)
-        end
-    end
-    -- 0.0.6 stored this as a name -> address map and earlier versions as one
-    -- packed string. Neither survives the type change, and reading them anyway
-    -- would put servers in the panel that the settings list cannot show. So the
-    -- old value is reported instead of used: the list is the only source of
-    -- truth, and the loss is never silent.
-    if #rows == 0 and legacyWarned ~= true then
-        local legacy = nil
-        if type(raw) == "string" and trim(raw) ~= "" then
-            legacy = raw
-        elseif type(raw) == "table" then
-            local names = {}
-            for name, spec in pairs(raw) do
-                if type(name) == "string" then
-                    table.insert(names, name .. " = " .. tostring(spec))
-                end
-            end
-            legacy = #names > 0 and table.concat(names, ", ") or nil
-        end
-        if legacy ~= nil then
-            legacyWarned = true
-            noctalia.log(
-                "dns-switcher: the Custom servers setting is now a list of 'Name = address' rows; "
-                    .. "re-enter these, they are not read any more: "
-                    .. legacy
-            )
         end
     end
     local sig = table.concat(rows, "\n")

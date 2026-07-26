@@ -11,7 +11,7 @@
   "err_timeout": "Timed out applying the DNS change (authorization prompt left unanswered?)",
   "err_unknown_provider": "Unknown provider id: {id}",
   "settings": {
-    "custom_servers": {
+    "custom_dns": {
       "description": "One DNS server per row, written 'Name = address'. One or two IPv4 addresses per row, e.g. 'Pi-hole = 192.168.1.5' or 'NextDNS = 45.90.28.0 45.90.30.0'. Rows appear in the panel in the order you list them; invalid ones are skipped.",
       "label": "Custom servers"
     },

@@ -6,7 +6,7 @@
 
 id = "nightwatch75/dns-switcher"
 name = "DNS Switcher"
-version = "0.0.7"
+version = "0.0.8"
 plugin_api = 9
 author = "nightwatch75"
 license = "MIT"
@@ -16,9 +16,10 @@ icon = "world"
 description = "Switch the system DNS between popular providers, custom servers, or the ISP default (NetworkManager)."
 
 # Plugin-level settings: shared by the widget engine (detection/apply) and
-# the panel (provider list). custom_servers is a string_list of
+# the panel (provider list). custom_dns is a string_list of
 # `Name = 1.2.3.4 5.6.7.8` rows: the community plugin store's validator does not
 # accept the string_map type, and a list keeps the order the user gives it.
+# See the custom_dns comment below for why the key was renamed too.
 
 [[setting]]
 key = "providers"
@@ -28,10 +29,15 @@ description_key = "settings.providers.description"
 default = "google,cloudflare,opendns,adguard,quad9"
 
 [[setting]]
-key = "custom_servers"
+# Deliberately NOT called custom_servers any more. 0.0.6 stored that key as a
+# string_map, and a stored value whose type no longer matches its declaration
+# makes Noctalia's override validation reject every settings write — the whole
+# file stops saving, not just this plugin. A removed key is only a warning, so
+# renaming turns a bricked config into a harmless one.
+key = "custom_dns"
 type = "string_list"
-label_key = "settings.custom_servers.label"
-description_key = "settings.custom_servers.description"
+label_key = "settings.custom_dns.label"
+description_key = "settings.custom_dns.description"
 default = []
 
 [[setting]]
