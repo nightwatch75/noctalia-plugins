@@ -8,7 +8,7 @@
 [[plugin]]
 id = "nightwatch75/dns-switcher"
 name = "DNS Switcher"
-version = "0.0.7"
+version = "0.0.8"
 author = "nightwatch75"
 license = "MIT"
 icon = "world"
