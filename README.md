@@ -21,6 +21,7 @@ location = "https://github.com/nightwatch75/noctalia-plugins.git"
 | [dns-switcher](dns-switcher/) | `nightwatch75/dns-switcher` | Switch the system DNS resolver from the bar |
 | [file-search](file-search/) | `nightwatch75/file-search` | Fuzzy search files and folders as you type (fzf-powered), open results via MIME association |
 | [todo](todo/) | `nightwatch75/todo` | Prioritised to-do list on the bar: editable tasks with low/medium/important colour chips, done toggle with strike-through, sorted by priority |
+| [topgrade-wrapper](topgrade-wrapper/) | `nightwatch75/topgrade-wrapper` | Drive topgrade from the bar: a pending-update count per package manager, and the upgrade run in a terminal window |
 
 ## License
 
