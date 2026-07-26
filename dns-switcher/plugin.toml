@@ -6,7 +6,7 @@
 
 id = "nightwatch75/dns-switcher"
 name = "DNS Switcher"
-version = "0.0.8"
+version = "0.0.9"
 plugin_api = 9
 author = "nightwatch75"
 license = "MIT"
@@ -16,10 +16,8 @@ icon = "world"
 description = "Switch the system DNS between popular providers, custom servers, or the ISP default (NetworkManager)."
 
 # Plugin-level settings: shared by the widget engine (detection/apply) and
-# the panel (provider list). custom_dns is a string_list of
-# `Name = 1.2.3.4 5.6.7.8` rows: the community plugin store's validator does not
-# accept the string_map type, and a list keeps the order the user gives it.
-# See the custom_dns comment below for why the key was renamed too.
+# the panel (provider list). Custom servers are five `Name = 1.2.3.4 5.6.7.8`
+# string fields, custom_1..custom_5; see the comment on them for why.
 
 [[setting]]
 key = "providers"
@@ -28,17 +26,50 @@ label_key = "settings.providers.label"
 description_key = "settings.providers.description"
 default = "google,cloudflare,opendns,adguard,quad9"
 
+# Five separate string settings rather than one list, because Noctalia's list
+# editor shows an existing row as a static label with remove/up/down buttons: a
+# typo means deleting the row and typing it again. A string renders as a text
+# field, so each server can be corrected in place. Five covers any realistic
+# number of custom resolvers.
+#
+# The keys are new names on purpose, not a retyped custom_dns. A stored value
+# whose type no longer matches its declaration makes Noctalia reject every
+# settings write, so the whole file stops saving; a key that simply no longer
+# exists is just a warning. That is what 0.0.8 was released to fix.
 [[setting]]
-# Deliberately NOT called custom_servers any more. 0.0.6 stored that key as a
-# string_map, and a stored value whose type no longer matches its declaration
-# makes Noctalia's override validation reject every settings write — the whole
-# file stops saving, not just this plugin. A removed key is only a warning, so
-# renaming turns a bricked config into a harmless one.
-key = "custom_dns"
-type = "string_list"
-label_key = "settings.custom_dns.label"
-description_key = "settings.custom_dns.description"
-default = []
+key = "custom_1"
+type = "string"
+label_key = "settings.custom_1.label"
+description_key = "settings.custom.description"
+default = ""
+
+[[setting]]
+key = "custom_2"
+type = "string"
+label_key = "settings.custom_2.label"
+description_key = "settings.custom.description"
+default = ""
+
+[[setting]]
+key = "custom_3"
+type = "string"
+label_key = "settings.custom_3.label"
+description_key = "settings.custom.description"
+default = ""
+
+[[setting]]
+key = "custom_4"
+type = "string"
+label_key = "settings.custom_4.label"
+description_key = "settings.custom.description"
+default = ""
+
+[[setting]]
+key = "custom_5"
+type = "string"
+label_key = "settings.custom_5.label"
+description_key = "settings.custom.description"
+default = ""
 
 [[setting]]
 key = "poll_seconds"
@@ -64,7 +95,9 @@ entry = "service.luau"
 [[panel]]
 id = "panel"
 entry = "panel.luau"
-width = 340
+# Wide enough for the longest built-in row, "OpenDNS · 208.67.222.222
+# 208.67.220.220", without eliding the addresses.
+width = 430
 height = 400
 placement = "attached"
 open_near_click = true

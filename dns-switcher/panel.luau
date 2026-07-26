@@ -28,12 +28,21 @@ local function requestApply(entry)
     })
 end
 
+-- A row names its provider and the addresses it would set, so picking one is not
+-- a guess about what it does. The ISP default has no fixed addresses -- whatever
+-- the LAN hands out -- so it stays a bare label, and the footer shows what is
+-- actually in use. A button carries one run of text, so the two are joined with a
+-- separator rather than styled apart.
 local function providerRow(entry)
     local active = snapshot.current ~= nil and snapshot.current.id == entry.id
+    local text = entry.label
+    if entry.ip ~= nil and entry.ip ~= "" then
+        text = text .. "  ·  " .. entry.ip
+    end
     return ui.button({
         key = "dns-" .. entry.id .. (active and "-on" or ""),
         glyph = entry.glyph,
-        text = entry.label,
+        text = text,
         variant = active and "primary" or "ghost",
         contentAlign = "start",
         onClick = function()

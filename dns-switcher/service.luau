@@ -82,22 +82,22 @@ local function validDnsSpec(spec)
     return count > 0
 end
 
--- Custom servers setting (string_list): one `Name = 1.2.3.4 5.6.7.8` row per
--- server, with one or two IPv4 addresses. A list rather than a map because the
--- community store's validator does not accept string_map, and it reads better
--- anyway: the rows keep the order the user put them in, and that is the order
--- the panel shows. The raw rows are the cache signature, so an invalid entry is
--- logged when the list changes rather than on every poll.
+-- Custom servers: five separate `Name = 1.2.3.4 5.6.7.8` string settings rather
+-- than one list, so a wrong address can be corrected in the field instead of
+-- deleted and retyped -- Noctalia's list editor has no per-row edit. Slot order
+-- is panel order. The keys are listed as literals so `noctalia plugins lint` can
+-- still match them against the manifest.
+local CUSTOM_KEYS = { "custom_1", "custom_2", "custom_3", "custom_4", "custom_5" }
+
+-- The raw slots are the cache signature, so an invalid entry is logged when a
+-- slot actually changes rather than on every poll.
 local customCacheSig = nil
 local customCacheList = {}
 local function customProviders()
-    local raw = cfg("custom_dns")
-    if type(raw) ~= "table" then
-        raw = {}
-    end
     local rows = {}
-    for _, row in ipairs(raw) do
-        if type(row) == "string" then
+    for _, key in ipairs(CUSTOM_KEYS) do
+        local row = cfg(key)
+        if type(row) == "string" and trim(row) ~= "" then
             table.insert(rows, row)
         end
     end

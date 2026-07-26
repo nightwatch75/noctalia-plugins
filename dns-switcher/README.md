@@ -34,11 +34,13 @@ noctalia msg panel-toggle nightwatch75/dns-switcher:panel
 
 ## Features
 
+- Each panel row shows the provider's name and the addresses it would set, so
+  picking one is not a guess
 - Pre-configured providers: Google, Cloudflare, OpenDNS, AdGuard, Quad9
   (pick which ones appear via the *Built-in providers* setting; clear it to
   use only your custom servers)
-- Custom servers via the *Custom servers* setting — one `Name = address` row
-  each, e.g. `Pi-hole = 192.168.1.5`, `NextDNS = 45.90.28.0 45.90.30.0`
+- Custom servers in five editable fields — `Name = address` each, e.g.
+  `Pi-hole = 192.168.1.5`, `NextDNS = 45.90.28.0 45.90.30.0`
 - Detection reads the connection profile (`ipv4.dns` + `ipv4.ignore-auto-dns`),
   so a manually configured resolver — LAN ones included — shows as its
   provider (or *Custom (ip)*), and DHCP-assigned DNS shows as *Default (ISP)*
@@ -53,7 +55,7 @@ noctalia msg panel-toggle nightwatch75/dns-switcher:panel
 | Setting | Type | Default | Description |
 | --- | --- | --- | --- |
 | `providers` | `string` | `google,cloudflare,opendns,adguard,quad9` | Comma-separated built-in provider ids shown in the panel. Empty = none (custom servers and ISP default only). |
-| `custom_dns` | `string_list` | *(empty)* | One row per server, written `Name = address`, with one or two IPv4 addresses: `Pi-hole = 192.168.1.5`, `NextDNS = 45.90.28.0 45.90.30.0`. Rows show in the panel in the order you list them; invalid rows are skipped. |
+| `custom_1` … `custom_5` | `string` | *(empty)* | One custom resolver each, written `Name = address`, with one or two IPv4 addresses: `Pi-hole = 192.168.1.5`, `NextDNS = 45.90.28.0 45.90.30.0`. The panel lists the filled slots in order; invalid ones are skipped and logged. |
 | `poll_seconds` | `int` | `10` | How often the active DNS is re-read with `nmcli` (2–120). |
 | `privilege_command` | `string` | *(empty)* | Prefix to run `nmcli` changes as root (e.g. `pkexec`, `sudo -n`). Empty runs `nmcli` directly — see *Privileges*. |
 | `show_label` (widget) | `bool` | `true` | Show the provider name next to the glyph (off = glyph only). |
@@ -148,17 +150,23 @@ apply your usual judgement on shared machines.
   not touched.
 - Custom server entries accept one or two space-separated IPv4 addresses;
   invalid entries are skipped and logged.
-- The *Custom servers* setting is a `string_list` of `Name = address` rows,
-  stored under the key `custom_dns`. It was a `string_map` under `custom_servers`
-  in 0.0.6, and a single packed string before that, so re-enter your servers as
-  rows after updating from either.
+- Custom servers are five separate `string` settings, `custom_1` … `custom_5`,
+  rather than one list. Noctalia's list editor shows an existing row as a static
+  label with remove and reorder buttons, so a wrong address means deleting the row
+  and typing it again; a `string` renders as a text field you can correct in
+  place. Five slots cover any realistic number of custom resolvers.
 
-  The key was renamed rather than reused because of how Noctalia validates its
-  settings file: a stored value whose type no longer matches its declaration
-  makes every settings write fail, so the whole file stops saving and nothing can
-  be enabled or configured until it is fixed by hand. A key that simply no longer
-  exists is only a warning. The old `custom_servers` value is therefore left
-  alone and ignored; delete it by hand if you want the warning gone.
+  The setting has changed shape three times: a single packed string up to 0.0.5,
+  a `string_map` named `custom_servers` in 0.0.6, a `string_list` named
+  `custom_dns` in 0.0.8, and these five fields from 0.0.9. Re-enter your servers
+  after updating from any of them.
+
+  Each change used a new key name on purpose. Noctalia rejects every write to its
+  settings file when a stored value's type no longer matches its declaration — the
+  whole file stops saving, and nothing can be enabled or configured until it is
+  fixed by hand, which is what 0.0.7 shipped by mistake and 0.0.8 fixed. A key
+  that simply no longer exists is only a warning, so old values are left alone and
+  ignored; delete them by hand if you want the warnings gone.
 - A server name may not contain `=`: everything before the first one is the
   name, the rest is the address list. Such a row is skipped and logged.
 - The bar glyph has no middle-click action: that gesture is bound by default to
