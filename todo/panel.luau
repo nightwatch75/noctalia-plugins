@@ -1,11 +1,11 @@
 --!nonstrict
 -- To Do — a prioritised task list in an attached panel.
 --
--- A task is { id, text, priority, done, uid? }. It is persisted in one of two
--- formats under <todo_folder>, chosen by the `storage` setting (see the storage
--- backends section below): the default single todo.json, or one iCalendar VTODO
--- file per task for CalDAV-compatible sync. In both, tasks are held in manual
--- order and `sort` records the display mode. Empty (blank-text) tasks are never
+-- A task is { id, text, priority, done }. The whole list is persisted to
+-- <todo_folder>/todo.json (noctalia.json) as an object { version, sort, tasks }:
+-- `tasks` is the array — ALWAYS in manual order — and `sort` records the chosen
+-- display mode. A legacy plain-array file is still read (treated as manual
+-- order, sort defaulting to "priority"). Empty (blank-text) tasks are never
 -- written: they only exist transiently while being entered.
 --
 -- Ordering has two modes, switched from a header toggle. `items` (and the disk
@@ -49,17 +49,6 @@ local sortMode = "priority" -- "priority" (auto sort) or "manual" (drag reorder)
 local confirmingClear = false -- header trash pressed, awaiting confirm/cancel
 
 local render
-
--- Per-row callbacks need distinct global names; the reconciler dispatches
--- callbacks by name only. getfenv() is the script environment lua_getglobal
--- reads from, so assigning into it defines the callback the host will find.
--- Keyed by the stable id, so a callback stays valid as rows reorder.
-local env = getfenv()
-local function rowCallback(prefix, id, fn)
-    local name = prefix .. "_" .. id
-    env[name] = fn
-    return name
-end
 
 local function tr(key, args)
     return noctalia.tr(key, args)
@@ -145,23 +134,7 @@ local function removeItem(id)
     return false
 end
 
--- ── Storage backends ─────────────────────────────────────────────────────────
--- Two on-disk formats, chosen by the `storage` setting:
---   * "json"  — the whole list in one todo.json (default; legacy plain array
---     still read). filePath points at it.
---   * "ical"  — one RFC 5545 VTODO per task at <folder>/<uid>.ics (a "vdir",
---     the layout Radicale/vdirsyncer use). Manual order + sort mode live in a
---     .order.json sidecar (VTODO has no ordering property). Sync-friendly:
---     file-sync tools (Syncthing) replicate per file, and a CalDAV server
---     (Radicale) can serve the folder to tasks.org/DAVx5.
-
-local function storageMode()
-    return noctalia.getConfig("storage") == "ical" and "ical" or "json"
-end
-
--- JSON backend (todo.json) ----------------------------------------------------
-
-local function loadJson()
+local function load()
     items = {}
     nextId = 1
     sortMode = "priority"
@@ -190,7 +163,6 @@ local function loadJson()
                         text = type(entry.text) == "string" and entry.text or "",
                         priority = normalizePriority(entry.priority),
                         done = entry.done == true,
-                        uid = type(entry.uid) == "string" and entry.uid or nil,
                     })
                     if id >= nextId then
                         nextId = id + 1
@@ -203,7 +175,10 @@ local function loadJson()
     loaded = true
 end
 
-local function saveJson()
+local function save()
+    if not loaded then
+        return -- never write before the first load reads what is on disk
+    end
     -- Blank tasks are in-progress placeholders; they never reach disk.
     local toStore = {}
     for _, item in ipairs(items) do
@@ -218,279 +193,7 @@ local function saveJson()
     local ok, err = noctalia.writeFile(filePath, encoded)
     if not ok then
         noctalia.notifyError(tr("title"), err or tr("save_failed"))
-    end
-end
-
--- iCalendar (VTODO vdir) backend ----------------------------------------------
-
--- iCalendar PRIORITY is 1 (highest)..9 (lowest); 0/absent = undefined.
-local ICAL_PRIO = { important = 1, medium = 5, low = 9 }
-local function priorityFromIcal(n)
-    n = tonumber(n)
-    if n == nil or n == 0 then return "medium" end
-    if n <= 4 then return "important" end
-    if n == 5 then return "medium" end
-    return "low"
-end
-
-local function icalEscape(s)
-    return (s:gsub("\\", "\\\\"):gsub(";", "\\;"):gsub(",", "\\,"):gsub("\r?\n", "\\n"))
-end
-
--- Single pass so an escaped backslash is never re-interpreted.
-local function icalUnescape(s)
-    local out, i, n = {}, 1, #s
-    while i <= n do
-        local c = s:sub(i, i)
-        if c == "\\" and i < n then
-            local d = s:sub(i + 1, i + 1)
-            if d == "n" or d == "N" then
-                table.insert(out, "\n")
-            else
-                table.insert(out, d) -- \\, \;, \, and any other escaped char
-            end
-            i += 2
-        else
-            table.insert(out, c)
-            i += 1
-        end
-    end
-    return table.concat(out)
-end
-
--- Fold a content line to <=75 octets, continuation with CRLF + space (RFC 5545
--- §3.1). Byte boundaries are spec-correct: unfolding rejoins the exact bytes.
-local function fold(line)
-    if #line <= 75 then return line end
-    local parts, i = {}, 1
-    while i <= #line do
-        local n = (i == 1) and 75 or 74
-        table.insert(parts, line:sub(i, i + n - 1))
-        i += n
-    end
-    return table.concat(parts, "\r\n ")
-end
-
--- Unfold: continuation lines (leading space/tab) join onto the previous one.
-local function unfold(raw)
-    local logical = {}
-    for line in (raw .. "\n"):gmatch("(.-)\n") do
-        line = (line:gsub("\r$", ""))
-        if (line:sub(1, 1) == " " or line:sub(1, 1) == "\t") and #logical > 0 then
-            logical[#logical] = logical[#logical] .. line:sub(2)
-        else
-            table.insert(logical, line)
-        end
-    end
-    return logical
-end
-
--- Floating local timestamp (no Z): no UTC conversion is available in-sandbox,
--- and CalDAV servers/task apps accept floating DATE-TIME for these fields.
-local function nowStamp()
-    return noctalia.formatTime("%Y%m%dT%H%M%S")
-end
-
--- UID = <time>-<rand>-<counter>@noctalia-todo. Time + counter keep it unique on
--- this device across sessions; the random part separates tasks made in the same
--- second; callers also collision-check against the existing set.
-local uidCounter = 0
-local rngSeeded = false
-local function newUid(existing)
-    if not rngSeeded then
-        math.randomseed((tonumber(noctalia.formatTime("%H%M%S")) or 1) + #items)
-        rngSeeded = true
-    end
-    while true do
-        uidCounter += 1
-        local uid = string.format("%s-%04x-%d@noctalia-todo",
-            noctalia.formatTime("%Y%m%d%H%M%S"), math.random(0, 0xffff), uidCounter)
-        if existing == nil or existing[uid] == nil then
-            return uid
-        end
-    end
-end
-
-local function serializeVtodo(item)
-    local lines = {
-        "BEGIN:VCALENDAR",
-        "VERSION:2.0",
-        "PRODID:-//nightwatch75//todo//EN",
-        "BEGIN:VTODO",
-        "UID:" .. item.uid,
-        "DTSTAMP:" .. nowStamp(),
-        "SUMMARY:" .. icalEscape(item.text),
-        "PRIORITY:" .. tostring(ICAL_PRIO[item.priority] or 5),
-    }
-    if item.done then
-        table.insert(lines, "STATUS:COMPLETED")
-        table.insert(lines, "PERCENT-COMPLETE:100")
-        table.insert(lines, "COMPLETED:" .. nowStamp())
-    else
-        table.insert(lines, "STATUS:NEEDS-ACTION")
-    end
-    table.insert(lines, "END:VTODO")
-    table.insert(lines, "END:VCALENDAR")
-    local folded = {}
-    for _, l in ipairs(lines) do
-        table.insert(folded, fold(l))
-    end
-    return table.concat(folded, "\r\n") .. "\r\n"
-end
-
--- Parse a single-VTODO .ics into a task, or nil if it carries no VTODO summary.
-local function parseVtodo(raw)
-    if raw == nil or not raw:find("BEGIN:VTODO", 1, true) then
-        return nil
-    end
-    local uid, summary, prio, status, percent
-    for _, line in ipairs(unfold(raw)) do
-        local head, value = line:match("^([^:]+):(.*)$")
-        if head ~= nil then
-            local name = head:match("^([^;]+)"):upper() -- drop any ;params
-            if name == "UID" then
-                uid = value
-            elseif name == "SUMMARY" then
-                summary = icalUnescape(value)
-            elseif name == "PRIORITY" then
-                prio = value
-            elseif name == "STATUS" then
-                status = value:upper()
-            elseif name == "PERCENT-COMPLETE" then
-                percent = tonumber(value)
-            end
-        end
-    end
-    if summary == nil then
-        return nil
-    end
-    return {
-        uid = uid,
-        text = summary,
-        priority = priorityFromIcal(prio),
-        done = status == "COMPLETED" or percent == 100,
-    }
-end
-
--- Sync tools drop conflicting copies (e.g. foo.sync-conflict-….ics) beside the
--- file; never read them as tasks nor delete them. Dotfiles (.order.json) skipped.
-local function isTaskFile(name)
-    return name:sub(-4) == ".ics" and name:sub(1, 1) ~= "." and not name:find("sync%-conflict")
-end
-
--- uid -> last on-disk content for the files this plugin manages, so save()
--- rewrites only what changed and deletes only its own files.
-local written = {}
-
-local function loadIcal()
-    items = {}
-    nextId = 1
-    sortMode = "priority"
-    written = {}
-    local byUid = {}
-    for _, name in ipairs(noctalia.listDir(folder) or {}) do
-        if isTaskFile(name) then
-            local raw = noctalia.readFile(folder .. "/" .. name)
-            local task = parseVtodo(raw)
-            if task ~= nil and task.uid ~= nil and task.uid ~= "" then
-                task.id = nextId
-                nextId += 1
-                byUid[task.uid] = task
-                written[task.uid] = raw
-            end
-        end
-    end
-    -- Manual order + sort mode from the sidecar; unknown uids appended (sorted).
-    local sidecar = noctalia.readFile(folder .. "/.order.json")
-    if sidecar ~= nil and sidecar ~= "" then
-        local decoded = noctalia.json.decode(sidecar)
-        if type(decoded) == "table" then
-            if decoded.sort == "manual" or decoded.sort == "priority" then
-                sortMode = decoded.sort
-            end
-            if type(decoded.order) == "table" then
-                for _, uid in ipairs(decoded.order) do
-                    if byUid[uid] ~= nil then
-                        table.insert(items, byUid[uid])
-                        byUid[uid] = nil
-                    end
-                end
-            end
-        end
-    end
-    local rest = {}
-    for uid in pairs(byUid) do
-        table.insert(rest, uid)
-    end
-    table.sort(rest)
-    for _, uid in ipairs(rest) do
-        table.insert(items, byUid[uid])
-    end
-    loaded = true
-end
-
-local function saveIcal()
-    noctalia.mkdirAll(folder)
-    local existing = {}
-    for _, it in ipairs(items) do
-        if it.uid ~= nil then existing[it.uid] = true end
-    end
-    local desired, order = {}, {}
-    for _, it in ipairs(items) do
-        if not isBlank(it.text) then
-            if it.uid == nil or it.uid == "" then
-                it.uid = newUid(existing)
-                existing[it.uid] = true
-            end
-            desired[it.uid] = serializeVtodo(it)
-            table.insert(order, it.uid)
-        end
-    end
-    -- Write changed files atomically (temp + rename, so a half-written file is
-    -- never synced); skip unchanged ones to avoid needless mtime churn.
-    for uid, content in pairs(desired) do
-        if written[uid] ~= content then
-            local path = folder .. "/" .. uid .. ".ics"
-            local tmp = folder .. "/." .. uid .. ".ics.tmp"
-            if noctalia.writeFile(tmp, content) then
-                if noctalia.renameFile(tmp, path) then
-                    written[uid] = content
-                else
-                    noctalia.removeFile(tmp)
-                end
-            end
-        end
-    end
-    -- Delete files for tasks we managed that are gone now (never touch external
-    -- or conflict files, which were never in `written`).
-    for uid in pairs(written) do
-        if desired[uid] == nil then
-            noctalia.removeFile(folder .. "/" .. uid .. ".ics")
-            written[uid] = nil
-        end
-    end
-    noctalia.writeFile(folder .. "/.order.json",
-        noctalia.json.encode({ sort = sortMode, order = order }, true) or "{}")
-end
-
--- Dispatchers -----------------------------------------------------------------
-
-local function load()
-    if storageMode() == "ical" then
-        loadIcal()
-    else
-        loadJson()
-    end
-end
-
-local function save()
-    if not loaded then
-        return -- never write before the first load reads what is on disk
-    end
-    if storageMode() == "ical" then
-        saveIcal()
-    else
-        saveJson()
+        return
     end
     dirty = false
 end
@@ -663,9 +366,9 @@ local function taskRow(item)
         height = 16,
         radius = 4,
         fill = COLORS[item.priority],
-        onClick = rowCallback("todoPrio", id, function()
+        onClick = function()
             cyclePriority(id)
-        end),
+        end,
     })
     local children = {}
     if grip ~= nil then
@@ -680,23 +383,23 @@ local function taskRow(item)
             placeholder = tr("placeholder"),
             focus = true,
             flexGrow = 1,
-            onChange = rowCallback("todoText", id, function(value)
+            onChange = function(value)
                 item.text = value
                 dirty = true
                 idleTicks = 0
-            end),
-            onSubmit = rowCallback("todoSubmit", id, function(value)
+            end,
+            onSubmit = function(value)
                 commitEdit(id, value)
-            end),
+            end,
         }))
         -- ✓ commits the edit, mirroring Enter.
         table.insert(children, ui.button({
             glyph = "check",
             variant = "primary",
             tooltip = tr("tip_commit"),
-            onClick = rowCallback("todoOk", id, function()
+            onClick = function()
                 commitEdit(id, item.text)
-            end),
+            end,
         }))
     else
         -- Static text; clicking it re-opens the editor ("press on the text").
@@ -706,27 +409,27 @@ local function taskRow(item)
             variant = "ghost",
             contentAlign = "start",
             flexGrow = 1,
-            onClick = rowCallback("todoEdit", id, function()
+            onClick = function()
                 enterEdit(id)
-            end),
+            end,
         }))
         -- Done toggle: strikes the text through.
         table.insert(children, ui.button({
             glyph = item.done and "square-check" or "square",
             variant = "ghost",
             tooltip = tr(item.done and "tip_undone" or "tip_done"),
-            onClick = rowCallback("todoDone", id, function()
+            onClick = function()
                 toggleDone(id)
-            end),
+            end,
         }))
         -- Explicit edit affordance next to the row.
         table.insert(children, ui.button({
             glyph = "pencil",
             variant = "ghost",
             tooltip = tr("tip_edit"),
-            onClick = rowCallback("todoPencil", id, function()
+            onClick = function()
                 enterEdit(id)
-            end),
+            end,
         }))
     end
 
@@ -734,9 +437,9 @@ local function taskRow(item)
         glyph = "trash",
         variant = "ghost",
         tooltip = tr("tip_delete"),
-        onClick = rowCallback("todoDel", id, function()
+        onClick = function()
             deleteItem(id)
-        end),
+        end,
     }))
 
     return ui.row({
@@ -798,7 +501,6 @@ render = function()
     local header = ui.row({ align = "center", gap = 8 }, {
         ui.label({ text = tr("title"), fontSize = 16, fontWeight = "bold", color = "on_surface", flexGrow = 1 }),
         sortToggle,
-        ui.button({ key = "header-refresh", glyph = "refresh", variant = "ghost", tooltip = tr("tip_refresh"), onClick = "onRefresh" }),
         ui.button({
             key = "header-clear-done" .. (done == 0 and "-off" or ""),
             glyph = "trash",
@@ -829,14 +531,6 @@ render = function()
             legendEntry("important"),
             legendEntry("medium"),
             legendEntry("low"),
-        }),
-        -- Footer note: which storage backend is active (JSON file vs iCal vdir).
-        ui.row({ justify = "center" }, {
-            ui.label({
-                text = tr(storageMode() == "ical" and "mode_ical" or "mode_json"),
-                fontSize = 11,
-                color = "on_surface_variant",
-            }),
         }),
     })
 
@@ -934,20 +628,6 @@ end
 
 function onSortToggle()
     setSortMode(sortMode == "manual" and "priority" or "manual")
-end
-
--- Reload from storage: flush a pending edit, then re-read the folder/file so
--- tasks that arrived externally (via a CalDAV server or file sync) show up.
--- The plugin writes locally; it cannot push to the phone — that is the CalDAV
--- client's job — so this is a pull/refresh, not a two-way "sync now".
-function onRefresh()
-    if dirty then
-        save()
-    end
-    editingId = nil
-    confirmingClear = false
-    load()
-    render()
 end
 
 -- Drop callback for the insertion zones (declarative drag-and-drop). payload is

@@ -9,7 +9,7 @@
 id = "nightwatch75/todo"
 name = "To Do"
 version = "0.0.10"
-plugin_api = 5
+plugin_api = 9
 author = "nightwatch75"
 license = "MIT"
 dependencies = []
@@ -24,19 +24,6 @@ key = "todo_folder"
 type = "folder"
 label_key = "settings.todo_folder.label"
 description_key = "settings.todo_folder.description"
-
-# Storage format: a single todo.json (default) or one iCalendar VTODO file per
-# task (a CalDAV-compatible "vdir" that syncs via Syncthing / a CalDAV server).
-[[setting]]
-key = "storage"
-type = "select"
-label_key = "settings.storage.label"
-description_key = "settings.storage.description"
-default = "json"
-options = [
-  { value = "json", label_key = "settings.storage.options.json" },
-  { value = "ical", label_key = "settings.storage.options.ical" },
-]
 
 [[panel]]
 id = "panel"
