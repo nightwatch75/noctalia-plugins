@@ -48,3 +48,14 @@ icon = "checklist"
 description = "A prioritised task list with a bar widget and editable panel."
 plugin_api = 5
 tags = ["bar", "panel", "productivity"]
+
+[[plugin]]
+id = "nightwatch75/topgrade-wrapper"
+name = "Topgrade Wrapper"
+version = "0.0.1"
+author = "nightwatch75"
+license = "MIT"
+icon = "package"
+description = "Check how many packages topgrade would upgrade, then run the upgrade in a terminal window."
+plugin_api = 3
+tags = ["bar", "panel", "service", "system", "utility"]
