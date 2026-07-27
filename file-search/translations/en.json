@@ -38,6 +38,8 @@
   },
   "status_indexing": "Indexing {path}…",
   "tip_close": "Close",
+  "tip_page_down": "Next results",
+  "tip_page_up": "Previous results",
   "tip_refresh": "Rebuild the file index",
   "tip_settings": "Plugin settings",
   "title": "File Search",

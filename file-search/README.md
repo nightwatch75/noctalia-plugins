@@ -45,11 +45,12 @@ In the panel:
 | `Esc`       | Close the panel (noctalia default)                   |
 
 The list shows ten rows at a time and the window follows the highlight, so
-stepping past the last visible row scrolls the list by one. The footer names
-the visible range (`3–12 of 47`) whenever there is more than one window of
-matches. Note that noctalia delivers one key event per *physical* press and
-swallows auto-repeat, so holding an arrow down does not keep moving — reach a
-distant match by narrowing the query rather than by walking to it.
+stepping past the last visible row scrolls the list by one. When there is more
+than one window of matches the footer names the visible range (`3–12 of 47`)
+and carries ⌃/⌄ buttons that page through it — the mouse wheel does nothing
+here, see *Notes*. Noctalia also delivers one key event per *physical* press
+and swallows auto-repeat, so holding an arrow down does not keep moving: reach
+a distant match by narrowing the query, or page with the footer buttons.
 
 The panel header also carries a ⚙ button that opens this plugin's page in
 *Settings → Plugins*, and a ↻ button that rebuilds the index.
@@ -125,8 +126,10 @@ noctalia msg plugins enable nightwatch75/file-search
 
 - The results list is windowed rather than scrolled, because `ui.scroll`
   gives plugins no way to scroll to a given row — the highlight could
-  otherwise be driven out of view with no way back. The consequence is that
-  the mouse wheel only covers the current window.
+  otherwise be driven out of view with no way back. A windowed list exactly
+  fills its scroll view, so the wheel has nothing to scroll, and panels get no
+  scroll callback of their own (`onScroll` is wired for bar widgets only).
+  The footer's ⌃/⌄ buttons are the mouse's way through the result set.
 - Panels get one `onKey` per physical key press: noctalia consumes auto-repeat
   before it reaches a plugin, so that a hold-to-act binding never sees a
   repeat as a new press. Arrow navigation is therefore one row per press. The

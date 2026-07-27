@@ -29,16 +29,20 @@
 -- demand via the refresh button. The bar widget mirrors the panel's open
 -- state through the shared "file_search_open" state key.
 
--- Result-list geometry. Every row is pinned to ROW_H so the row count is fixed
--- arithmetic instead of whatever control-height tier the host picks (a Button
--- with text would default to Style::controlHeight, 38). The budget, from the
--- panel's 480 height in plugin.toml: 480 − 2 × Style::panelPadding (14) = 452
--- content, less the column's three 12px gaps, the header row (32, its glyph
--- buttons), the query input (Style::controlHeight, 38) and the footer label
--- (~15) → 331 for the list. 10 × 30 + 9 × 2 = 318 fits; 11 rows would not.
+-- Result-list geometry. Both heights are pinned so the row count is fixed
+-- arithmetic instead of whatever control-height tier the host picks: a Button
+-- with text defaults to Style::controlHeight (38) via ensureLabel(), and a
+-- glyph-only one to controlHeightSm (32) — the pager would otherwise make the
+-- footer twice as tall as the label it sits next to and cost a row.
+--
+-- The budget, from the panel's 480 height in plugin.toml: 480 − 2 ×
+-- Style::panelPadding (14) = 452 content, less the column's three 12px gaps,
+-- the header row (32, its glyph buttons), the query input (38) and the footer
+-- (PAGER_H) → 324 for the list. 10 × 30 + 9 × 2 = 318 fits; 11 would not.
 local ROW_H = 30
 local ROW_GAP = 2
 local VISIBLE_ROWS = 10
+local PAGER_H = 22
 
 local query = ""
 local results = {}      -- relative paths; directories keep a trailing "/"
@@ -305,26 +309,80 @@ local function resultRow(rel, index)
     })
 end
 
+-- Page the window by a full screenful. The selection rides along to the top of
+-- the new page: leaving it behind would point Enter at a row that is no longer
+-- on screen.
+local function page(direction)
+    local last = math.max(1, #results - VISIBLE_ROWS + 1)
+    local target = math.max(1, math.min(last, windowStart + (direction * VISIBLE_ROWS)))
+    if target == windowStart then
+        return
+    end
+    windowStart = target
+    selected = target
+    render()
+end
+
+function onPageUp()
+    page(-1)
+end
+
+function onPageDown()
+    page(1)
+end
+
 local function statusFooter()
     if indexing then
         return ui.label({ text = tr("status_indexing", { path = searchRoot() }), fontSize = 11, color = "secondary" })
     end
     local shown = #results
-    -- With more matches than the window can hold, the plain count would look
-    -- like the list was truncated; name the visible range instead so the rows
-    -- off-window are visibly reachable rather than missing.
-    local text
-    if shown > VISIBLE_ROWS then
-        text = tr("counts_window", {
-            from = windowStart,
-            to = math.min(shown, windowStart + VISIBLE_ROWS - 1),
-            shown = shown,
-            total = total or 0,
+    if shown <= VISIBLE_ROWS then
+        return ui.label({
+            text = tr("counts", { shown = shown, total = total or 0 }),
+            fontSize = 11,
+            color = "on_surface_variant",
         })
-    else
-        text = tr("counts", { shown = shown, total = total or 0 })
     end
-    return ui.label({ text = text, fontSize = 11, color = "on_surface_variant" })
+
+    -- More matches than the window holds. The plain count would read as a
+    -- truncated list, so name the visible range — and pair it with pager
+    -- buttons, because the wheel cannot reach the rows off-window: a windowed
+    -- list exactly fills its ui.scroll, so there is nothing for it to scroll,
+    -- and panels get no scroll callback of their own (onScroll is wired for
+    -- bar widgets only). Without these the off-window rows would be reachable
+    -- by keyboard alone.
+    local lastStart = math.max(1, shown - VISIBLE_ROWS + 1)
+    return ui.row({ gap = 4, align = "center" }, {
+        ui.label({
+            text = tr("counts_window", {
+                from = windowStart,
+                to = math.min(shown, windowStart + VISIBLE_ROWS - 1),
+                shown = shown,
+                total = total or 0,
+            }),
+            fontSize = 11,
+            color = "on_surface_variant",
+            flexGrow = 1,
+        }),
+        ui.button({
+            key = "page-up" .. (windowStart > 1 and "" or "-off"),
+            glyph = "chevron-up",
+            variant = "ghost",
+            height = PAGER_H,
+            enabled = windowStart > 1,
+            tooltip = tr("tip_page_up"),
+            onClick = "onPageUp",
+        }),
+        ui.button({
+            key = "page-down" .. (windowStart < lastStart and "" or "-off"),
+            glyph = "chevron-down",
+            variant = "ghost",
+            height = PAGER_H,
+            enabled = windowStart < lastStart,
+            tooltip = tr("tip_page_down"),
+            onClick = "onPageDown",
+        }),
+    })
 end
 
 render = function()
