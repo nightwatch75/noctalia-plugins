@@ -38,6 +38,7 @@
   "status_indexing": "Indexing {path}…",
   "tip_close": "Close",
   "tip_refresh": "Rebuild the file index",
+  "tip_settings": "Plugin settings",
   "title": "File Search",
   "tooltip_closed": "File search — {path}\nClick to search · right-click: folder · middle-click: copy path",
   "tooltip_open": "File search open — {path}\nClick to close"

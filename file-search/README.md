@@ -30,12 +30,22 @@ noctalia msg panel-toggle nightwatch75/file-search:panel
 | Right click  | Open the search folder in the file manager      |
 | Middle click | Copy the search folder path to the clipboard    |
 
+Middle click needs the manifest to unbind it: every bar widget carries a
+built-in binding for it that opens the widget's own settings, and a bound
+gesture never reaches the plugin. This widget declares `middle = "none"`, so
+the button is the plugin's again — the panel's ⚙ button is the settings route.
+
 In the panel:
 
-| Key     | Action                              |
-|---------|-------------------------------------|
-| `Enter` | Open the top match                  |
-| `Esc`   | Close the panel (noctalia default)  |
+| Key         | Action                                        |
+|-------------|-----------------------------------------------|
+| *(typing)*  | Filter the results — the query box holds focus |
+| `↑` / `↓`   | Move the highlighted result                    |
+| `Enter`     | Open the highlighted result                    |
+| `Esc`       | Close the panel (noctalia default)             |
+
+The panel header also carries a ⚙ button that opens this plugin's page in
+*Settings → Plugins*, and a ↻ button that rebuilds the index.
 
 In the noctalia launcher (keyboard-first flow, native navigation):
 
@@ -56,13 +66,13 @@ index is shared with the panel and built on demand when missing.
 - Configurable bar glyph, search folder (defaults to `~`), excluded folder
   names (`.git, node_modules, .cache, .venv` by default, matched anywhere in
   the tree), hidden entries on/off, max results
-- `Enter` opens the top match; every result row opens on click via the
-  system MIME association — files in their default app, folders in the file
-  manager
+- Keyboard navigation in the panel: `↑`/`↓` move the highlighted result and
+  `Enter` opens it, without ever leaving the query box. Every result row also
+  opens on click, via the system MIME association — files in their default
+  app, folders in the file manager
 - Launcher provider for a keyboard-first flow: type `/fs <text>` in the
   noctalia launcher and navigate the results with the native arrow keys +
-  `Enter` (plugin panels cannot receive arrow keys in the current Luau API,
-  so the launcher is the keyboard way to browse results)
+  `Enter`
 - Folder results are marked with a trailing `/` and a folder glyph
 - Index rebuilds automatically when the relevant settings change, and on
   demand via the panel's refresh button (external file changes are picked up
@@ -82,7 +92,8 @@ index is shared with the panel and built on demand when missing.
 
 ## Requirements
 
-- noctalia ≥ 5.0.0
+- noctalia with plugin API ≥ 15 (`noctalia.openSettings()`; panel key
+  capture needs 13 and manifest gesture defaults 14)
 - [`fzf`](https://github.com/junegunn/fzf) — the fuzzy matcher
 - `find` (GNU findutils) — walks the search folder into the index
 - `xdg-open` (xdg-utils) — opens results with the MIME association
@@ -105,6 +116,10 @@ noctalia msg plugins enable nightwatch75/file-search
 
 ## Notes
 
+- Noctalia offers plugins no way to scroll a list to a given row, so pushing
+  the highlight far enough down a long result list moves it out of view. The
+  launcher (`/fs`) remains the fully keyboard-driven way to browse a big
+  result set.
 - The index lives in the plugin's private data directory
   (`noctalia.pluginDataDir()`, by default
   `~/.local/state/noctalia/plugins/data/nightwatch75/file-search/` — honors

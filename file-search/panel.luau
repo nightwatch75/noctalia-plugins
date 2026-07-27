@@ -6,7 +6,14 @@
 -- after that every keystroke runs `fzf --filter=<query>` over the cache, so
 -- typing stays responsive even on large trees. Results update live; picking
 -- one opens it with the system MIME association (xdg-open) — directories
--- open in the file manager. Enter opens the top match.
+-- open in the file manager.
+--
+-- Keyboard: the query input holds focus, so typing always reaches it. Up/Down
+-- (declared as the panel's capture_keys, plugin_api >= 13) move the highlighted
+-- result and Enter opens it — the query input's onSubmit, which is why Return is
+-- not captured. The host exposes no way to scroll a ui.scroll to a given child,
+-- so a selection driven far enough down a long result list moves out of view;
+-- the launcher entry (launcher.luau) stays the full keyboard-driven path.
 --
 -- The index is rebuilt when the panel opens with changed settings, or on
 -- demand via the refresh button. The bar widget mirrors the panel's open
@@ -14,6 +21,7 @@
 
 local query = ""
 local results = {}      -- relative paths; directories keep a trailing "/"
+local selected = 1      -- 1-based index into `results`; Enter opens this row
 local total = nil       -- entries in the index, shown in the footer
 local indexing = false
 local searching = false
@@ -212,6 +220,9 @@ runSearch = function()
             for line in (result.stdout or ""):gmatch("[^\n]+") do
                 table.insert(results, line)
             end
+            -- A new result set invalidates the old position: the top match is
+            -- what a fresh query means to select.
+            selected = 1
         end
         -- The query moved on while this search ran: chase it. The stale
         -- rows rendered below are overwritten as soon as it completes.
@@ -240,13 +251,17 @@ local function openEntry(rel)
     panel.close()
 end
 
+-- The selected row is the one Enter opens, so it is drawn as the primary
+-- action. The key carries the selection: the reconciler diffs by key, and the
+-- same convention marks the active row in the other panels.
 local function resultRow(rel, index)
     local isDir = rel:sub(-1) == "/"
+    local isSelected = index == selected
     return ui.button({
-        key = "hit-" .. index,
+        key = "hit-" .. index .. (isSelected and "-sel" or ""),
         glyph = isDir and "folder" or "file",
         text = rel,
-        variant = "ghost",
+        variant = isSelected and "primary" or "ghost",
         contentAlign = "start",
         onClick = function()
             openEntry(rel)
@@ -277,6 +292,7 @@ render = function()
                 flexGrow = 1,
             }),
             ui.button({ glyph = "refresh", variant = "ghost", tooltip = tr("tip_refresh"), onClick = "onRefreshIndex" }),
+            ui.button({ glyph = "settings", variant = "ghost", tooltip = tr("tip_settings"), onClick = "onOpenSettings" }),
             ui.button({ glyph = "close", variant = "ghost", tooltip = tr("tip_close"), onClick = "onClosePanel" }),
         }),
         ui.input({
@@ -285,7 +301,7 @@ render = function()
             focus = true,
             placeholder = tr("search_placeholder"),
             onChange = "onQueryChanged",
-            onSubmit = "onOpenFirst",
+            onSubmit = "onOpenSelected",
         }),
     }
 
@@ -317,6 +333,7 @@ function onOpen(_context)
     fzfMissing = not noctalia.commandExists("fzf")
     query = ""
     results = {}
+    selected = 1
     inputRev += 1
     noctalia.state.set("file_search_open", true)
     if not fzfMissing then
@@ -360,16 +377,42 @@ function onQueryChanged(value)
     runSearch()
 end
 
-function onOpenFirst(value)
+-- Enter in the query input: open whatever Up/Down last highlighted, which is
+-- the top match until the arrows move it.
+function onOpenSelected(value)
     query = value
-    if results[1] ~= nil then
-        openEntry(results[1])
+    local rel = results[selected]
+    if rel ~= nil then
+        openEntry(rel)
+    end
+end
+
+-- Declared capture_keys arrive here as the verbatim manifest spec. The host
+-- sends one call per physical press plus one on release; only the press moves
+-- the selection. Movement clamps at both ends rather than wrapping, so holding
+-- an arrow settles on the first or last row instead of cycling past it.
+function onKey(chord, pressed)
+    if not pressed or #results == 0 then
+        return
+    end
+    local step = chord == "Down" and 1 or -1
+    local target = math.max(1, math.min(#results, selected + step))
+    if target ~= selected then
+        selected = target
+        render()
     end
 end
 
 function onRefreshIndex()
     haveIndex = false
     buildIndex()
+end
+
+-- Opens the settings window on this plugin's own page (the host supplies the
+-- plugin id, so a plugin can only ever open its own). The panel closes on the
+-- way; the index survives it, since it lives in the plugin data directory.
+function onOpenSettings()
+    noctalia.openSettings()
 end
 
 function onClosePanel()
