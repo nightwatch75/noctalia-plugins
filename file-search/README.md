@@ -37,6 +37,17 @@ In the panel:
 | `Enter` | Open the top match                  |
 | `Esc`   | Close the panel (noctalia default)  |
 
+On a result row:
+
+| Action      | Effect                                                     |
+|-------------|------------------------------------------------------------|
+| Left click  | Open it with the system MIME association                   |
+| Right click | Copy its absolute path to the clipboard (panel stays open)  |
+
+A path too long for one row is shortened in the middle rather than at the end,
+so the file name — the part the query matched — always stays readable:
+`.local/share/flatpak/repo/tmp/cache/…dolphin.idx.sig`.
+
 The panel header also carries a ⚙ button that opens this plugin's page in
 *Settings → Plugins*, and a ↻ button that rebuilds the index.
 

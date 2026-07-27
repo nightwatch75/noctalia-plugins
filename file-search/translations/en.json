@@ -1,4 +1,5 @@
 {
+  "copied_entry": "Path copied to clipboard",
   "copied_path": "Search folder path copied to clipboard",
   "counts": "{shown} shown · {total} indexed",
   "err_bad_record": "Ignored an invalid index record — rebuild the index",

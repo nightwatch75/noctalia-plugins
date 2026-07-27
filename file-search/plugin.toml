@@ -6,7 +6,7 @@
 
 id = "nightwatch75/file-search"
 name = "File Search"
-version = "0.0.16"
+version = "0.0.17"
 plugin_api = 15
 author = "nightwatch75"
 license = "MIT"
