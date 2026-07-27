@@ -6,48 +6,14 @@
 -- after that every keystroke runs `fzf --filter=<query>` over the cache, so
 -- typing stays responsive even on large trees. Results update live; picking
 -- one opens it with the system MIME association (xdg-open) — directories
--- open in the file manager.
---
--- Keyboard: the query input holds focus, so typing always reaches it. Up/Down
--- (declared as the panel's capture_keys, plugin_api >= 13) move the highlighted
--- result and Enter opens it — the query input's onSubmit, which is why Return is
--- not captured.
---
--- The results list is WINDOWED rather than scrolled. ui.scroll gives plugins no
--- way to scroll to a given child (the reconciler accepts no offset prop, and the
--- host's scroll-into-view is wired to native controls only), so a highlight
--- moving past the fold could never be brought back into view. Instead only the
--- rows that fit are rendered and the window follows the selection: pressing Down
--- on the last visible row advances the window by one, which reads as the list
--- scrolling. The trade is that the wheel cannot reach past the window, so a
--- distant match is reached by narrowing the query. Note the host swallows key
--- auto-repeat (a hold-to-act binding must not see a repeat as a new press), so
--- onKey fires once per physical press and holding an arrow does not keep
--- moving. The launcher entry keeps a natively scrolled, repeating list.
+-- open in the file manager. Enter opens the top match.
 --
 -- The index is rebuilt when the panel opens with changed settings, or on
 -- demand via the refresh button. The bar widget mirrors the panel's open
 -- state through the shared "file_search_open" state key.
 
--- Result-list geometry. Both heights are pinned so the row count is fixed
--- arithmetic instead of whatever control-height tier the host picks: a Button
--- with text defaults to Style::controlHeight (38) via ensureLabel(), and a
--- glyph-only one to controlHeightSm (32) — the pager would otherwise make the
--- footer twice as tall as the label it sits next to and cost a row.
---
--- The budget, from the panel's 480 height in plugin.toml: 480 − 2 ×
--- Style::panelPadding (14) = 452 content, less the column's three 12px gaps,
--- the header row (32, its glyph buttons), the query input (38) and the footer
--- (PAGER_H) → 324 for the list. 10 × 30 + 9 × 2 = 318 fits; 11 would not.
-local ROW_H = 30
-local ROW_GAP = 2
-local VISIBLE_ROWS = 10
-local PAGER_H = 22
-
 local query = ""
 local results = {}      -- relative paths; directories keep a trailing "/"
-local selected = 1      -- 1-based index into `results`; Enter opens this row
-local windowStart = 1   -- index of the first rendered row; follows `selected`
 local total = nil       -- entries in the index, shown in the footer
 local indexing = false
 local searching = false
@@ -246,10 +212,6 @@ runSearch = function()
             for line in (result.stdout or ""):gmatch("[^\n]+") do
                 table.insert(results, line)
             end
-            -- A new result set invalidates the old position: the top match is
-            -- what a fresh query means to select, and the window follows it.
-            selected = 1
-            windowStart = 1
         end
         -- The query moved on while this search ran: chase it. The stale
         -- rows rendered below are overwritten as soon as it completes.
@@ -278,57 +240,18 @@ local function openEntry(rel)
     panel.close()
 end
 
--- Slide the window so `selected` is inside it, then keep it in range: a shorter
--- result set must not leave the window pointing past the end.
-local function syncWindow()
-    if selected < windowStart then
-        windowStart = selected
-    elseif selected > windowStart + VISIBLE_ROWS - 1 then
-        windowStart = selected - VISIBLE_ROWS + 1
-    end
-    local maxStart = math.max(1, #results - VISIBLE_ROWS + 1)
-    windowStart = math.max(1, math.min(maxStart, windowStart))
-end
-
--- The selected row is the one Enter opens, so it is drawn as the primary
--- action. The key carries the selection: the reconciler diffs by key, and the
--- same convention marks the active row in the other panels.
 local function resultRow(rel, index)
     local isDir = rel:sub(-1) == "/"
-    local isSelected = index == selected
     return ui.button({
-        key = "hit-" .. index .. (isSelected and "-sel" or ""),
+        key = "hit-" .. index,
         glyph = isDir and "folder" or "file",
         text = rel,
-        variant = isSelected and "primary" or "ghost",
+        variant = "ghost",
         contentAlign = "start",
-        height = ROW_H,
         onClick = function()
             openEntry(rel)
         end,
     })
-end
-
--- Page the window by a full screenful. The selection rides along to the top of
--- the new page: leaving it behind would point Enter at a row that is no longer
--- on screen.
-local function page(direction)
-    local last = math.max(1, #results - VISIBLE_ROWS + 1)
-    local target = math.max(1, math.min(last, windowStart + (direction * VISIBLE_ROWS)))
-    if target == windowStart then
-        return
-    end
-    windowStart = target
-    selected = target
-    render()
-end
-
-function onPageUp()
-    page(-1)
-end
-
-function onPageDown()
-    page(1)
 end
 
 local function statusFooter()
@@ -336,52 +259,10 @@ local function statusFooter()
         return ui.label({ text = tr("status_indexing", { path = searchRoot() }), fontSize = 11, color = "secondary" })
     end
     local shown = #results
-    if shown <= VISIBLE_ROWS then
-        return ui.label({
-            text = tr("counts", { shown = shown, total = total or 0 }),
-            fontSize = 11,
-            color = "on_surface_variant",
-        })
-    end
-
-    -- More matches than the window holds. The plain count would read as a
-    -- truncated list, so name the visible range — and pair it with pager
-    -- buttons, because the wheel cannot reach the rows off-window: a windowed
-    -- list exactly fills its ui.scroll, so there is nothing for it to scroll,
-    -- and panels get no scroll callback of their own (onScroll is wired for
-    -- bar widgets only). Without these the off-window rows would be reachable
-    -- by keyboard alone.
-    local lastStart = math.max(1, shown - VISIBLE_ROWS + 1)
-    return ui.row({ gap = 4, align = "center" }, {
-        ui.label({
-            text = tr("counts_window", {
-                from = windowStart,
-                to = math.min(shown, windowStart + VISIBLE_ROWS - 1),
-                shown = shown,
-                total = total or 0,
-            }),
-            fontSize = 11,
-            color = "on_surface_variant",
-            flexGrow = 1,
-        }),
-        ui.button({
-            key = "page-up" .. (windowStart > 1 and "" or "-off"),
-            glyph = "chevron-up",
-            variant = "ghost",
-            height = PAGER_H,
-            enabled = windowStart > 1,
-            tooltip = tr("tip_page_up"),
-            onClick = "onPageUp",
-        }),
-        ui.button({
-            key = "page-down" .. (windowStart < lastStart and "" or "-off"),
-            glyph = "chevron-down",
-            variant = "ghost",
-            height = PAGER_H,
-            enabled = windowStart < lastStart,
-            tooltip = tr("tip_page_down"),
-            onClick = "onPageDown",
-        }),
+    return ui.label({
+        text = tr("counts", { shown = shown, total = total or 0 }),
+        fontSize = 11,
+        color = "on_surface_variant",
     })
 end
 
@@ -405,7 +286,7 @@ render = function()
             focus = true,
             placeholder = tr("search_placeholder"),
             onChange = "onQueryChanged",
-            onSubmit = "onOpenSelected",
+            onSubmit = "onOpenFirst",
         }),
     }
 
@@ -421,15 +302,11 @@ render = function()
                 flexGrow = 1,
             }))
         else
-            -- Only the windowed slice is built. ui.scroll is kept around it as
-            -- a safety net: if a theme ever makes a row taller than ROW_H the
-            -- last one stays reachable with the wheel instead of being clipped.
             local rows = {}
-            local last = math.min(#results, windowStart + VISIBLE_ROWS - 1)
-            for index = windowStart, last do
-                table.insert(rows, resultRow(results[index], index))
+            for index, rel in ipairs(results) do
+                table.insert(rows, resultRow(rel, index))
             end
-            table.insert(children, ui.scroll({ flexGrow = 1, gap = ROW_GAP }, rows))
+            table.insert(children, ui.scroll({ flexGrow = 1, gap = 2 }, rows))
         end
         table.insert(children, statusFooter())
     end
@@ -441,8 +318,6 @@ function onOpen(_context)
     fzfMissing = not noctalia.commandExists("fzf")
     query = ""
     results = {}
-    selected = 1
-    windowStart = 1
     inputRev += 1
     noctalia.state.set("file_search_open", true)
     if not fzfMissing then
@@ -486,30 +361,10 @@ function onQueryChanged(value)
     runSearch()
 end
 
--- Enter in the query input: open whatever Up/Down last highlighted, which is
--- the top match until the arrows move it.
-function onOpenSelected(value)
+function onOpenFirst(value)
     query = value
-    local rel = results[selected]
-    if rel ~= nil then
-        openEntry(rel)
-    end
-end
-
--- Declared capture_keys arrive here as the verbatim manifest spec. The host
--- sends one call per physical press plus one on release, and swallows the
--- auto-repeat in between, so this steps exactly one row per press. Movement
--- clamps at both ends rather than wrapping.
-function onKey(chord, pressed)
-    if not pressed or #results == 0 then
-        return
-    end
-    local step = chord == "Down" and 1 or -1
-    local target = math.max(1, math.min(#results, selected + step))
-    if target ~= selected then
-        selected = target
-        syncWindow()
-        render()
+    if results[1] ~= nil then
+        openEntry(results[1])
     end
 end
 

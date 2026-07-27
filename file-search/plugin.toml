@@ -6,7 +6,7 @@
 
 id = "nightwatch75/file-search"
 name = "File Search"
-version = "0.0.15"
+version = "0.0.16"
 plugin_api = 15
 author = "nightwatch75"
 license = "MIT"
@@ -65,23 +65,10 @@ width = 520
 height = 480
 placement = "attached"
 open_near_click = true
-# Arrow keys move the result selection; Enter is left alone so the focused query
-# input keeps delivering it through onSubmit. Escape is deliberately absent: the
-# host reserves the Cancel action for dismissing the panel and never hands it to
-# a plugin. Needs plugin_api 13.
-capture_keys = ["Up", "Down"]
 
 [[widget]]
 id = "file-search"
 entry = "file-search.luau"
-
-  # The bar binds middle click to `settings-open-widget` for every widget, and a
-  # bound gesture is taken away from the widget's own input area — which silently
-  # swallowed this widget's onMiddleClick (copy the search folder path). Unbinding
-  # it here hands the button back to the script; the panel's gear button is the
-  # route to the settings now. Manifest gesture defaults need plugin_api 14.
-  [widget.actions]
-  middle = "none"
 
   [[widget.setting]]
   key = "glyph"

@@ -30,27 +30,12 @@ noctalia msg panel-toggle nightwatch75/file-search:panel
 | Right click  | Open the search folder in the file manager      |
 | Middle click | Copy the search folder path to the clipboard    |
 
-Middle click needs the manifest to unbind it: every bar widget carries a
-built-in binding for it that opens the widget's own settings, and a bound
-gesture never reaches the plugin. This widget declares `middle = "none"`, so
-the button is the plugin's again — the panel's ⚙ button is the settings route.
-
 In the panel:
 
-| Key         | Action                                              |
-|-------------|-----------------------------------------------------|
-| *(typing)*  | Filter the results — the query box holds focus       |
-| `↑` / `↓`   | Move the highlight; at the edge the list scrolls one row |
-| `Enter`     | Open the highlighted result                          |
-| `Esc`       | Close the panel (noctalia default)                   |
-
-The list shows ten rows at a time and the window follows the highlight, so
-stepping past the last visible row scrolls the list by one. When there is more
-than one window of matches the footer names the visible range (`3–12 of 47`)
-and carries ⌃/⌄ buttons that page through it — the mouse wheel does nothing
-here, see *Notes*. Noctalia also delivers one key event per *physical* press
-and swallows auto-repeat, so holding an arrow down does not keep moving: reach
-a distant match by narrowing the query, or page with the footer buttons.
+| Key     | Action                              |
+|---------|-------------------------------------|
+| `Enter` | Open the top match                  |
+| `Esc`   | Close the panel (noctalia default)  |
 
 The panel header also carries a ⚙ button that opens this plugin's page in
 *Settings → Plugins*, and a ↻ button that rebuilds the index.
@@ -74,13 +59,13 @@ index is shared with the panel and built on demand when missing.
 - Configurable bar glyph, search folder (defaults to `~`), excluded folder
   names (`.git, node_modules, .cache, .venv` by default, matched anywhere in
   the tree), hidden entries on/off, max results
-- Keyboard navigation in the panel: `↑`/`↓` move the highlighted result and
-  scroll the list a row at a time, `Enter` opens it — all without leaving the
-  query box. Every result row also opens on click, via the system MIME
-  association — files in their default app, folders in the file manager
+- `Enter` opens the top match; every result row opens on click via the
+  system MIME association — files in their default app, folders in the file
+  manager
 - Launcher provider for a keyboard-first flow: type `/fs <text>` in the
   noctalia launcher and navigate the results with the native arrow keys +
-  `Enter`
+  `Enter` (plugin panels cannot receive arrow keys in the current Luau API,
+  so the launcher is the keyboard way to browse results)
 - Folder results are marked with a trailing `/` and a folder glyph
 - Index rebuilds automatically when the relevant settings change, and on
   demand via the panel's refresh button (external file changes are picked up
@@ -100,8 +85,7 @@ index is shared with the panel and built on demand when missing.
 
 ## Requirements
 
-- noctalia with plugin API ≥ 15 (`noctalia.openSettings()`; panel key
-  capture needs 13 and manifest gesture defaults 14)
+- noctalia with plugin API ≥ 15 (`noctalia.openSettings()`, the panel's ⚙ button)
 - [`fzf`](https://github.com/junegunn/fzf) — the fuzzy matcher
 - `find` (GNU findutils) — walks the search folder into the index
 - `xdg-open` (xdg-utils) — opens results with the MIME association
@@ -124,16 +108,6 @@ noctalia msg plugins enable nightwatch75/file-search
 
 ## Notes
 
-- The results list is windowed rather than scrolled, because `ui.scroll`
-  gives plugins no way to scroll to a given row — the highlight could
-  otherwise be driven out of view with no way back. A windowed list exactly
-  fills its scroll view, so the wheel has nothing to scroll, and panels get no
-  scroll callback of their own (`onScroll` is wired for bar widgets only).
-  The footer's ⌃/⌄ buttons are the mouse's way through the result set.
-- Panels get one `onKey` per physical key press: noctalia consumes auto-repeat
-  before it reaches a plugin, so that a hold-to-act binding never sees a
-  repeat as a new press. Arrow navigation is therefore one row per press. The
-  launcher (`/fs`) is a native control and does repeat, on a scrolled list.
 - The index lives in the plugin's private data directory
   (`noctalia.pluginDataDir()`, by default
   `~/.local/state/noctalia/plugins/data/nightwatch75/file-search/` — honors
