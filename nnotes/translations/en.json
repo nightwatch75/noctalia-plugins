@@ -5,18 +5,29 @@
   "copied_path": "Notes path copied to clipboard",
   "tip_folder": "Open the notes folder",
   "tip_copy": "Copy the notes file path",
+  "tip_settings": "Plugin settings",
   "tip_close": "Close",
   "editor_placeholder": "Type your notes…",
   "editing": "Editing…",
   "saved": "Saved",
   "counts": "{words} words · {chars} chars",
   "save_failed": "Could not save the notes file",
-  "settings.notes_folder.label": "Notes folder",
-  "settings.notes_folder.description": "Where the notes file lives. Defaults to ~/Notes when empty.",
-  "settings.file_name.label": "File name",
-  "settings.file_name.description": "Single text file the panel edits.",
-  "settings.autosave_seconds.label": "Autosave (seconds)",
-  "settings.autosave_seconds.description": "Idle seconds before unsaved changes are written. 0 saves only on close / Ctrl+Enter.",
-  "settings.glyph.label": "Glyph",
-  "settings.glyph.description": "Icon shown on the bar."
+  "settings": {
+    "notes_folder": {
+      "label": "Notes folder",
+      "description": "Where the notes file lives. Defaults to ~/Notes when empty."
+    },
+    "file_name": {
+      "label": "File name",
+      "description": "Single text file the panel edits."
+    },
+    "autosave_seconds": {
+      "label": "Autosave (seconds)",
+      "description": "Idle seconds before unsaved changes are written. 0 saves only on close / Ctrl+Enter."
+    },
+    "glyph": {
+      "label": "Glyph",
+      "description": "Icon shown on the bar."
+    }
+  }
 }

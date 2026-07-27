@@ -3,8 +3,8 @@
 
 id = "nightwatch75/nnotes"
 name = "nnotes"
-version = "0.0.4"
-plugin_api = 3
+version = "0.0.5"
+plugin_api = 15
 author = "nightwatch75"
 license = "MIT"
 dependencies = ["xdg-utils"]
@@ -49,6 +49,14 @@ open_near_click = true
 [[widget]]
 id = "nnotes"
 entry = "nnotes.luau"
+
+  # The bar binds middle click to `settings-open-widget` for every widget, and a
+  # bound gesture is taken away from the widget's own input area — which silently
+  # swallowed this widget's onMiddleClick (copy the notes path). Unbinding it here
+  # hands the button back to the script; the panel's gear button is the route to
+  # the settings now. Widget defaults declared in the manifest need plugin_api 14.
+  [widget.actions]
+  middle = "none"
 
   [[widget.setting]]
   key = "glyph"

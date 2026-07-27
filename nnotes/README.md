@@ -31,10 +31,18 @@ noctalia msg panel-toggle nightwatch75/nnotes:panel
 | Right click  | Open the notes folder in the file manager     |
 | Middle click | Copy the notes file path to the clipboard     |
 
+Middle click needs the manifest to unbind it: every bar widget carries a
+built-in binding for it that opens the widget's own settings, and a bound
+gesture never reaches the plugin. This widget declares `middle = "none"`, so
+the button is the plugin's again — the panel's ⚙ button is the settings route.
+
 | Key          | Action                                    |
 |--------------|-------------------------------------------|
 | `Ctrl+Enter` | Save now                                  |
 | `Esc`        | Close the panel (noctalia default; saves) |
+
+The panel header carries a ⚙ button that opens this plugin's page in
+*Settings → Plugins*, next to the folder and copy-path buttons.
 
 ## Features
 
@@ -59,7 +67,8 @@ noctalia msg panel-toggle nightwatch75/nnotes:panel
 
 ## Requirements
 
-- noctalia ≥ 5.0.0
+- noctalia with plugin API ≥ 15 (`noctalia.openSettings()`; the manifest
+  gesture default that frees middle click needs 14)
 - `xdg-open` (`xdg-utils`) — used to open the notes folder in your file
   manager (right-click on the bar widget, folder button in the panel)
 

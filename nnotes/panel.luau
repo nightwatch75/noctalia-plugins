@@ -69,6 +69,7 @@ render = function()
             }),
             ui.button({ glyph = "folder", variant = "ghost", tooltip = noctalia.tr("tip_folder"), onClick = "onOpenFolder" }),
             ui.button({ glyph = "copy", variant = "ghost", tooltip = noctalia.tr("tip_copy"), onClick = "onCopyPath" }),
+            ui.button({ glyph = "settings", variant = "ghost", tooltip = noctalia.tr("tip_settings"), onClick = "onOpenSettings" }),
             ui.button({ glyph = "close", variant = "ghost", tooltip = noctalia.tr("tip_close"), onClick = "onClosePanel" }),
         }),
         ui.input({
@@ -145,6 +146,13 @@ end
 function onCopyPath()
     noctalia.copyToClipboard(notesFile(), "text/plain")
     noctalia.notify(noctalia.tr("title"), noctalia.tr("copied_path"))
+end
+
+-- Opens the settings window on this plugin's own page (the host supplies the
+-- plugin id, so a plugin can only ever open its own). The panel closes on the
+-- way, and onClose flushes the buffer, so no edit is lost.
+function onOpenSettings()
+    noctalia.openSettings()
 end
 
 function onClosePanel()
