@@ -19,8 +19,11 @@
 -- moving past the fold could never be brought back into view. Instead only the
 -- rows that fit are rendered and the window follows the selection: pressing Down
 -- on the last visible row advances the window by one, which reads as the list
--- scrolling. The trade is that the wheel cannot reach past the window — narrow
--- the query, or hold Down. The launcher entry keeps the natively scrolled list.
+-- scrolling. The trade is that the wheel cannot reach past the window, so a
+-- distant match is reached by narrowing the query. Note the host swallows key
+-- auto-repeat (a hold-to-act binding must not see a repeat as a new press), so
+-- onKey fires once per physical press and holding an arrow does not keep
+-- moving. The launcher entry keeps a natively scrolled, repeating list.
 --
 -- The index is rebuilt when the panel opens with changed settings, or on
 -- demand via the refresh button. The bar widget mirrors the panel's open
@@ -436,9 +439,9 @@ function onOpenSelected(value)
 end
 
 -- Declared capture_keys arrive here as the verbatim manifest spec. The host
--- sends one call per physical press plus one on release; only the press moves
--- the selection. Movement clamps at both ends rather than wrapping, so holding
--- an arrow settles on the first or last row instead of cycling past it.
+-- sends one call per physical press plus one on release, and swallows the
+-- auto-repeat in between, so this steps exactly one row per press. Movement
+-- clamps at both ends rather than wrapping.
 function onKey(chord, pressed)
     if not pressed or #results == 0 then
         return

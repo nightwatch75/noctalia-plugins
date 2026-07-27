@@ -45,8 +45,11 @@ In the panel:
 | `Esc`       | Close the panel (noctalia default)                   |
 
 The list shows ten rows at a time and the window follows the highlight, so
-holding `↓` walks the whole result set. The footer names the visible range
-(`3–12 of 47`) whenever there is more than one window of matches.
+stepping past the last visible row scrolls the list by one. The footer names
+the visible range (`3–12 of 47`) whenever there is more than one window of
+matches. Note that noctalia delivers one key event per *physical* press and
+swallows auto-repeat, so holding an arrow down does not keep moving — reach a
+distant match by narrowing the query rather than by walking to it.
 
 The panel header also carries a ⚙ button that opens this plugin's page in
 *Settings → Plugins*, and a ↻ button that rebuilds the index.
@@ -123,8 +126,11 @@ noctalia msg plugins enable nightwatch75/file-search
 - The results list is windowed rather than scrolled, because `ui.scroll`
   gives plugins no way to scroll to a given row — the highlight could
   otherwise be driven out of view with no way back. The consequence is that
-  the mouse wheel only covers the current window: narrow the query, or hold
-  `↓`. The launcher (`/fs`) keeps a natively scrolled list.
+  the mouse wheel only covers the current window.
+- Panels get one `onKey` per physical key press: noctalia consumes auto-repeat
+  before it reaches a plugin, so that a hold-to-act binding never sees a
+  repeat as a new press. Arrow navigation is therefore one row per press. The
+  launcher (`/fs`) is a native control and does repeat, on a scrolled list.
 - The index lives in the plugin's private data directory
   (`noctalia.pluginDataDir()`, by default
   `~/.local/state/noctalia/plugins/data/nightwatch75/file-search/` — honors

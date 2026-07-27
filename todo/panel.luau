@@ -30,10 +30,17 @@
 -- The bar widget (todo.luau) lights its glyph while the panel is open via the
 -- shared "todo_open" state; it reads todo.json itself for the pending count.
 
--- Row width budget. A Button clamps and ellipsizes its label only when it has
--- an explicit width (the host derives the label's max width from it); flexGrow
--- alone lets a long task overrun the buttons to its right instead of shrinking.
--- So the text button is given whatever the fixed parts of the row leave over.
+-- Row width budget. A Button constrains its label only when it has an explicit
+-- width (the host derives the label's max width from it); flexGrow alone lets a
+-- long task overrun the buttons to its right instead of shrinking. So the text
+-- button is given whatever the fixed parts of the row leave over.
+--
+-- The constrained label WRAPS, it does not ellipsize: Button sets the label's
+-- maxWidth and TextEllipsize::End but never a maxLines, and the text renderer
+-- only ellipsizes against an explicit line budget — with maxLines 0 Pango is
+-- given the full 500-line backstop and wraps freely. Wrapping is what we want
+-- here (the whole task stays readable), and the row grows to fit because
+-- Button pins only a minimum height.
 -- Every constant below mirrors one in noctalia's Style, named so the sum can be
 -- re-checked against the host rather than re-measured by eye.
 local PANEL_WIDTH = 400 -- keep in sync with [[panel]] width in plugin.toml
@@ -428,8 +435,8 @@ local function taskRow(item)
         }))
     else
         -- Static text; clicking it re-opens the editor ("press on the text").
-        -- The explicit width is what makes a long task ellipsize instead of
-        -- running under the three buttons that follow it.
+        -- The explicit width is what makes a long task wrap onto another line
+        -- instead of running under the three buttons that follow it.
         table.insert(children, ui.button({
             key = "view-" .. id,
             text = item.done and strike(item.text) or item.text,

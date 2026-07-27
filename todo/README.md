@@ -80,9 +80,9 @@ close.
 Tick a task (☐ → ☑) to complete it — its text is struck through until you
 un-tick it. The bar glyph's tooltip shows how many tasks are still to do.
 
-A task longer than the row is truncated with an ellipsis, so it never runs
-under the buttons on the right; open it for editing to read or change the
-whole text.
+A task longer than the row wraps onto further lines and the row grows to fit,
+so the whole text stays readable and never runs under the buttons on the
+right.
 
 ## Storage
 
