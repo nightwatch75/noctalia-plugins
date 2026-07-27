@@ -37,12 +37,16 @@ the button is the plugin's again — the panel's ⚙ button is the settings rout
 
 In the panel:
 
-| Key         | Action                                        |
-|-------------|-----------------------------------------------|
-| *(typing)*  | Filter the results — the query box holds focus |
-| `↑` / `↓`   | Move the highlighted result                    |
-| `Enter`     | Open the highlighted result                    |
-| `Esc`       | Close the panel (noctalia default)             |
+| Key         | Action                                              |
+|-------------|-----------------------------------------------------|
+| *(typing)*  | Filter the results — the query box holds focus       |
+| `↑` / `↓`   | Move the highlight; at the edge the list scrolls one row |
+| `Enter`     | Open the highlighted result                          |
+| `Esc`       | Close the panel (noctalia default)                   |
+
+The list shows ten rows at a time and the window follows the highlight, so
+holding `↓` walks the whole result set. The footer names the visible range
+(`3–12 of 47`) whenever there is more than one window of matches.
 
 The panel header also carries a ⚙ button that opens this plugin's page in
 *Settings → Plugins*, and a ↻ button that rebuilds the index.
@@ -67,9 +71,9 @@ index is shared with the panel and built on demand when missing.
   names (`.git, node_modules, .cache, .venv` by default, matched anywhere in
   the tree), hidden entries on/off, max results
 - Keyboard navigation in the panel: `↑`/`↓` move the highlighted result and
-  `Enter` opens it, without ever leaving the query box. Every result row also
-  opens on click, via the system MIME association — files in their default
-  app, folders in the file manager
+  scroll the list a row at a time, `Enter` opens it — all without leaving the
+  query box. Every result row also opens on click, via the system MIME
+  association — files in their default app, folders in the file manager
 - Launcher provider for a keyboard-first flow: type `/fs <text>` in the
   noctalia launcher and navigate the results with the native arrow keys +
   `Enter`
@@ -116,10 +120,11 @@ noctalia msg plugins enable nightwatch75/file-search
 
 ## Notes
 
-- Noctalia offers plugins no way to scroll a list to a given row, so pushing
-  the highlight far enough down a long result list moves it out of view. The
-  launcher (`/fs`) remains the fully keyboard-driven way to browse a big
-  result set.
+- The results list is windowed rather than scrolled, because `ui.scroll`
+  gives plugins no way to scroll to a given row — the highlight could
+  otherwise be driven out of view with no way back. The consequence is that
+  the mouse wheel only covers the current window: narrow the query, or hold
+  `↓`. The launcher (`/fs`) keeps a natively scrolled list.
 - The index lives in the plugin's private data directory
   (`noctalia.pluginDataDir()`, by default
   `~/.local/state/noctalia/plugins/data/nightwatch75/file-search/` — honors

@@ -1,6 +1,7 @@
 {
   "copied_path": "Search folder path copied to clipboard",
   "counts": "{shown} shown · {total} indexed",
+  "counts_window": "{from}–{to} of {shown} · {total} indexed",
   "err_bad_record": "Ignored an invalid index record — rebuild the index",
   "err_index": "Failed to index the search folder",
   "err_no_fzf": "fzf not found — install fzf to use this plugin",

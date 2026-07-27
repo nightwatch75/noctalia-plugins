@@ -11,17 +11,36 @@
 -- Keyboard: the query input holds focus, so typing always reaches it. Up/Down
 -- (declared as the panel's capture_keys, plugin_api >= 13) move the highlighted
 -- result and Enter opens it — the query input's onSubmit, which is why Return is
--- not captured. The host exposes no way to scroll a ui.scroll to a given child,
--- so a selection driven far enough down a long result list moves out of view;
--- the launcher entry (launcher.luau) stays the full keyboard-driven path.
+-- not captured.
+--
+-- The results list is WINDOWED rather than scrolled. ui.scroll gives plugins no
+-- way to scroll to a given child (the reconciler accepts no offset prop, and the
+-- host's scroll-into-view is wired to native controls only), so a highlight
+-- moving past the fold could never be brought back into view. Instead only the
+-- rows that fit are rendered and the window follows the selection: pressing Down
+-- on the last visible row advances the window by one, which reads as the list
+-- scrolling. The trade is that the wheel cannot reach past the window — narrow
+-- the query, or hold Down. The launcher entry keeps the natively scrolled list.
 --
 -- The index is rebuilt when the panel opens with changed settings, or on
 -- demand via the refresh button. The bar widget mirrors the panel's open
 -- state through the shared "file_search_open" state key.
 
+-- Result-list geometry. Every row is pinned to ROW_H so the row count is fixed
+-- arithmetic instead of whatever control-height tier the host picks (a Button
+-- with text would default to Style::controlHeight, 38). The budget, from the
+-- panel's 480 height in plugin.toml: 480 − 2 × Style::panelPadding (14) = 452
+-- content, less the column's three 12px gaps, the header row (32, its glyph
+-- buttons), the query input (Style::controlHeight, 38) and the footer label
+-- (~15) → 331 for the list. 10 × 30 + 9 × 2 = 318 fits; 11 rows would not.
+local ROW_H = 30
+local ROW_GAP = 2
+local VISIBLE_ROWS = 10
+
 local query = ""
 local results = {}      -- relative paths; directories keep a trailing "/"
 local selected = 1      -- 1-based index into `results`; Enter opens this row
+local windowStart = 1   -- index of the first rendered row; follows `selected`
 local total = nil       -- entries in the index, shown in the footer
 local indexing = false
 local searching = false
@@ -221,8 +240,9 @@ runSearch = function()
                 table.insert(results, line)
             end
             -- A new result set invalidates the old position: the top match is
-            -- what a fresh query means to select.
+            -- what a fresh query means to select, and the window follows it.
             selected = 1
+            windowStart = 1
         end
         -- The query moved on while this search ran: chase it. The stale
         -- rows rendered below are overwritten as soon as it completes.
@@ -251,6 +271,18 @@ local function openEntry(rel)
     panel.close()
 end
 
+-- Slide the window so `selected` is inside it, then keep it in range: a shorter
+-- result set must not leave the window pointing past the end.
+local function syncWindow()
+    if selected < windowStart then
+        windowStart = selected
+    elseif selected > windowStart + VISIBLE_ROWS - 1 then
+        windowStart = selected - VISIBLE_ROWS + 1
+    end
+    local maxStart = math.max(1, #results - VISIBLE_ROWS + 1)
+    windowStart = math.max(1, math.min(maxStart, windowStart))
+end
+
 -- The selected row is the one Enter opens, so it is drawn as the primary
 -- action. The key carries the selection: the reconciler diffs by key, and the
 -- same convention marks the active row in the other panels.
@@ -263,6 +295,7 @@ local function resultRow(rel, index)
         text = rel,
         variant = isSelected and "primary" or "ghost",
         contentAlign = "start",
+        height = ROW_H,
         onClick = function()
             openEntry(rel)
         end,
@@ -274,11 +307,21 @@ local function statusFooter()
         return ui.label({ text = tr("status_indexing", { path = searchRoot() }), fontSize = 11, color = "secondary" })
     end
     local shown = #results
-    return ui.label({
-        text = tr("counts", { shown = shown, total = total or 0 }),
-        fontSize = 11,
-        color = "on_surface_variant",
-    })
+    -- With more matches than the window can hold, the plain count would look
+    -- like the list was truncated; name the visible range instead so the rows
+    -- off-window are visibly reachable rather than missing.
+    local text
+    if shown > VISIBLE_ROWS then
+        text = tr("counts_window", {
+            from = windowStart,
+            to = math.min(shown, windowStart + VISIBLE_ROWS - 1),
+            shown = shown,
+            total = total or 0,
+        })
+    else
+        text = tr("counts", { shown = shown, total = total or 0 })
+    end
+    return ui.label({ text = text, fontSize = 11, color = "on_surface_variant" })
 end
 
 render = function()
@@ -317,11 +360,15 @@ render = function()
                 flexGrow = 1,
             }))
         else
+            -- Only the windowed slice is built. ui.scroll is kept around it as
+            -- a safety net: if a theme ever makes a row taller than ROW_H the
+            -- last one stays reachable with the wheel instead of being clipped.
             local rows = {}
-            for index, rel in ipairs(results) do
-                table.insert(rows, resultRow(rel, index))
+            local last = math.min(#results, windowStart + VISIBLE_ROWS - 1)
+            for index = windowStart, last do
+                table.insert(rows, resultRow(results[index], index))
             end
-            table.insert(children, ui.scroll({ flexGrow = 1, gap = 2 }, rows))
+            table.insert(children, ui.scroll({ flexGrow = 1, gap = ROW_GAP }, rows))
         end
         table.insert(children, statusFooter())
     end
@@ -334,6 +381,7 @@ function onOpen(_context)
     query = ""
     results = {}
     selected = 1
+    windowStart = 1
     inputRev += 1
     noctalia.state.set("file_search_open", true)
     if not fzfMissing then
@@ -399,6 +447,7 @@ function onKey(chord, pressed)
     local target = math.max(1, math.min(#results, selected + step))
     if target ~= selected then
         selected = target
+        syncWindow()
         render()
     end
 end
