@@ -510,6 +510,7 @@ render = function()
             onClick = "onClearDone",
         }),
         ui.button({ key = "header-add", glyph = "plus", variant = "primary", tooltip = tr("tip_add"), onClick = "onAdd" }),
+        ui.button({ key = "header-settings", glyph = "settings", variant = "ghost", tooltip = tr("tip_settings"), onClick = "onOpenSettings" }),
         ui.button({ key = "header-close", glyph = "close", variant = "ghost", tooltip = tr("tip_close"), onClick = "onClosePanel" }),
     })
 
@@ -648,6 +649,13 @@ end
 function onClearDoneCancel()
     confirmingClear = false
     render()
+end
+
+-- Opens the settings window on this plugin's own page (the host supplies the
+-- plugin id, so a plugin can only ever open its own). It closes the panel on
+-- the way, so onClose flushes any pending edit first.
+function onOpenSettings()
+    noctalia.openSettings()
 end
 
 function onClosePanel()

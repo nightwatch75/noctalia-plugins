@@ -33,6 +33,7 @@ noctalia msg panel-toggle nightwatch75/todo:panel
 | **Enter**, or ✓ (row)         | Commit the edit — the row goes back to a static line |
 | ☐ / ☑ button (row)            | Toggle done/to-do (done tasks are struck through)   |
 | 🗑 button (row)                | Delete the task                                     |
+| ⚙ button (panel header)       | Open this plugin's page in *Settings → Plugins*     |
 
 ## Priorities
 
@@ -111,7 +112,8 @@ noctalia msg plugins enable nightwatch75/todo
 
 ## Requirements
 
-- noctalia with plugin API ≥ 5 (declarative drag-and-drop)
+- noctalia with plugin API ≥ 15 (`noctalia.openSettings()`; declarative
+  drag-and-drop needs 5)
 - No external dependencies
 
 ## License
