@@ -81,6 +81,7 @@ render = function()
                 color = "on_surface",
                 flexGrow = 1,
             }),
+            ui.button({ glyph = "settings", variant = "ghost", tooltip = tr("tip_settings"), onClick = "onOpenSettings" }),
             ui.button({ glyph = "close", variant = "ghost", tooltip = tr("tip_close"), onClick = "onClosePanel" }),
         }),
     }
@@ -126,6 +127,13 @@ function onCopyServers()
     end
     noctalia.copyToClipboard(text, "text/plain")
     noctalia.notify(tr("title"), tr("copied", { ip = text }))
+end
+
+-- Opens the settings window on this plugin's own page (the host supplies the
+-- plugin id, so a plugin can only ever open its own). It closes the panel on
+-- the way, which is why nothing is rendered afterwards.
+function onOpenSettings()
+    noctalia.openSettings()
 end
 
 function onClosePanel()

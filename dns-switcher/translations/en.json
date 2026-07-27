@@ -54,6 +54,7 @@
   "status_switching": "Switching…",
   "tip_close": "Close",
   "tip_copy": "Copy the active DNS servers",
+  "tip_settings": "Plugin settings",
   "title": "DNS Switcher",
   "tooltip_actions": "Actions",
   "tooltip_hints": "click: panel · right: reset to ISP",
