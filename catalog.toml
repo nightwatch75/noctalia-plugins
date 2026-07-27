@@ -4,58 +4,125 @@
 # Index of every plugin this source ships — the minimum needed to render, search,
 # and compat-check the list. The per-plugin plugin.toml stays authoritative; the
 # host re-reads it on enable. Keep one [[plugin]] row per plugin subdirectory.
+# A [[plugin.release]] row names an older revision for a Noctalia below the tip's
+# plugin_api, so an older release stays installable instead of the plugin vanishing.
 
 [[plugin]]
 id = "nightwatch75/dns-switcher"
 name = "DNS Switcher"
-version = "0.0.9"
+version = "0.0.10"
+updated_at = 1785140293
+added_at = 1783852430
 author = "nightwatch75"
 license = "MIT"
 icon = "world"
 description = "Switch the system DNS between popular providers, custom servers, or the ISP default (NetworkManager)."
-plugin_api = 9
+plugin_api = 15
 tags = ["bar", "panel", "service", "network", "privacy"]
+
+[[plugin.release]]
+plugin_api = 9
+version = "0.0.9"
+rev = "9ed9833884a2dfdf21ead35700e3398702eca9c5"
+
+[[plugin.release]]
+plugin_api = 6
+version = "0.0.6"
+rev = "42a6085f9119003e2057e983702ef659e07b0a55"
+
+[[plugin.release]]
+plugin_api = 3
+version = "0.0.5"
+rev = "34b05dfa074239f4a410de8303be81995bca0b78"
 
 [[plugin]]
 id = "nightwatch75/file-search"
 name = "File Search"
-version = "0.0.11"
+version = "0.0.12"
+updated_at = 1785140308
+added_at = 1783852430
 author = "nightwatch75"
 license = "MIT"
 icon = "search"
 description = "Search files and folders as you type, fuzzy-matched with fzf; open results with the system MIME association."
-plugin_api = 9
+plugin_api = 15
 tags = ["bar", "launcher", "panel", "utility", "productivity"]
+
+[[plugin.release]]
+plugin_api = 9
+version = "0.0.11"
+rev = "64eb27d888f0fc09faf000d3a4582d1e3bb0b15b"
+
+[[plugin.release]]
+plugin_api = 3
+version = "0.0.10"
+rev = "b6e1ff3dc39c38ac042fb76f94af2e29c5c457d5"
 
 [[plugin]]
 id = "nightwatch75/nnotes"
 name = "nnotes"
-version = "0.0.4"
+version = "0.0.5"
+updated_at = 1785140308
+added_at = 1783852430
 author = "nightwatch75"
 license = "MIT"
 icon = "notes"
 description = "One-click scratchpad: floating notes panel with autosave."
-plugin_api = 3
+plugin_api = 15
 tags = ["bar", "panel", "productivity"]
+
+[[plugin.release]]
+plugin_api = 3
+version = "0.0.4"
+rev = "34b05dfa074239f4a410de8303be81995bca0b78"
 
 [[plugin]]
 id = "nightwatch75/todo"
 name = "To Do"
-version = "0.0.10"
+version = "0.0.11"
+updated_at = 1785140293
+added_at = 1783932697
 author = "nightwatch75"
 license = "MIT"
 icon = "checklist"
 description = "A prioritised task list with a bar widget and editable panel."
-plugin_api = 9
+plugin_api = 15
 tags = ["bar", "panel", "productivity"]
+
+[[plugin.release]]
+plugin_api = 9
+version = "0.0.10"
+rev = "6ce5fffa0177314b030a694ac12c48d62a87f689"
+
+[[plugin.release]]
+plugin_api = 5
+version = "0.0.10"
+rev = "51e4664fddeb61f09d604a45b1b1013a3e2ccb00"
+
+[[plugin.release]]
+plugin_api = 3
+version = "0.0.8"
+rev = "34b05dfa074239f4a410de8303be81995bca0b78"
 
 [[plugin]]
 id = "nightwatch75/topgrade-wrapper"
 name = "Topgrade Wrapper"
-version = "0.0.2"
+version = "0.0.3"
+updated_at = 1785140293
+added_at = 1785076212
 author = "nightwatch75"
 license = "MIT"
 icon = "package"
 description = "Check how many packages topgrade would upgrade, then run the upgrade in a terminal window."
-plugin_api = 9
+plugin_api = 15
 tags = ["bar", "panel", "service", "system", "utility"]
+
+[[plugin.release]]
+plugin_api = 9
+version = "0.0.2"
+rev = "221ee943f78946d94f8aa8fa44c4426b6ff9ba9f"
+
+[[plugin.release]]
+plugin_api = 3
+version = "0.0.1"
+rev = "2dc2ebdc9ff5642368204b1f9c76e72233c0fe9e"
