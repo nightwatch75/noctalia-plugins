@@ -30,6 +30,31 @@
 -- The bar widget (todo.luau) lights its glyph while the panel is open via the
 -- shared "todo_open" state; it reads todo.json itself for the pending count.
 
+-- Row width budget. A Button clamps and ellipsizes its label only when it has
+-- an explicit width (the host derives the label's max width from it); flexGrow
+-- alone lets a long task overrun the buttons to its right instead of shrinking.
+-- So the text button is given whatever the fixed parts of the row leave over.
+-- Every constant below mirrors one in noctalia's Style, named so the sum can be
+-- re-checked against the host rather than re-measured by eye.
+local PANEL_WIDTH = 400 -- keep in sync with [[panel]] width in plugin.toml
+local PANEL_PADDING = 14 -- Style::panelPadding, applied left and right
+local SCROLLBAR_GUTTER = 14 -- Style::scrollbarWidth (6) + Style::scrollbarGap (8)
+local ROW_GAP = 8 -- the task row's own gap
+local CHIP_W = 16 -- the priority chip
+local GRIP_W = 24 -- the ☰ drag grip, manual mode only
+local GLYPH_BTN_W = 30 -- ghost glyph button: 2 × Style::spaceSm + a 14px glyph
+local ROW_CONTENT_W = PANEL_WIDTH - (2 * PANEL_PADDING) - SCROLLBAR_GUTTER
+
+-- Width left for the task text once the chip, the optional grip and the
+-- `trailing` glyph buttons (each preceded by a gap) have taken their share.
+local function taskTextWidth(withGrip, trailing)
+    local width = ROW_CONTENT_W - CHIP_W - ROW_GAP - (trailing * (GLYPH_BTN_W + ROW_GAP))
+    if withGrip then
+        width -= GRIP_W + ROW_GAP
+    end
+    return width
+end
+
 local PRIORITIES = { "important", "medium", "low" }
 local RANK = { important = 1, medium = 2, low = 3 }
 local COLORS = { important = "#e06c75", medium = "#e5c07b", low = "#98c379" }
@@ -403,12 +428,14 @@ local function taskRow(item)
         }))
     else
         -- Static text; clicking it re-opens the editor ("press on the text").
+        -- The explicit width is what makes a long task ellipsize instead of
+        -- running under the three buttons that follow it.
         table.insert(children, ui.button({
             key = "view-" .. id,
             text = item.done and strike(item.text) or item.text,
             variant = "ghost",
             contentAlign = "start",
-            flexGrow = 1,
+            width = taskTextWidth(grip ~= nil, 3),
             onClick = function()
                 enterEdit(id)
             end,

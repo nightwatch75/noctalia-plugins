@@ -8,7 +8,7 @@
 
 id = "nightwatch75/todo"
 name = "To Do"
-version = "0.0.11"
+version = "0.0.12"
 plugin_api = 15
 author = "nightwatch75"
 license = "MIT"
