@@ -3,7 +3,7 @@
 
 id = "nightwatch75/nnotes"
 name = "nnotes"
-version = "0.0.5"
+version = "0.0.6"
 plugin_api = 15
 author = "nightwatch75"
 license = "MIT"

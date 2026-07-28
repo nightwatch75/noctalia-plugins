@@ -42,7 +42,12 @@ the button is the plugin's again — the panel's ⚙ button is the settings rout
 | `Esc`        | Close the panel (noctalia default; saves) |
 
 The panel header carries a ⚙ button that opens this plugin's page in
-*Settings → Plugins*, next to the folder and copy-path buttons.
+*Settings → Plugins*, next to the folder and copy-path buttons. The same page
+opens from the command line, so it can be bound in your compositor too:
+
+```sh
+noctalia msg settings-open-plugin nightwatch75/nnotes
+```
 
 ## Features
 
@@ -67,8 +72,9 @@ The panel header carries a ⚙ button that opens this plugin's page in
 
 ## Requirements
 
-- noctalia with plugin API ≥ 15 (`noctalia.openSettings()`; the manifest
-  gesture default that frees middle click needs 14)
+- noctalia v5.0.0-beta.6 or newer — the first tagged release that accepts
+  `plugin_api = 15` (`noctalia.openSettings()`, the panel's ⚙ button; the
+  manifest gesture default that frees middle click needs 14)
 - `xdg-open` (`xdg-utils`) — used to open the notes folder in your file
   manager (right-click on the bar widget, folder button in the panel)
 
