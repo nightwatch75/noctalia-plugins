@@ -49,7 +49,12 @@ so the file name — the part the query matched — always stays readable:
 `.local/share/flatpak/repo/tmp/cache/…dolphin.idx.sig`.
 
 The panel header also carries a ⚙ button that opens this plugin's page in
-*Settings → Plugins*, and a ↻ button that rebuilds the index.
+*Settings → Plugins*, and a ↻ button that rebuilds the index. The same settings
+page opens from the command line, so it can be bound in your compositor too:
+
+```sh
+noctalia msg settings-open-plugin nightwatch75/file-search
+```
 
 In the noctalia launcher (keyboard-first flow, native navigation):
 
@@ -96,7 +101,8 @@ index is shared with the panel and built on demand when missing.
 
 ## Requirements
 
-- noctalia with plugin API ≥ 15 (`noctalia.openSettings()`, the panel's ⚙ button)
+- noctalia v5.0.0-beta.6 or newer — the first tagged release that accepts
+  `plugin_api = 15` (`noctalia.openSettings()`, the panel's ⚙ button)
 - [`fzf`](https://github.com/junegunn/fzf) — the fuzzy matcher
 - `find` (GNU findutils) — walks the search folder into the index
 - `xdg-open` (xdg-utils) — opens results with the MIME association
