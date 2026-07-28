@@ -35,6 +35,13 @@ noctalia msg panel-toggle nightwatch75/todo:panel
 | 🗑 button (row)                | Delete the task                                     |
 | ⚙ button (panel header)       | Open this plugin's page in *Settings → Plugins*     |
 
+That settings page also opens from the command line, so it can be bound in your
+compositor too:
+
+```sh
+noctalia msg settings-open-plugin nightwatch75/todo
+```
+
 ## Priorities
 
 Each task carries a priority, shown at the start of the row as a small coloured
@@ -116,8 +123,9 @@ noctalia msg plugins enable nightwatch75/todo
 
 ## Requirements
 
-- noctalia with plugin API ≥ 15 (`noctalia.openSettings()`; declarative
-  drag-and-drop needs 5)
+- noctalia v5.0.0-beta.6 or newer — the first tagged release that accepts
+  `plugin_api = 15` (`noctalia.openSettings()`, the panel's ⚙ button;
+  declarative drag-and-drop needs 5)
 - No external dependencies
 
 ## License
