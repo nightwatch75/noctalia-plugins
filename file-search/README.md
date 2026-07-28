@@ -28,7 +28,10 @@ noctalia msg panel-toggle nightwatch75/file-search:panel
 |--------------|-------------------------------------------------|
 | Left click   | Open/close the search panel                     |
 | Right click  | Open the search folder in the file manager      |
-| Middle click | Copy the search folder path to the clipboard    |
+
+Middle click is not used: every bar widget carries a built-in binding for it
+that opens the widget's own settings, and a bound gesture never reaches the
+plugin. Use the panel's ⚙ button, or the command below, for the settings.
 
 In the panel:
 
