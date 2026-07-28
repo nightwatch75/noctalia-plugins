@@ -33,7 +33,12 @@ noctalia msg panel-toggle nightwatch75/dns-switcher:panel
 | Right click  | Reset to the connection default (ISP)         |
 
 The panel header carries a ⚙ button that opens this plugin's page in
-*Settings → Plugins* — the quickest route to the custom-server fields.
+*Settings → Plugins* — the quickest route to the custom-server fields. The same
+page opens from the command line, so it can be bound in your compositor too:
+
+```sh
+noctalia msg settings-open-plugin nightwatch75/dns-switcher
+```
 
 ## Features
 
@@ -80,7 +85,8 @@ noctalia msg plugin nightwatch75/dns-switcher:service all poll
 
 ## Requirements
 
-- noctalia with plugin API ≥ 15 (`noctalia.openSettings()`)
+- noctalia v5.0.0-beta.6 or newer — the first tagged release that accepts
+  `plugin_api = 15` (`noctalia.openSettings()`, the panel's ⚙ button)
 - NetworkManager (`networkmanager`, provides `nmcli`) with an active connection
 - Permission to modify system connections (see *Privileges* below)
 
