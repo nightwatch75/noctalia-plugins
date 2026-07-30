@@ -108,8 +108,9 @@ local rowAction = DEFAULT_ROW_ACTION
 local mounts = {}       -- mount points of the detected removable volumes
 local mountsAt = 0      -- unix seconds of the last mount scan (0 = never)
 local probing = false
-local roots = {}        -- what the index actually covers, ancestors first
-local absoluteRecords = false -- records are absolute (set when #roots > 1)
+local roots = {}        -- what an index built now would cover, ancestors first
+local indexRoots = {}   -- what the index ON DISK was built with (see indexRootsOf)
+local absoluteRecords = false -- records are absolute (set when #indexRoots > 1)
 local indexState = "fresh" -- "fresh" | "stale" (usable, out of date) | "missing"
 local reloading = false -- a refresh pass is in flight
 local reloadQueued = false
@@ -463,6 +464,28 @@ local function cacheFresh(dir)
     return noctalia.readFile(dir .. "/meta-" .. scope) == indexKey()
 end
 
+-- The roots the index on disk was built with, read back out of its fingerprint,
+-- or nil when there is no index. Records must be read the way they were
+-- WRITTEN, not the way a fresh walk would write them now: unplug one of two
+-- disks and the file still holds absolute records, so deciding the format from
+-- the current mount list would make every row unopenable — including the rows
+-- of the disk still attached — until the next rebuild.
+local function indexRootsOf(dir)
+    local meta = noctalia.readFile(dir .. "/meta-" .. scope)
+    if type(meta) ~= "string" then
+        return nil
+    end
+    local section = meta:match("\n%-%-\n(.-)\n%-%-\n")
+    if section == nil then
+        return nil
+    end
+    local list = {}
+    for line in section:gmatch("[^\n]+") do
+        table.insert(list, line)
+    end
+    return #list > 0 and list or nil
+end
+
 -- Code-point slices. Byte offsets would split a multi-byte character and
 -- produce invalid UTF-8, which the text renderer then refuses to measure.
 local function headChars(value, count)
@@ -585,7 +608,10 @@ buildIndex = function()
     indexing = true
     errMsg = nil
     local key = indexKey()
-    local absolute = absoluteRecords
+    -- The format this walk WRITES follows the roots it is about to visit, not
+    -- the format of the index being replaced.
+    local builtRoots = roots
+    local absolute = #builtRoots > 1
     local builtScope = scope
 
     -- Names containing a newline would each forge extra one-per-fragment
@@ -653,24 +679,26 @@ buildIndex = function()
                 -- count, the freshness — describes the current scope. Derive
                 -- the state again instead of inheriting it.
                 applyState()
-            elseif indexKey() ~= key then
-                -- Same scope, but its roots or exclusions moved (a disk came
-                -- or went). Chasing that is fine for the search folder; for a
-                -- disk it would be a second multi-minute walk nobody asked
-                -- for, so the index is just marked out of date.
+            else
+                -- The file on disk is the one this walk just wrote: read it
+                -- the way it was written.
+                indexRoots = builtRoots
+                absoluteRecords = absolute
                 haveIndex = true
                 total = tonumber(trim(result.stdout or "")) or 0
-                if autoIndexAllowed() then
+                if indexKey() == key then
+                    indexState = "fresh"
+                    runSearch()
+                elseif autoIndexAllowed() then
+                    -- Roots or exclusions moved during the walk (a disk came or
+                    -- went). Chasing that is fine for the search folder.
                     buildIndex()
                 else
+                    -- For a disk it would be a second multi-minute walk nobody
+                    -- asked for, so the index is just marked out of date.
                     indexState = "stale"
                     runSearch()
                 end
-            else
-                haveIndex = true
-                total = tonumber(trim(result.stdout or "")) or 0
-                indexState = "fresh"
-                runSearch()
             end
         else
             haveIndex = false
@@ -742,15 +770,19 @@ local function absolutePath(record)
             return nil
         end
     end
+    -- Validated against the roots of the index the record came from, so a
+    -- record can still never escape a root, but one written for a disk that has
+    -- since been unplugged stays openable (xdg-open just fails if it is gone).
+    local from = #indexRoots > 0 and indexRoots or roots
     if absoluteRecords then
-        for _, root in ipairs(roots) do
+        for _, root in ipairs(from) do
             if startsWith(path, root == "/" and "/" or root .. "/") then
                 return path
             end
         end
         return nil
     end
-    local root = roots[1]
+    local root = from[1]
     if root == nil or path == "" or path:sub(1, 1) == "/" then
         return nil
     end
@@ -984,13 +1016,15 @@ end
 -- and flagged, or the panel asks for a rebuild when there is none at all.
 applyState = function()
     roots = computeRoots()
-    absoluteRecords = #roots > 1
     local dir = dataDir()
     if dir == nil then
         errMsg = tr("err_index")
         render()
         return
     end
+    -- How to read what is on disk; a walk started below overwrites both.
+    indexRoots = indexRootsOf(dir) or roots
+    absoluteRecords = #indexRoots > 1
     if cacheFresh(dir) then
         haveIndex = true
         indexState = "fresh"
@@ -1040,7 +1074,13 @@ local function requestReload(force, build)
         reloading = false
         if build then
             roots = computeRoots()
-            absoluteRecords = #roots > 1
+            -- The index being replaced stays readable until the walk lands, so
+            -- a row clicked meanwhile still resolves.
+            local dir = dataDir()
+            if dir ~= nil then
+                indexRoots = indexRootsOf(dir) or roots
+                absoluteRecords = #indexRoots > 1
+            end
             results = {}
             total = nil
             errMsg = nil

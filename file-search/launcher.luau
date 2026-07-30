@@ -52,6 +52,7 @@ local scope = DEFAULT_SCOPE
 local mounts = {}
 local mountsAt = 0       -- unix seconds of the last mount scan (0 = never)
 local roots = {}
+local indexRoots = {}    -- what the index ON DISK was built with (indexRootsOf)
 local absoluteRecords = false
 local staleIndex = false -- searching an index that no longer matches the disks
 
@@ -300,6 +301,25 @@ local function cacheFresh(dir)
     return noctalia.readFile(dir .. "/meta-" .. scope) == indexKey()
 end
 
+-- The roots the index on disk was built with, read back out of its fingerprint
+-- (see panel.luau): records must be read the way they were written, or unplug
+-- one of two disks and every row stops resolving until the next rebuild.
+local function indexRootsOf(dir)
+    local meta = noctalia.readFile(dir .. "/meta-" .. scope)
+    if type(meta) ~= "string" then
+        return nil
+    end
+    local section = meta:match("\n%-%-\n(.-)\n%-%-\n")
+    if section == nil then
+        return nil
+    end
+    local list = {}
+    for line in section:gmatch("[^\n]+") do
+        table.insert(list, line)
+    end
+    return #list > 0 and list or nil
+end
+
 -- One cache record, about to be turned into a path. The cache is a plain
 -- user-editable file, so records are untrusted: reject anything that could
 -- resolve outside the roots it claims to come from.
@@ -313,15 +333,18 @@ local function absolutePath(record)
             return nil
         end
     end
+    -- Against the roots of the index the record came from, not of a walk that
+    -- would happen now: a record can still never escape a root.
+    local from = #indexRoots > 0 and indexRoots or roots
     if absoluteRecords then
-        for _, root in ipairs(roots) do
+        for _, root in ipairs(from) do
             if startsWith(path, root == "/" and "/" or root .. "/") then
                 return path
             end
         end
         return nil
     end
-    local root = roots[1]
+    local root = from[1]
     if root == nil or path == "" or path:sub(1, 1) == "/" then
         return nil
     end
@@ -379,7 +402,9 @@ local function buildIndex(query)
     pendingQuery = query
 
     local key = indexKey()
-    local absolute = absoluteRecords
+    -- The format this walk writes follows the roots it is about to visit.
+    local builtRoots = roots
+    local absolute = #builtRoots > 1
     local builtScope = scope
     -- Names containing a newline would each forge extra one-per-fragment
     -- records (a crafted name can smuggle '..' lines into the index), so
@@ -439,18 +464,24 @@ local function buildIndex(query)
                 -- so roots, records and freshness are derived for the scope
                 -- that is actually current.
                 onQuery(queued or query)
-            elseif indexKey() ~= key and autoIndexAllowed() then
-                -- Settings changed while the walk was running: the cache
-                -- holds paths relative to the old root, and activation
-                -- would join them to the new one. Rebuild instead of
-                -- searching stale records (mirrors the panel).
-                buildIndex(queued or query)
             else
-                -- For a disk scope the same mismatch only marks the index
-                -- out of date: a second unasked-for walk is exactly what
-                -- this plugin must not do.
-                staleIndex = indexKey() ~= key
-                runQuery(queued or query)
+                -- The file on disk is the one this walk just wrote: read it
+                -- the way it was written.
+                indexRoots = builtRoots
+                absoluteRecords = absolute
+                if indexKey() == key then
+                    staleIndex = false
+                    runQuery(queued or query)
+                elseif autoIndexAllowed() then
+                    -- Roots or exclusions moved during the walk; chasing that
+                    -- is fine for the search folder.
+                    buildIndex(queued or query)
+                else
+                    -- For a disk it would be a second unasked-for walk, which
+                    -- is exactly what this plugin must not do.
+                    staleIndex = true
+                    runQuery(queued or query)
+                end
             end
         else
             launcher.setResults(queued or query, { noopRow("err_index") })
@@ -588,7 +619,9 @@ function onQuery(query)
     scope = readScope(dir)
     withMounts(query, function(current)
         roots = computeRoots()
-        absoluteRecords = #roots > 1
+        -- How to read what is on disk right now; a walk below overwrites both.
+        indexRoots = indexRootsOf(dir) or roots
+        absoluteRecords = #indexRoots > 1
         if cacheFresh(dir) then
             staleIndex = false
             runQuery(current)

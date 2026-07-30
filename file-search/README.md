@@ -183,8 +183,11 @@ noctalia msg plugins enable nightwatch75/file-search
   header toggle cycles. A fingerprint that no longer matches — a settings
   change, a scope change, a disk plugged in or removed — rebuilds the
   search-folder index automatically and marks a disk index out of date.
-- Records are relative to the root when there is only one (the common case, and
-  what keeps the rows short), absolute when several roots share one index.
+- Several disks share one index, not one each: a rebuild walks every mounted
+  volume in a single pass. Records are relative to the root when there is only
+  one (the common case, and what keeps the rows short) and absolute when there
+  are several — and they are always read the way the index was *written*, so
+  unplugging one of two disks leaves the rest of the results openable.
 - Volume metadata is pruned at every root, since a disk used on Windows or macOS
   otherwise contributes tens of thousands of records that are not your files:
   `lost+found`, `$RECYCLE.BIN`, `RECYCLER`, `System Volume Information`,
