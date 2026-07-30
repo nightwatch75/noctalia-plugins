@@ -182,8 +182,8 @@ results whenever the index is out of date.
   for the path-aware ranking; older builds work, with fzf's default ranking
 - `find` (GNU findutils) — walks the roots into the index
 - `xdg-open` (xdg-utils) — opens results with the MIME association
-- `mktemp`, `mv`, `wc`, `head`, `rm` — GNU coreutils, standard on any Linux
-  desktop
+- `mktemp`, `mv`, `wc`, `head`, `rm`, `date` — GNU coreutils, standard on any
+  Linux desktop (`date` times the index walk for the footer)
 - `lsblk` (util-linux) — lists the mounted USB/removable volumes; only run when
   the scope includes them. Missing, it falls back to `/proc/mounts` and the
   udisks2 layout (`/run/media/<user>/…`, `/media/…`)
