@@ -83,6 +83,17 @@ local ROW_ACTION_GLYPHS = { copy = "copy", reveal = "folder-open" }
 local NEXT_ROW_ACTION = { copy = "reveal", reveal = "copy" }
 local DEFAULT_ROW_ACTION = "copy"
 
+-- How fzf scores a match, switched by the third header button and persisted
+-- like the others. "path" is fzf's --scheme=path: it treats / as a strong
+-- boundary, so a match that starts a file or folder name beats the same letters
+-- buried in a long directory. "default" is fzf's generic scoring, which mostly
+-- rewards the shortest path. Path wins on most queries here — "config" finds
+-- .ssh/config instead of a Steam directory five levels down — but not on all of
+-- them, which is exactly why it is a toggle and not a constant.
+local RANKING_GLYPHS = { default = "arrows-sort", path = "sitemap" }
+local NEXT_RANKING = { default = "path", path = "default" }
+local DEFAULT_RANKING = "path"
+
 -- A walk over a USB spinning disk is seek-bound and can run for tens of
 -- minutes on a multi-terabyte drive, where the search folder alone is seconds;
 -- the timeout follows the scope. Nothing at that price is ever started on its
@@ -106,6 +117,10 @@ local pluginVersion = (function()
     return ("\n" .. text):match('\nversion%s*=%s*"([^"]+)"') or ""
 end)()
 
+-- Whether the installed fzf understands --scheme, decided once per script load
+-- (see probeFzfScheme). False until it answers, and on any fzf too old for it.
+local schemeSupported = false
+
 local query = ""
 local results = {}      -- index records: relative to the root, or absolute
 local total = nil       -- entries in the index, shown in the footer
@@ -118,6 +133,7 @@ local inputRev = 0      -- bumped to reseed the query input on open
 local haveIndex = false -- the cache on disk matches the current settings
 local scope = DEFAULT_SCOPE
 local rowAction = DEFAULT_ROW_ACTION
+local ranking = DEFAULT_RANKING
 local mounts = {}       -- mount points of the detected removable volumes
 local mountsAt = 0      -- unix seconds of the last mount scan (0 = never)
 local probing = false
@@ -154,6 +170,23 @@ end
 
 local function now()
     return tonumber(noctalia.formatTime("%s")) or 0
+end
+
+-- --scheme=path arrived in fzf 0.36; an older build exits with "unknown option"
+-- and the panel would show an empty list forever. So the flag is only ever used
+-- after the installed version says it is understood — one spawn per script
+-- load, generic ranking until it answers.
+local function probeFzfScheme()
+    noctalia.runAsync("fzf --version 2>/dev/null", function(result)
+        local major, minor = (result.stdout or ""):match("(%d+)%.(%d+)")
+        major, minor = tonumber(major), tonumber(minor)
+        schemeSupported = major ~= nil and minor ~= nil and (major > 0 or minor >= 36)
+    end, 5000)
+end
+
+-- The scoring flag for the next search: what the toggle asks for, if fzf can.
+local function rankingFlag()
+    return (ranking == "path" and schemeSupported) and " --scheme=path" or ""
 end
 
 -- Whether the plugin may walk the tree by itself. It may for the search folder,
@@ -221,6 +254,24 @@ local function writeRowAction(dir, value)
     local ok, err = noctalia.writeFile(dir .. "/row-action", value)
     if not ok then
         noctalia.log("file-search: could not persist the row action: " .. tostring(err))
+    end
+end
+
+local function readRanking(dir)
+    local raw = noctalia.readFile(dir .. "/ranking")
+    if type(raw) == "string" then
+        local value = trim(raw)
+        if RANKING_GLYPHS[value] ~= nil then
+            return value
+        end
+    end
+    return DEFAULT_RANKING
+end
+
+local function writeRanking(dir, value)
+    local ok, err = noctalia.writeFile(dir .. "/ranking", value)
+    if not ok then
+        noctalia.log("file-search: could not persist the ranking: " .. tostring(err))
     end
 end
 
@@ -753,7 +804,7 @@ runSearch = function()
         cmd = cacheSh(dir) .. '\nhead -n ' .. limit .. ' "$CACHE" 2>/dev/null'
     else
         -- head closes the pipe early; the pipeline status stays head's (0).
-        cmd = cacheSh(dir) .. "\nfzf --filter=" .. shellQuote(q)
+        cmd = cacheSh(dir) .. "\nfzf" .. rankingFlag() .. " --filter=" .. shellQuote(q)
             .. ' < "$CACHE" 2>/dev/null | head -n ' .. limit
     end
     local ok = noctalia.runAsync(cmd, function(result)
@@ -927,6 +978,26 @@ local function formatDuration(ms)
     return string.format("%dm %02ds", math.floor(seconds / 60), math.floor(seconds % 60))
 end
 
+-- One dim line of fzf's extended-search operators, between the results and the
+-- status bar. They are the difference between "many matches" and "the one", and
+-- nothing else in the panel hints that the query field understands more than
+-- letters. One label, not a row of chips: the cheapest node count for something
+-- that renders on every keystroke.
+-- Two labels rather than one string: the caption says what the row is, dimmed
+-- so it reads as a label and not as part of the syntax, and the operators
+-- themselves stay in the brighter colour because they are the content.
+local function syntaxLegend()
+    return ui.row({ key = "legend", gap = 6, align = "center" }, {
+        ui.label({
+            key = "legend-caption",
+            text = tr("syntax_hint_label"),
+            fontSize = 10,
+            color = "on_surface_variant",
+        }),
+        ui.label({ key = "legend-ops", text = tr("syntax_hint"), fontSize = 10, color = "on_surface" }),
+    })
+end
+
 -- Counts on the left, how long the walk behind this index took on the right.
 -- The duration is the one recorded in the count sidecar, so it survives a
 -- restart and follows the scope: switching to the disks shows the disks' own
@@ -957,16 +1028,17 @@ local function statusFooter()
         end
     end
     local children = {
-        ui.label({ text = left, fontSize = 11, color = tone, flexGrow = 1 }),
+        ui.label({ key = "counts", text = left, fontSize = 11, color = tone, flexGrow = 1 }),
     }
     if buildMs ~= nil then
         table.insert(children, ui.label({
+            key = "elapsed",
             text = tr("build_time", { duration = formatDuration(buildMs) }),
             fontSize = 11,
             color = "on_surface_variant",
         }))
     end
-    return ui.row({ gap = 8, align = "center" }, children)
+    return ui.row({ key = "footer", gap = 8, align = "center" }, children)
 end
 
 -- The scope button cycles folder → folder+disks → disks only. A cycling button
@@ -989,6 +1061,26 @@ local function rowActionButton()
     })
 end
 
+-- Names the scoring scheme and switches it. The tooltip has to carry the whole
+-- explanation: the difference only shows up in the order of the rows, and there
+-- is nowhere else to say what changed. When fzf is too old for --scheme the
+-- button stays on the generic scheme and says why, rather than disappearing.
+local function rankingButton()
+    local tip = schemeSupported
+        and tr("tip_ranking", {
+            current = tr("ranking." .. ranking),
+            next = tr("ranking." .. NEXT_RANKING[ranking]),
+        })
+        or tr("tip_ranking_unsupported")
+    return ui.button({
+        key = "ranking-" .. ranking,
+        glyph = RANKING_GLYPHS[schemeSupported and ranking or "default"],
+        variant = "ghost",
+        tooltip = tip,
+        onClick = "onCycleRanking",
+    })
+end
+
 local function scopeButton()
     return ui.button({
         key = "scope-" .. scope,
@@ -1003,9 +1095,12 @@ local function scopeButton()
 end
 
 render = function()
+    -- Every child of the panel and of the header carries a stable key, so the
+    -- reconciler matches roles instead of guessing by position and type.
     local children = {
-        ui.row({ gap = 6, align = "center" }, {
+        ui.row({ key = "header", gap = 6, align = "center" }, {
             ui.label({
+                key = "title",
                 text = tr("title"),
                 fontSize = 16,
                 fontWeight = "bold",
@@ -1014,13 +1109,14 @@ render = function()
             -- Version off the manifest, small and dimmed: it answers "which
             -- build am I running" without competing with the title. The spacer
             -- rather than a flexGrow title keeps the two together on the left.
-            ui.label({ text = pluginVersion, fontSize = 10, color = "on_surface_variant" }),
-            ui.spacer({ flexGrow = 1 }),
+            ui.label({ key = "version", text = pluginVersion, fontSize = 10, color = "on_surface_variant" }),
+            ui.spacer({ key = "gap", flexGrow = 1 }),
+            rankingButton(),
             rowActionButton(),
             scopeButton(),
-            ui.button({ glyph = "refresh", variant = "ghost", tooltip = tr("tip_refresh"), onClick = "onRefreshIndex" }),
-            ui.button({ glyph = "settings", variant = "ghost", tooltip = tr("tip_settings"), onClick = "onOpenSettings" }),
-            ui.button({ glyph = "close", variant = "ghost", tooltip = tr("tip_close"), onClick = "onClosePanel" }),
+            ui.button({ key = "refresh", glyph = "refresh", variant = "ghost", tooltip = tr("tip_refresh"), onClick = "onRefreshIndex" }),
+            ui.button({ key = "settings", glyph = "settings", variant = "ghost", tooltip = tr("tip_settings"), onClick = "onOpenSettings" }),
+            ui.button({ key = "close", glyph = "close", variant = "ghost", tooltip = tr("tip_close"), onClick = "onClosePanel" }),
         }),
         ui.input({
             key = "query-" .. inputRev,
@@ -1032,43 +1128,45 @@ render = function()
         }),
     }
 
+    -- Whatever the state, the body is ONE keyed column that grows: the results
+    -- list and every message live inside it. Swapping node types at the top
+    -- level is what left the panel short of its own height, with dead space
+    -- under the status bar: the reconciler matches children by (type, key), so
+    -- a changed sequence detaches them all and re-matches — unkeyed labels get
+    -- handed to whichever role asks for a label first, and a prop the new role
+    -- does not set (flexGrow among them) is never reset, it just carries over
+    -- from the previous tenant. A constant shape has nothing to re-match.
+    local body
     if fzfMissing then
-        table.insert(children, ui.label({ text = tr("err_no_fzf"), color = "error" }))
+        body = ui.label({ key = "body-msg", text = tr("err_no_fzf"), color = "error", flexGrow = 1 })
     elseif errMsg ~= nil then
-        table.insert(children, ui.label({ text = errMsg, color = "error" }))
+        body = ui.label({ key = "body-msg", text = errMsg, color = "error", flexGrow = 1 })
+    elseif #roots == 0 and not indexing then
+        -- Only reachable with scope "external": nothing to search, and
+        -- "no matches" would blame the query for it.
+        body = ui.label({ key = "body-msg", text = tr("no_external"), color = "on_surface_variant", flexGrow = 1 })
+    elseif indexState == "missing" and not indexing then
+        -- A disk scope that has never been indexed. Walking it is a
+        -- minutes-long operation on a large drive, so it is offered rather
+        -- than performed.
+        body = ui.label({ key = "body-msg", text = tr("index_missing"), color = "on_surface_variant", flexGrow = 1 })
+    elseif #results == 0 and not indexing and trim(query) ~= "" then
+        body = ui.label({
+            key = "body-msg",
+            text = tr("no_results", { query = query }),
+            color = "on_surface_variant",
+            flexGrow = 1,
+        })
     else
-        if #roots == 0 and not indexing then
-            -- Only reachable with scope "external": nothing to search, and
-            -- "no matches" would blame the query for it.
-            table.insert(children, ui.label({
-                text = tr("no_external"),
-                color = "on_surface_variant",
-                flexGrow = 1,
-            }))
-        elseif indexState == "missing" and not indexing then
-            -- A disk scope that has never been indexed. Walking it is a
-            -- minutes-long operation on a large drive, so it is offered rather
-            -- than performed.
-            table.insert(children, ui.label({
-                text = tr("index_missing"),
-                color = "on_surface_variant",
-                flexGrow = 1,
-            }))
-        elseif #results == 0 and not indexing and trim(query) ~= "" then
-            table.insert(children, ui.label({
-                text = tr("no_results", { query = query }),
-                color = "on_surface_variant",
-                flexGrow = 1,
-            }))
-        else
-            local rows = {}
-            for index, rel in ipairs(results) do
-                table.insert(rows, resultRow(rel, index))
-            end
-            table.insert(children, ui.scroll({ flexGrow = 1, gap = 2 }, rows))
+        local rows = {}
+        for index, rel in ipairs(results) do
+            table.insert(rows, resultRow(rel, index))
         end
-        table.insert(children, statusFooter())
+        body = ui.scroll({ key = "hits", flexGrow = 1, gap = 2 }, rows)
     end
+    table.insert(children, ui.column({ key = "body", flexGrow = 1, align = "stretch" }, { body }))
+    table.insert(children, syntaxLegend())
+    table.insert(children, statusFooter())
 
     panel.render(ui.column({ flexGrow = 1, gap = 12, align = "stretch" }, children))
 end
@@ -1179,6 +1277,7 @@ function onOpen(_context)
         -- a script reload drops both of these from memory.
         scope = readScope(dir)
         rowAction = readRowAction(dir)
+        ranking = readRanking(dir)
     end
     if fzfMissing then
         render()
@@ -1239,6 +1338,21 @@ end
 -- The press itself is deliberately cheap — a 6-byte write and a render. Every
 -- process it might need (mount scan, count, search) goes through
 -- requestReload, which collapses a burst of presses into one pass.
+-- The index is untouched; only the order of the rows changes, so the current
+-- query is simply run again through the other scheme.
+function onCycleRanking()
+    if not schemeSupported then
+        return
+    end
+    ranking = NEXT_RANKING[ranking] or DEFAULT_RANKING
+    local dir = dataDir()
+    if dir ~= nil then
+        writeRanking(dir, ranking)
+    end
+    render()
+    runSearch()
+end
+
 -- Nothing to reload: this only changes what a right click will do next.
 function onCycleRowAction()
     rowAction = NEXT_ROW_ACTION[rowAction] or DEFAULT_ROW_ACTION
@@ -1272,3 +1386,5 @@ end
 function onClosePanel()
     panel.close()
 end
+
+probeFzfScheme()

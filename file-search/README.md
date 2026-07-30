@@ -62,6 +62,33 @@ listed and what is indexed, and on the right how long the walk behind that
 index took — per scope, kept across restarts, and still visible while a new
 walk runs, which is when knowing the last one's cost is most useful.
 
+### Search syntax
+
+The query goes to `fzf` as-is, so its extended-search operators work here. The
+panel keeps a one-line reminder of them above the status bar.
+
+| Query | Matches |
+|---|---|
+| `panel luau` | both terms, in any order (space is AND) |
+| `'panel.luau` | **exact**, not fuzzy — a single quote, not double quotes |
+| `^src` | at the start |
+| `.webp$` | at the end |
+| `luau !src` | `luau`, excluding anything with `src` |
+| `.toml$ \| .json$` | either one (spaces around the `\|` are required) |
+
+A lowercase query is case-insensitive; one uppercase letter anywhere makes it
+case-sensitive. There is no regex: fzf does not have one.
+
+The 🗠/🗺 button in the header switches how matches are scored, and remembers it:
+
+| Glyph | Ranking |
+|---|---|
+| 🗺 | **path-aware** *(default)* — a match starting a file or folder name wins, so `config` finds `.ssh/config` and not the deepest `…/Steam Controller Configs/` |
+| 🗠 | generic — fzf's own scoring, which mostly rewards the shortest path |
+
+Path-aware costs about a third more CPU per keystroke and needs fzf 0.36 or
+newer; on an older build the button stays on generic and says so.
+
 ### Searching external disks
 
 The 🗀 button in the panel header cycles what the search covers:
@@ -151,7 +178,8 @@ results whenever the index is out of date.
 
 - noctalia v5.0.0-beta.6 or newer — the first tagged release that accepts
   `plugin_api = 15` (`noctalia.openSettings()`, the panel's ⚙ button)
-- [`fzf`](https://github.com/junegunn/fzf) — the fuzzy matcher
+- [`fzf`](https://github.com/junegunn/fzf) — the fuzzy matcher. 0.36 or newer
+  for the path-aware ranking; older builds work, with fzf's default ranking
 - `find` (GNU findutils) — walks the roots into the index
 - `xdg-open` (xdg-utils) — opens results with the MIME association
 - `mktemp`, `mv`, `wc`, `head`, `rm` — GNU coreutils, standard on any Linux
@@ -185,7 +213,7 @@ noctalia msg plugins enable nightwatch75/file-search
   `NOCTALIA_STATE_HOME`/`XDG_STATE_HOME`): `list-<scope>` is a plain list of
   paths, `meta-<scope>` records the scope, roots and exclusions that built it,
   `count-<scope>` its line count and the walk's duration in milliseconds, and
-  `scope`/`row-action` the one word each
+  `scope`, `row-action` and `ranking` the one word each
   header toggle cycles. A fingerprint that no longer matches — a settings
   change, a scope change, a disk plugged in or removed — rebuilds the
   search-folder index automatically and marks a disk index out of date.

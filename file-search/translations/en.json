@@ -19,6 +19,10 @@
   },
   "no_external": "No external disk mounted — plug one in, then rebuild the index",
   "no_results": "No matches for \"{query}\"",
+  "ranking": {
+    "default": "generic — the shortest path wins",
+    "path": "path-aware — a match starting a name wins"
+  },
   "row_action": {
     "copy": "copies its path",
     "reveal": "shows it in the file manager"
@@ -52,8 +56,12 @@
     }
   },
   "status_indexing": "Indexing {path}…",
+  "syntax_hint": "'exact · ^starts · ends$ · !exclude · a | b",
+  "syntax_hint_label": "fzf syntax:",
   "status_indexing_multi": "Indexing {count} locations…",
   "tip_close": "Close",
+  "tip_ranking": "Ranking: {current}\ne.g. \"config\" → .ssh/config, not …/Steam Controller Configs/\nClick to switch to: {next}",
+  "tip_ranking_unsupported": "Path-aware ranking needs fzf 0.36 or newer",
   "tip_refresh": "Rebuild the file index",
   "tip_row_action": "Right click on a result {current}\nClick to switch to: {next}",
   "tip_scope": "Searching: {current}\nClick to search {next}",

@@ -55,6 +55,8 @@ local roots = {}
 local indexRoots = {}    -- what the index ON DISK was built with (indexRootsOf)
 local absoluteRecords = false
 local staleIndex = false -- searching an index that no longer matches the disks
+local ranking = "path"   -- scoring scheme, as persisted by the panel's toggle
+local schemeSupported = false -- whether this fzf understands --scheme at all
 
 local runQuery
 
@@ -76,6 +78,33 @@ end
 
 local function now()
     return tonumber(noctalia.formatTime("%s")) or 0
+end
+
+-- Same version gate as the panel: fzf learned --scheme in 0.36 and an older one
+-- would exit on an unknown option, leaving the launcher with an empty list.
+local function probeFzfScheme()
+    noctalia.runAsync("fzf --version 2>/dev/null", function(result)
+        local major, minor = (result.stdout or ""):match("(%d+)%.(%d+)")
+        major, minor = tonumber(major), tonumber(minor)
+        schemeSupported = major ~= nil and minor ~= nil and (major > 0 or minor >= 36)
+    end, 5000)
+end
+
+local function rankingFlag()
+    return (ranking == "path" and schemeSupported) and " --scheme=path" or ""
+end
+
+-- The panel owns the toggle; the launcher just follows what it wrote, re-read
+-- per query like the scope so the two never rank the same index differently.
+local function readRanking(dir)
+    local raw = noctalia.readFile(dir .. "/ranking")
+    if type(raw) == "string" then
+        local value = trim(raw)
+        if value == "path" or value == "default" then
+            return value
+        end
+    end
+    return "path"
 end
 
 -- Mirrors the panel: the search folder may be re-walked whenever its
@@ -522,7 +551,7 @@ runQuery = function(query)
     if text == "" then
         cmd = cacheSh(dir) .. '\nhead -n ' .. MAX_RESULTS .. ' "$CACHE" 2>/dev/null'
     else
-        cmd = cacheSh(dir) .. "\nfzf --filter=" .. shellQuote(text)
+        cmd = cacheSh(dir) .. "\nfzf" .. rankingFlag() .. " --filter=" .. shellQuote(text)
             .. ' < "$CACHE" 2>/dev/null | head -n ' .. MAX_RESULTS
     end
     local ok = noctalia.runAsync(cmd, function(result)
@@ -617,9 +646,10 @@ function onQuery(query)
         launcher.setResults(query, { noopRow("err_index") })
         return
     end
-    -- Re-read on every query: the panel may have cycled the scope since the
-    -- last keystroke, and the file is a single word.
+    -- Re-read on every query: the panel may have cycled the scope or the
+    -- ranking since the last keystroke, and both files are a single word.
     scope = readScope(dir)
+    ranking = readRanking(dir)
     withMounts(query, function(current)
         roots = computeRoots()
         -- How to read what is on disk right now; a walk below overwrites both.
@@ -688,3 +718,5 @@ function onActivate(id)
     end
     noctalia.runAsync("xdg-open " .. shellQuote(path) .. " >/dev/null 2>&1")
 end
+
+probeFzfScheme()
