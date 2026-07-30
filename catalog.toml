@@ -38,8 +38,8 @@ rev = "34b05dfa074239f4a410de8303be81995bca0b78"
 [[plugin]]
 id = "nightwatch75/file-search"
 name = "File Search"
-version = "0.0.20"
-updated_at = 1785419571
+version = "0.0.21"
+updated_at = 1785419897
 added_at = 1783852430
 author = "nightwatch75"
 license = "MIT"
