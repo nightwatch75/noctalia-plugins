@@ -438,17 +438,20 @@ local function buildIndex(query)
         .. '\nrm -f "$CACHE_DIR/index.list" "$CACHE_DIR/index.meta"\n'
         .. 'find "$CACHE_DIR" -maxdepth 1 \\( -name \'list-*.*\' -o -name \'meta-*.*\''
         .. " -o -name 'count-*.*' \\) -mmin +90 -delete 2>/dev/null\n"
+        .. 'START=$(date +%s%3N)\n'
         .. 'TMP=$(mktemp "$CACHE_DIR/list-' .. scope .. '.XXXXXX") || exit 1\n'
         .. walk .. "\n"
         .. 'mv -f "$TMP" "$CACHE" || exit 1\n'
         .. 'TMPM=$(mktemp "$CACHE_DIR/meta-' .. scope .. '.XXXXXX") || exit 1\n'
         .. "printf '%s' " .. shellQuote(key) .. ' > "$TMPM"\n'
         .. 'mv -f "$TMPM" "$META" || exit 1\n'
-        -- Same count sidecar the panel's footer reads, written while the file
-        -- is hot so nobody has to re-read 100 MB to show a number.
+        -- Same count sidecar the panel's footer reads — count and elapsed
+        -- milliseconds — written while the file is hot so nobody has to re-read
+        -- 100 MB to show a number.
         .. 'COUNT=$(wc -l < "$CACHE") || exit 1\n'
+        .. 'ELAPSED=$(( $(date +%s%3N) - START ))\n'
         .. 'TMPN=$(mktemp "$CACHE_DIR/count-' .. scope .. '.XXXXXX") || exit 1\n'
-        .. 'printf %s "$COUNT" > "$TMPN"\n'
+        .. 'printf "%s %s" "$COUNT" "$ELAPSED" > "$TMPN"\n'
         .. 'mv -f "$TMPN" "$COUNTF" || exit 1'
 
     launcher.setResults(query, { noopRow("launcher.indexing") })

@@ -1,8 +1,9 @@
 {
+  "build_time": "indexed in {duration}",
   "copied_entry": "Path copied to clipboard",
   "counts": "{shown} shown · {total} indexed",
   "counts_disks": " · {disks} external",
-  "counts_stale": " · out of date, press ↻",
+  "counts_stale": " · out of date",
   "err_bad_record": "Ignored an invalid index record — rebuild the index",
   "err_index": "Failed to index the search folder",
   "err_no_fzf": "fzf not found — install fzf to use this plugin",

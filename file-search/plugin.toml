@@ -7,7 +7,7 @@
 
 id = "nightwatch75/file-search"
 name = "File Search"
-version = "0.0.21"
+version = "0.0.22"
 plugin_api = 15
 author = "nightwatch75"
 license = "MIT"
@@ -15,7 +15,7 @@ license = "MIT"
 # coreutils + xdg-utils on any Linux desktop). lsblk only runs while the search
 # scope includes the external disks, gdbus only on a reveal-in-file-manager
 # click, and that one falls back to xdg-open when it is missing.
-dependencies = ["fzf", "find", "lsblk", "gdbus", "mktemp", "mv", "wc", "head", "rm", "xdg-open"]
+dependencies = ["fzf", "find", "lsblk", "gdbus", "mktemp", "mv", "wc", "head", "rm", "date", "xdg-open"]
 tags = ["bar", "launcher", "panel", "utility", "productivity"]
 icon = "search"
 description = "Search files and folders as you type, fuzzy-matched with fzf; open results with the system MIME association."

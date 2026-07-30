@@ -57,6 +57,11 @@ A path too long for one row is shortened in the middle rather than at the end,
 so the file name — the part the query matched — always stays readable:
 `.local/share/flatpak/repo/tmp/cache/…dolphin.idx.sig`.
 
+The plugin version sits next to the panel title. The footer counts what is
+listed and what is indexed, and on the right how long the walk behind that
+index took — per scope, kept across restarts, and still visible while a new
+walk runs, which is when knowing the last one's cost is most useful.
+
 ### Searching external disks
 
 The 🗀 button in the panel header cycles what the search covers:
@@ -179,7 +184,8 @@ noctalia msg plugins enable nightwatch75/file-search
   `~/.local/state/noctalia/plugins/data/nightwatch75/file-search/` — honors
   `NOCTALIA_STATE_HOME`/`XDG_STATE_HOME`): `list-<scope>` is a plain list of
   paths, `meta-<scope>` records the scope, roots and exclusions that built it,
-  `count-<scope>` its line count, and `scope`/`row-action` the one word each
+  `count-<scope>` its line count and the walk's duration in milliseconds, and
+  `scope`/`row-action` the one word each
   header toggle cycles. A fingerprint that no longer matches — a settings
   change, a scope change, a disk plugged in or removed — rebuilds the
   search-folder index automatically and marks a disk index out of date.

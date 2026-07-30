@@ -94,9 +94,22 @@ local BUILD_TIMEOUT_DISKS = 1800000
 -- one lsblk instead of one per press.
 local MOUNT_TTL = 30
 
+-- Read out of the plugin's own manifest (readFile resolves a relative path
+-- against the plugin directory), so the header cannot drift from the version
+-- the store shows. Empty when unreadable — a missing version is not worth an
+-- error line in the panel.
+local pluginVersion = (function()
+    local text = noctalia.readFile("plugin.toml")
+    if type(text) ~= "string" then
+        return ""
+    end
+    return ("\n" .. text):match('\nversion%s*=%s*"([^"]+)"') or ""
+end)()
+
 local query = ""
 local results = {}      -- index records: relative to the root, or absolute
 local total = nil       -- entries in the index, shown in the footer
+local buildMs = nil     -- how long the walk behind that index took
 local indexing = false
 local searching = false
 local errMsg = nil
@@ -557,9 +570,12 @@ end
 -- feel like it wedged the shell.
 local function readTotal(dir)
     local target = scope
+    buildMs = nil -- belongs to the index of this scope, if that one recorded it
     local recorded = noctalia.readFile(dir .. "/count-" .. target)
     if recorded ~= nil then
-        total = tonumber(trim(recorded)) or 0
+        local count, elapsed = trim(recorded):match("^(%d+)%s+(%d+)$")
+        total = tonumber(count or trim(recorded)) or 0
+        buildMs = tonumber(elapsed)
         return
     end
     local info = noctalia.fileInfo(dir .. "/list-" .. target)
@@ -653,6 +669,9 @@ buildIndex = function()
         .. '\nrm -f "$CACHE_DIR/index.list" "$CACHE_DIR/index.meta"\n'
         .. 'find "$CACHE_DIR" -maxdepth 1 \\( -name \'list-*.*\' -o -name \'meta-*.*\''
         .. " -o -name 'count-*.*' \\) -mmin +90 -delete 2>/dev/null\n"
+        -- Timed here rather than around runAsync: this is the walk itself,
+        -- without the queueing and callback hops the shell knows nothing about.
+        .. 'START=$(date +%s%3N)\n'
         .. 'TMP=$(mktemp "$CACHE_DIR/list-' .. scope .. '.XXXXXX") || exit 1\n'
         .. walk .. "\n"
         .. 'mv -f "$TMP" "$CACHE" || exit 1\n'
@@ -660,12 +679,15 @@ buildIndex = function()
         .. "printf '%s' " .. shellQuote(key) .. ' > "$TMPM"\n'
         .. 'mv -f "$TMPM" "$META" || exit 1\n'
         -- The count is taken here, while the file is already hot, and left in a
-        -- sidecar: every later open reads 7 bytes instead of the whole index.
+        -- sidecar together with the elapsed milliseconds: every later open
+        -- reads a dozen bytes instead of the whole index, and the footer can
+        -- still say how long the walk behind it took.
         .. 'COUNT=$(wc -l < "$CACHE") || exit 1\n'
+        .. 'ELAPSED=$(( $(date +%s%3N) - START ))\n'
         .. 'TMPN=$(mktemp "$CACHE_DIR/count-' .. scope .. '.XXXXXX") || exit 1\n'
-        .. 'printf %s "$COUNT" > "$TMPN"\n'
+        .. 'printf "%s %s" "$COUNT" "$ELAPSED" > "$TMPN"\n'
         .. 'mv -f "$TMPN" "$COUNTF" || exit 1\n'
-        .. 'printf %s "$COUNT"'
+        .. 'printf "%s %s" "$COUNT" "$ELAPSED"'
 
     render()
     local timeout = (scope == "folder") and BUILD_TIMEOUT_LOCAL or BUILD_TIMEOUT_DISKS
@@ -685,7 +707,9 @@ buildIndex = function()
                 indexRoots = builtRoots
                 absoluteRecords = absolute
                 haveIndex = true
-                total = tonumber(trim(result.stdout or "")) or 0
+                local count, elapsed = trim(result.stdout or ""):match("^(%d+)%s+(%d+)$")
+                total = tonumber(count) or 0
+                buildMs = tonumber(elapsed)
                 if indexKey() == key then
                     indexState = "fresh"
                     runSearch()
@@ -889,25 +913,60 @@ local function resultRow(rel, index)
     })
 end
 
+-- Milliseconds as something a person reads at a glance: "820 ms", "12.4 s",
+-- "7m 41s". A disk walk is minutes, a warm home folder is under a second, and
+-- the same string has to serve both.
+local function formatDuration(ms)
+    if ms < 1000 then
+        return string.format("%d ms", ms)
+    end
+    local seconds = ms / 1000
+    if seconds < 60 then
+        return string.format("%.1f s", seconds)
+    end
+    return string.format("%dm %02ds", math.floor(seconds / 60), math.floor(seconds % 60))
+end
+
+-- Counts on the left, how long the walk behind this index took on the right.
+-- The duration is the one recorded in the count sidecar, so it survives a
+-- restart and follows the scope: switching to the disks shows the disks' own
+-- walk, not the last one that happened to run. It stays on screen during a
+-- rebuild too — "the last one took 7m 41s" is exactly what you want to know
+-- while waiting for this one.
 local function statusFooter()
+    local left, tone
     if indexing then
         -- One root gets named; several would wrap the footer onto a second
         -- line, so they are counted instead.
-        local text = #roots > 1
+        left = #roots > 1
             and tr("status_indexing_multi", { count = #roots })
             or tr("status_indexing", { path = roots[1] or searchRoot() })
-        return ui.label({ text = text, fontSize = 11, color = "secondary" })
+        tone = "secondary"
+    else
+        left = tr("counts", { shown = #results, total = total or 0 })
+        if scope ~= "folder" then
+            left = left .. tr("counts_disks", { disks = #mounts })
+        end
+        if indexState == "stale" then
+            -- Searchable, but built for a different scope or disk set. Saying
+            -- so is the honest alternative to silently re-walking a 5 TB drive.
+            left = left .. tr("counts_stale")
+            tone = "secondary"
+        else
+            tone = "on_surface_variant"
+        end
     end
-    local text = tr("counts", { shown = #results, total = total or 0 })
-    if scope ~= "folder" then
-        text = text .. tr("counts_disks", { disks = #mounts })
+    local children = {
+        ui.label({ text = left, fontSize = 11, color = tone, flexGrow = 1 }),
+    }
+    if buildMs ~= nil then
+        table.insert(children, ui.label({
+            text = tr("build_time", { duration = formatDuration(buildMs) }),
+            fontSize = 11,
+            color = "on_surface_variant",
+        }))
     end
-    if indexState == "stale" then
-        -- Searchable, but built for a different scope or disk set. Saying so
-        -- is the honest alternative to silently re-walking a 5 TB drive.
-        return ui.label({ text = text .. tr("counts_stale"), fontSize = 11, color = "secondary" })
-    end
-    return ui.label({ text = text, fontSize = 11, color = "on_surface_variant" })
+    return ui.row({ gap = 8, align = "center" }, children)
 end
 
 -- The scope button cycles folder → folder+disks → disks only. A cycling button
@@ -951,8 +1010,12 @@ render = function()
                 fontSize = 16,
                 fontWeight = "bold",
                 color = "on_surface",
-                flexGrow = 1,
             }),
+            -- Version off the manifest, small and dimmed: it answers "which
+            -- build am I running" without competing with the title. The spacer
+            -- rather than a flexGrow title keeps the two together on the left.
+            ui.label({ text = pluginVersion, fontSize = 10, color = "on_surface_variant" }),
+            ui.spacer({ flexGrow = 1 }),
             rowActionButton(),
             scopeButton(),
             ui.button({ glyph = "refresh", variant = "ghost", tooltip = tr("tip_refresh"), onClick = "onRefreshIndex" }),
