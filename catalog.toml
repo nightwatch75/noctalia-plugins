@@ -107,8 +107,8 @@ rev = "34b05dfa074239f4a410de8303be81995bca0b78"
 [[plugin]]
 id = "nightwatch75/topgrade-wrapper"
 name = "Topgrade Wrapper"
-version = "0.0.5"
-updated_at = 1785653605
+version = "0.0.6"
+updated_at = 1785654522
 added_at = 1785076212
 author = "nightwatch75"
 license = "MIT"
