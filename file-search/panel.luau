@@ -606,6 +606,37 @@ local function elidePath(rel)
     return headPart .. ELLIPSIS .. base
 end
 
+-- Cache keyed by the raw record: elidePath is pure, so the same rel never
+-- needs recomputing across the many render() calls that leave `results`
+-- untouched (toggling row-action, resizing, other settings changes all
+-- re-render the whole row list). On a flatpak-heavy $HOME almost every
+-- visible row is over PATH_MAX_CHARS (runtime trees nest well past 56
+-- chars), so the "common case skips this" comment above routinely fails and
+-- render() was recomputing the full utf8 walk for up to `max_results` rows
+-- on every one of those unrelated re-renders — that is what exceeded a
+-- panel callback's CPU budget and got the panel disabled. Cleared wholesale
+-- rather than LRU-evicted once it grows past a session's realistic working
+-- set — simplicity over a perfect policy, since a full miss just costs one
+-- elidePath call again.
+local elideCache = {}
+local elideCacheCount = 0
+local ELIDE_CACHE_MAX = 4000
+
+local function elidePathCached(rel)
+    local cached = elideCache[rel]
+    if cached ~= nil then
+        return cached
+    end
+    if elideCacheCount >= ELIDE_CACHE_MAX then
+        elideCache = {}
+        elideCacheCount = 0
+    end
+    local shown = elidePath(rel)
+    elideCache[rel] = shown
+    elideCacheCount = elideCacheCount + 1
+    return shown
+end
+
 -- Count the cache the panel is about to search. buildIndex records the total
 -- as a side effect of building, but a panel opening on a cache that is already
 -- fresh -- the common case, and the one the launcher leaves behind -- never
@@ -937,7 +968,7 @@ local function resultRow(rel, index)
     -- The row carries no tooltip on purpose: one string per row is enough
     -- extra weight, over a list this long, to get the render's callback killed
     -- for exceeding its CPU budget. Right click yields the full path instead.
-    local shown = elidePath(rel)
+    local shown = elidePathCached(rel)
     return ui.button({
         key = "hit-" .. index,
         glyph = isDir and "folder" or "file",
