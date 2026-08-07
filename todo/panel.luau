@@ -64,6 +64,18 @@ end
 
 local storage = require("./storage.luau")
 
+-- Read out of the plugin's own manifest (readFile resolves a relative path
+-- against the plugin directory), so the header cannot drift from the version
+-- the store shows. Empty when unreadable — a missing version is not worth an
+-- error line in the panel.
+local pluginVersion = (function()
+    local text = noctalia.readFile("plugin.toml")
+    if type(text) ~= "string" then
+        return ""
+    end
+    return ("\n" .. text):match('\nversion%s*=%s*"([^"]+)"') or ""
+end)()
+
 local PRIORITIES = { "important", "medium", "low" }
 local RANK = { important = 1, medium = 2, low = 3 }
 local COLORS = { important = "#e06c75", medium = "#e5c07b", low = "#98c379" }
@@ -497,7 +509,12 @@ render = function()
     end
 
     local header = ui.row({ align = "center", gap = 8 }, {
-        ui.label({ text = tr("title"), fontSize = 16, fontWeight = "bold", color = "on_surface", flexGrow = 1 }),
+        ui.label({ key = "title", text = tr("title"), fontSize = 16, fontWeight = "bold", color = "on_surface" }),
+        -- Version off the manifest, small and dimmed: it answers "which
+        -- build am I running" without competing with the title. The spacer
+        -- rather than a flexGrow title keeps the two together on the left.
+        ui.label({ key = "version", text = pluginVersion, fontSize = 10, color = "on_surface_variant" }),
+        ui.spacer({ key = "gap", flexGrow = 1 }),
         sortToggle,
         ui.button({
             key = "header-clear-done" .. (done == 0 and "-off" or ""),
