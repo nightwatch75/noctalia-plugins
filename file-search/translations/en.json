@@ -65,6 +65,7 @@
   "tip_refresh": "Rebuild the file index",
   "tip_row_action": "Right click on a result {current}\nClick to switch to: {next}",
   "tip_scope": "Searching: {current}\nClick to search {next}",
+  "tip_scope_free": "{free} free across {count} disk(s)",
   "tip_settings": "Plugin settings",
   "title": "File Search",
   "tooltip_closed": "File search — {path}\nClick to search · right-click: folder",

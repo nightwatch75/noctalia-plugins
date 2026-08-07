@@ -152,6 +152,34 @@ local runSearch
 local buildIndex
 local applyState
 
+-- Braille spinner shown in the status footer during a from-scratch index
+-- build (plugin_api >= 18: panel.setNeedsFrameTick + onFrameTick). Gated on
+-- `#results == 0` in updateSpinnerState below, not just `indexing`: a stale
+-- index keeps showing its OLD results while a fresh build runs behind it
+-- (indexState == "stale"), and re-running render() at spinner speed would
+-- re-walk that whole results list (resultRow + elidePathCached) many times a
+-- second — the exact CPU-budget trap 0.0.26 was released to fix. An empty
+-- results list makes that rebuild cost nothing, so ticking is only ever
+-- armed for the genuinely slow case this exists for: a disk scope indexed
+-- for the first time, with nothing yet to show.
+local SPINNER_FRAMES = { "⠋", "⠙", "⠹", "⠸", "⠼", "⠴", "⠦", "⠧", "⠇", "⠏" }
+local SPINNER_STEP_MS = 90
+local spinnerIndex = 1
+local spinnerAccumMs = 0
+local spinnerTicking = false
+
+local function setSpinnerTicking(on)
+    if on == spinnerTicking then
+        return
+    end
+    spinnerTicking = on
+    panel.setNeedsFrameTick(on)
+    if not on then
+        spinnerAccumMs = 0
+        spinnerIndex = 1
+    end
+end
+
 local function tr(key, args)
     return noctalia.tr(key, args)
 end
@@ -168,8 +196,11 @@ local function startsWith(value, prefix)
     return value:sub(1, #prefix) == prefix
 end
 
+-- plugin_api >= 16: a direct wall-clock read, no string formatting/parsing (and
+-- no dependency on "%s" staying a Unix-epoch format) for a value only ever
+-- diffed against itself.
 local function now()
-    return tonumber(noctalia.formatTime("%s")) or 0
+    return noctalia.nowMs() / 1000
 end
 
 -- --scheme=path arrived in fzf 0.36; an older build exits with "unknown option"
@@ -998,6 +1029,43 @@ end
 -- Milliseconds as something a person reads at a glance: "820 ms", "12.4 s",
 -- "7m 41s". A disk walk is minutes, a warm home folder is under a second, and
 -- the same string has to serve both.
+local function formatBytes(bytes)
+    local units = { "B", "KB", "MB", "GB", "TB" }
+    local value = bytes
+    local unit = 1
+    while value >= 1024 and unit < #units do
+        value /= 1024
+        unit += 1
+    end
+    if unit == 1 then
+        return string.format("%.0f %s", value, units[unit])
+    end
+    return string.format("%.1f %s", value, units[unit])
+end
+
+-- Free space across every mount the current scope would walk (plugin_api >=
+-- 16). One noctalia.diskStats(path) call per mount — the same small, stable
+-- set `mounts` already holds, never per matched file — because each distinct
+-- path queried is retained by the host until the plugin unloads.
+local function diskFreeSummary()
+    if scope == "folder" or #mounts == 0 then
+        return nil
+    end
+    local freeBytes = 0
+    local sampled = 0
+    for _, mount in ipairs(mounts) do
+        local stats = noctalia.diskStats(mount)
+        if stats ~= nil then
+            freeBytes += stats.freeBytes
+            sampled += 1
+        end
+    end
+    if sampled == 0 then
+        return nil
+    end
+    return tr("tip_scope_free", { free = formatBytes(freeBytes), count = sampled })
+end
+
 local function formatDuration(ms)
     if ms < 1000 then
         return string.format("%d ms", ms)
@@ -1043,6 +1111,9 @@ local function statusFooter()
         left = #roots > 1
             and tr("status_indexing_multi", { count = #roots })
             or tr("status_indexing", { path = roots[1] or searchRoot() })
+        if spinnerTicking then
+            left = SPINNER_FRAMES[spinnerIndex] .. "  " .. left
+        end
         tone = "secondary"
     else
         left = tr("counts", { shown = #results, total = total or 0 })
@@ -1113,19 +1184,26 @@ local function rankingButton()
 end
 
 local function scopeButton()
+    local tooltip = tr("tip_scope", {
+        current = tr("scope." .. scope),
+        next = tr("scope." .. NEXT_SCOPE[scope]),
+    })
+    local free = diskFreeSummary()
+    if free ~= nil then
+        tooltip = tooltip .. "\n" .. free
+    end
     return ui.button({
         key = "scope-" .. scope,
         glyph = SCOPE_GLYPHS[scope],
         variant = "ghost",
-        tooltip = tr("tip_scope", {
-            current = tr("scope." .. scope),
-            next = tr("scope." .. NEXT_SCOPE[scope]),
-        }),
+        tooltip = tooltip,
         onClick = "onCycleScope",
     })
 end
 
 render = function()
+    setSpinnerTicking(indexing and #results == 0)
+
     -- Every child of the panel and of the header carries a stable key, so the
     -- reconciler matches roles instead of guessing by position and type.
     local children = {
@@ -1319,7 +1397,26 @@ function onOpen(_context)
 end
 
 function onClose()
+    -- Stop the frame tick even mid-build; the next onOpen re-arms it if the
+    -- build is somehow still running (buildIndex survives the panel closing).
+    setSpinnerTicking(false)
     noctalia.state.set("file_search_open", false)
+end
+
+-- plugin_api >= 18. Throttled to SPINNER_STEP_MS regardless of the host's
+-- actual tick rate; render() itself flips setNeedsFrameTick off once indexing
+-- ends or results stop being empty, so this never spins forever unattended.
+function onFrameTick(deltaMs)
+    if not spinnerTicking then
+        return
+    end
+    spinnerAccumMs += deltaMs
+    if spinnerAccumMs < SPINNER_STEP_MS then
+        return
+    end
+    spinnerAccumMs = 0
+    spinnerIndex = (spinnerIndex % #SPINNER_FRAMES) + 1
+    render()
 end
 
 function onConfigChanged()
