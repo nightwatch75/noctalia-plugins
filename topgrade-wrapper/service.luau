@@ -27,8 +27,10 @@
 -- While one runs, processMatches() polls for the topgrade process and re-counts
 -- as soon as it is gone, so the bar clears itself.
 
-local STATE_KEY = "topgrade_state"
-local REQUEST_KEY = "topgrade_request"
+local shared = require("./shared.luau")
+
+local UPDATES_SOUND = "topgrade-updates-found" -- name registered with noctalia.sound.load
+local soundReady = false -- true once UPDATES_SOUND has finished loading
 
 local DRY_TIMEOUT_MS = 45000 -- topgrade --dry-run: PATH probes, no network
 local COUNT_TIMEOUT_MS = 60000 -- per manager; several of these hit the network
@@ -210,7 +212,7 @@ local function cfg(key)
 end
 
 local function tr(key, args)
-    return noctalia.tr(key, args)
+    return shared.tr(key, args)
 end
 
 local function trim(value)
@@ -319,7 +321,7 @@ end
 local function publish()
     stateNonce += 1
     local config = detectedConfig()
-    noctalia.state.set(STATE_KEY, {
+    noctalia.state.set(shared.STATE_KEY, {
         nonce = stateNonce,
         phase = phase,
         step = step,
@@ -437,6 +439,9 @@ local function finishCheck()
     publish()
     if total > 0 and cfg("notify_on_updates") == true then
         noctalia.notify(tr("title"), noctalia.trp("notify_updates", total, { count = total }))
+    end
+    if total > 0 and soundReady and cfg("sound_on_updates") == true then
+        noctalia.sound.play(UPDATES_SOUND)
     end
 end
 
@@ -632,7 +637,7 @@ local function handle(action)
     end
 end
 
-noctalia.state.watch(REQUEST_KEY, function(value)
+noctalia.state.watch(shared.REQUEST_KEY, function(value)
     if type(value) ~= "table" then
         return
     end
@@ -669,6 +674,25 @@ function onConfigChanged()
     publish()
 end
 
+-- plugin_api >= 17. A hot reload (editing this file) tears this VM down and a
+-- fresh one starts moments later, which republishes its own state on load —
+-- nothing to do for "reload". On disable/uninstall/shutdown mid-check/run,
+-- though, nothing ever republishes again: without this, every widget/panel
+-- instance reading the shared state would stay frozen on "checking"/"running"
+-- forever. This cannot (and does not try to) kill the underlying topgrade or
+-- query process — runAsync hands back no killable handle — it only stops
+-- describing it as in progress.
+function onExit(_signal, reason)
+    if reason == "reload" then
+        return
+    end
+    if phase == "checking" or phase == "running" then
+        phase = "idle"
+        step = ""
+        publish()
+    end
+end
+
 function update()
     if phase == "running" then
         runTicks += 1
@@ -697,6 +721,10 @@ function update()
         startCheck()
     end
 end
+
+noctalia.sound.load(UPDATES_SOUND, "sounds/updates-found.wav", function(ok)
+    soundReady = ok == true
+end)
 
 noctalia.setUpdateInterval(1000)
 commandSig = commandSignature()

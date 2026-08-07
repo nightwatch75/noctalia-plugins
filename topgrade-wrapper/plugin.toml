@@ -11,8 +11,8 @@
 
 id = "nightwatch75/topgrade-wrapper"
 name = "Topgrade Wrapper"
-version = "0.0.7"
-plugin_api = 15
+version = "0.0.8"
+plugin_api = 22
 author = "nightwatch75"
 license = "MIT"
 dependencies = ["topgrade"]
@@ -68,6 +68,13 @@ type = "bool"
 label_key = "settings.notify_on_updates.label"
 description_key = "settings.notify_on_updates.description"
 default = true
+
+[[setting]]
+key = "sound_on_updates"
+type = "bool"
+label_key = "settings.sound_on_updates.label"
+description_key = "settings.sound_on_updates.description"
+default = false
 
 # Off makes an expanded manager a plain list of names. The hover line under the
 # list still spells out the versions of whatever row the pointer is on, so this
@@ -126,6 +133,13 @@ open_near_click = true
 [[widget]]
 id = "topgrade-wrapper"
 entry = "topgrade-wrapper.luau"
+
+  # Both gestures are declared here rather than hard-coded in onClick/
+  # onRightClick, so the user can remap them from the bar's own gesture
+  # settings. "right" is the exact IPC line service.luau's onIpc documents.
+  [widget.actions]
+  left = "panel-toggle nightwatch75/topgrade-wrapper:panel"
+  right = "plugin nightwatch75/topgrade-wrapper:service all check"
 
   [[widget.setting]]
   key = "glyph"
