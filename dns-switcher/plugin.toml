@@ -6,11 +6,14 @@
 
 id = "nightwatch75/dns-switcher"
 name = "DNS Switcher"
-version = "0.0.11"
-plugin_api = 15
+version = "0.1.0"
+plugin_api = 22
 author = "nightwatch75"
 license = "MIT"
-dependencies = ["networkmanager"]
+# dig (bind-tools/dnsutils) is preferred for the panel's lookup tester;
+# nslookup is the fallback when dig is missing. Neither is required for the
+# core switch/apply feature, only for that one panel section.
+dependencies = ["networkmanager", "dig", "nslookup"]
 tags = ["bar", "panel", "service", "network", "privacy"]
 icon = "world"
 description = "Switch the system DNS between popular providers, custom servers, or the ISP default (NetworkManager)."
@@ -96,15 +99,25 @@ entry = "service.luau"
 id = "panel"
 entry = "panel.luau"
 # Wide enough for the longest built-in row, "OpenDNS · 208.67.222.222
-# 208.67.220.220", without eliding the addresses.
+# 208.67.220.220", without eliding the addresses. Height grew in 0.0.13 to
+# fit the lookup tester below the provider list without starving it.
 width = 430
-height = 400
+height = 460
 placement = "attached"
 open_near_click = true
 
 [[widget]]
 id = "dns-switcher"
 entry = "dns-switcher.luau"
+
+  # Declared here rather than hard-coded in onClick/onRightClick, so the user
+  # can remap any of them from the bar's own gesture settings. "right"/
+  # "scroll_*" are the exact IPC lines service.luau's onIpc documents.
+  [widget.actions]
+  left = "panel-toggle nightwatch75/dns-switcher:panel"
+  right = "plugin nightwatch75/dns-switcher:service all apply default"
+  scroll_up = "plugin nightwatch75/dns-switcher:service all cycle next"
+  scroll_down = "plugin nightwatch75/dns-switcher:service all cycle prev"
 
   [[widget.setting]]
   key = "show_label"

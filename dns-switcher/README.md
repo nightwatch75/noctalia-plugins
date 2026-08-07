@@ -1,14 +1,10 @@
 # DNS Switcher
 
 A [noctalia](https://github.com/noctalia-dev/noctalia) v5 bar plugin: switch the system DNS
-between popular providers, your own servers, or the ISP default, from a panel
-on the bar. Based on [Ronin-CK's v4 DNS Switcher](https://github.com/noctalia-dev/legacy-v4-plugins)
-(QML), rebuilt on the v5 Luau plugin API.
-
-The bar widget shows the active provider (name + glyph); clicking it opens a
-panel listing the configured providers — pick one and it is applied
-immediately: one `nmcli` profile change pushed onto the live connection with
-`nmcli device reapply`, so the network never drops or reconnects.
+between popular providers, your own servers, or the ISP default — from a panel
+on the bar, no reconnect. Based on
+[Ronin-CK's v4 DNS Switcher](https://github.com/noctalia-dev/legacy-v4-plugins),
+rebuilt on the v5 Luau plugin API.
 
 ## Plugin
 
@@ -17,118 +13,81 @@ immediately: one `nmcli` profile change pushed onto the live connection with
 | ID | `nightwatch75/dns-switcher` |
 | Entries | Bar widget: `dns-switcher`; panel: `panel`; service: `service` |
 
+## Features
+
+- **Instant, no-drop switching** — one `nmcli con mod` + `nmcli device
+  reapply` on the active connection profile; the network never disconnects
+- **Pre-configured providers** (Google, Cloudflare, OpenDNS, AdGuard, Quad9)
+  plus up to 5 custom servers (`Name = address`, e.g. `Pi-hole = 192.168.1.5`)
+- **Detection**, not guessing — reads the connection's own `ipv4.dns` /
+  `ipv4.ignore-auto-dns`, so a manually configured resolver (LAN ones
+  included) shows as its provider, DHCP-assigned DNS shows as *Default (ISP)*
+- **DNS lookup tester** at the bottom of the panel: resolve any name against
+  the currently active provider's own address with `dig`/`nslookup`, to
+  confirm a switch took effect or check whether a provider blocks a domain
+- **Fully rebindable gestures** — left click, right click and scroll are
+  declared in the manifest (`[widget.actions]`), so any of them can be
+  remapped from the bar's own gesture settings; scroll cycles providers
+- **Singleton service** — one engine regardless of how many bars/monitors
+  show the widget; widget and panel are pure renderers over its shared state
+- Live footer (connection name + active resolver IPs, with a copy button),
+  glyph-only mode for compact bars
+
 ## Usage
 
-Add the `dns-switcher` widget from Noctalia's widget picker and click it to
-open the provider panel — pick a provider and it is applied immediately. You
-can also open the panel directly or bind it in your compositor:
+Add the `dns-switcher` widget from Noctalia's widget picker. Default gestures:
+
+| Action       | Effect                                          |
+|--------------|--------------------------------------------------|
+| Left click   | Open/close the provider panel                     |
+| Right click  | Reset to the connection default (ISP)             |
+| Scroll       | Cycle to the next/previous configured provider    |
+
+All three are bar-level defaults and can be remapped from *Settings → Bar*.
+The panel itself, and the plugin's settings page, also open from the CLI:
 
 ```sh
 noctalia msg panel-toggle nightwatch75/dns-switcher:panel
-```
-
-| Action       | Effect                                        |
-|--------------|-----------------------------------------------|
-| Left click   | Open/close the provider panel                 |
-| Right click  | Reset to the connection default (ISP)         |
-
-The panel header carries a ⚙ button that opens this plugin's page in
-*Settings → Plugins* — the quickest route to the custom-server fields. The same
-page opens from the command line, so it can be bound in your compositor too:
-
-```sh
 noctalia msg settings-open-plugin nightwatch75/dns-switcher
 ```
-
-## Features
-
-- Each panel row shows the provider's name and the addresses it would set, so
-  picking one is not a guess
-- Pre-configured providers: Google, Cloudflare, OpenDNS, AdGuard, Quad9
-  (pick which ones appear via the *Built-in providers* setting; clear it to
-  use only your custom servers)
-- Custom servers in five editable fields — `Name = address` each, e.g.
-  `Pi-hole = 192.168.1.5`, `NextDNS = 45.90.28.0 45.90.30.0`
-- Detection reads the connection profile (`ipv4.dns` + `ipv4.ignore-auto-dns`),
-  so a manually configured resolver — LAN ones included — shows as its
-  provider (or *Custom (ip)*), and DHCP-assigned DNS shows as *Default (ISP)*
-- Live footer in the panel: connection name and active resolver IPs, with a
-  copy button
-- Glyph-only mode (*Show provider name* off) for compact bars
-- Singleton service entry: with multiple bars/monitors the engine runs once —
-  widgets and panel are pure renderers over its shared state
 
 ## Settings
 
 | Setting | Type | Default | Description |
 | --- | --- | --- | --- |
-| `providers` | `string` | `google,cloudflare,opendns,adguard,quad9` | Comma-separated built-in provider ids shown in the panel. Empty = none (custom servers and ISP default only). |
-| `custom_1` … `custom_5` | `string` | *(empty)* | One custom resolver each, written `Name = address`, with one or two IPv4 addresses: `Pi-hole = 192.168.1.5`, `NextDNS = 45.90.28.0 45.90.30.0`. The panel lists the filled slots in order; invalid ones are skipped and logged. |
+| `providers` | `string` | `google,cloudflare,opendns,adguard,quad9` | Comma-separated built-in provider ids shown in the panel. Empty = none. |
+| `custom_1` … `custom_5` | `string` | *(empty)* | One custom resolver each: `Name = address`, one or two IPv4 addresses. |
 | `poll_seconds` | `int` | `10` | How often the active DNS is re-read with `nmcli` (2–120). |
-| `privilege_command` | `string` | *(empty)* | Prefix to run `nmcli` changes as root (e.g. `pkexec`, `sudo -n`). Empty runs `nmcli` directly — see *Privileges*. |
-| `show_label` (widget) | `bool` | `true` | Show the provider name next to the glyph (off = glyph only). |
+| `privilege_command` | `string` | *(empty)* | Prefix to run `nmcli` changes as root (`pkexec`, `sudo -n`) — see *Privileges*. |
+| `show_label` (widget) | `bool` | `true` | Show the provider name next to the glyph. |
 
 ## IPC
 
-Beyond opening the panel, the service entry accepts events:
-
 ```sh
 noctalia msg plugin nightwatch75/dns-switcher:service all apply cloudflare
-```
-
-`apply` takes a built-in provider id, `default` (ISP), or `custom:<name>`;
-`poll` forces an immediate re-check of the active DNS:
-
-```sh
 noctalia msg plugin nightwatch75/dns-switcher:service all poll
+noctalia msg plugin nightwatch75/dns-switcher:service all cycle next
 ```
+
+`apply` takes a built-in id, `default` (ISP), or `custom:<name>`; `poll`
+forces an immediate re-check; `cycle next`/`cycle prev` step to the
+neighbouring provider (what scroll sends).
 
 ## Requirements
 
-- noctalia v5.0.0-beta.6 or newer — the first tagged release that accepts
-  `plugin_api = 15` (`noctalia.openSettings()`, the panel's ⚙ button)
+- noctalia v5.0.0-beta.6 or newer for the core plugin; the gesture remapping
+  and lookup tester need a newer build still (`plugin_api = 22`)
 - NetworkManager (`networkmanager`, provides `nmcli`) with an active connection
 - Permission to modify system connections (see *Privileges* below)
-
-## Install
-
-Install **DNS Switcher** from Noctalia's plugin store (*Settings → Plugins*),
-then add the widget to a bar from *Settings → Bar*. Plugin options live in
-*Settings → Plugins*.
-
-For local development, add your working copy as a path source instead
-(`.luau` edits hot-reload):
-
-```sh
-noctalia msg plugins source add dev path /path/to/plugins
-noctalia msg plugins enable nightwatch75/dns-switcher
-```
-
-## How it changes the DNS
-
-It modifies the profile of the active wifi/ethernet connection and reapplies
-it to the device in place — no reactivation, no captive-portal re-runs, no
-dropped packets:
-
-```sh
-nmcli con mod <uuid> ipv4.dns "<servers>" ipv4.ignore-auto-dns yes
-nmcli device reapply <device>
-```
-
-Resetting to the ISP default clears `ipv4.dns` and sets
-`ipv4.ignore-auto-dns no`, restoring the DHCP-provided resolvers.
+- `dig` (bind-tools/dnsutils) or `nslookup`, optional — only the lookup
+  tester needs one of them; the rest of the plugin works without either
 
 ## Privileges
 
-The *Privilege command* setting is **empty by default**: NetworkManager's
-polkit policy (`org.freedesktop.NetworkManager.settings.modify.system`)
-allows active local sessions — typically `wheel`/`sudo` group members — to
-modify system connections without a password on most desktop distros, so
-plain `nmcli` just works.
-
-If your distro is stricter you'll get a "not authorized" error; then either
-set *Privilege command* to `pkexec` (noctalia's polkit agent shows the
-password prompt) or `sudo -n` with a matching sudoers rule:
+*Privilege command* is **empty by default**: NetworkManager's polkit policy
+usually lets active local sessions modify system connections without a
+password. If you get a "not authorized" error, set it to `pkexec` (shows
+noctalia's own polkit prompt) or `sudo -n` with a matching sudoers rule:
 
 ```
 # /etc/sudoers.d/nmcli-dns
@@ -148,39 +107,17 @@ polkit.addRule(function(action, subject) {
 });
 ```
 
-All of these widen what the account can do to NetworkManager system-wide —
-apply your usual judgement on shared machines.
+Both widen what the account can do to NetworkManager system-wide — apply
+your usual judgement on shared machines.
 
 ## Notes
 
-- Only IPv4 DNS is managed, like the v4 plugin.
-- The plugin targets the first active wifi/ethernet connection (falling back
-  to the first active non-loopback one); with VPNs up, the VPN's own DNS is
-  not touched.
-- Custom server entries accept one or two space-separated IPv4 addresses;
-  invalid entries are skipped and logged.
-- Custom servers are five separate `string` settings, `custom_1` … `custom_5`,
-  rather than one list. Noctalia's list editor shows an existing row as a static
-  label with remove and reorder buttons, so a wrong address means deleting the row
-  and typing it again; a `string` renders as a text field you can correct in
-  place. Five slots cover any realistic number of custom resolvers.
-
-  The setting has changed shape three times: a single packed string up to 0.0.5,
-  a `string_map` named `custom_servers` in 0.0.6, a `string_list` named
-  `custom_dns` in 0.0.8, and these five fields from 0.0.9. Re-enter your servers
-  after updating from any of them.
-
-  Each change used a new key name on purpose. Noctalia rejects every write to its
-  settings file when a stored value's type no longer matches its declaration — the
-  whole file stops saving, and nothing can be enabled or configured until it is
-  fixed by hand, which is what 0.0.7 shipped by mistake and 0.0.8 fixed. A key
-  that simply no longer exists is only a warning, so old values are left alone and
-  ignored; delete them by hand if you want the warnings gone.
-- A server name may not contain `=`: everything before the first one is the
-  name, the rest is the address list. Such a row is skipped and logged.
-- The bar glyph has no middle-click action: that gesture is bound by default to
-  opening the widget's own settings, and a binding wins over a script callback.
-  Use the panel's copy button for the active servers.
+- IPv4 DNS only, like the v4 plugin.
+- Targets the first active wifi/ethernet connection (falling back to the
+  first active non-loopback one); a VPN's own DNS is not touched.
+- Custom servers are five separate `string` settings rather than one list,
+  because Noctalia's list editor has no in-place row edit — a `string`
+  field does. A server name may not contain `=`.
 
 ## License
 
