@@ -16,6 +16,8 @@
 -- NetworkManager's polkit policy lets active local sessions modify system
 -- connections on most desktop distros.
 
+local shared = require("./shared.luau")
+
 local BUILTIN = {
     { id = "google",     label = "Google",     ip = "8.8.8.8 8.8.4.4",               glyph = "brand-google" },
     { id = "cloudflare", label = "Cloudflare", ip = "1.1.1.1 1.0.0.1",               glyph = "cloud" },
@@ -42,7 +44,7 @@ local function cfg(key)
 end
 
 local function tr(key, args)
-    return noctalia.tr(key, args)
+    return shared.tr(key, args)
 end
 
 local function trim(value)
@@ -164,7 +166,7 @@ end
 
 local function publish()
     stateNonce += 1
-    noctalia.state.set("dns_state", {
+    noctalia.state.set(shared.STATE_KEY, {
         nonce = stateNonce,
         current = current,
         servers = lastSeen,
@@ -280,6 +282,11 @@ local function apply(provider)
     if changing then
         return
     end
+    -- No "already active" short-circuit: `current` is only ever refreshed by
+    -- the async poll, so it can be stale by up to a full pollSeconds() window
+    -- (shorter but still nonzero right after another apply/cycle). Skipping
+    -- here on a stale match would silently drop a legitimate request instead
+    -- of just doing one harmless idempotent nmcli round trip.
     if provider.ip ~= "" and not validDnsSpec(provider.ip) then
         noctalia.notifyError(tr("title"), tr("err_invalid_ip", { ip = provider.ip }))
         return
@@ -365,17 +372,44 @@ local function applyById(id, label, ip)
     return false
 end
 
+-- Steps the active provider to its neighbour in providerList() (wrapping at
+-- either end). Backs the bar widget's scroll_up/scroll_down gesture default;
+-- with no detected current provider yet, "next" starts at the first entry
+-- rather than doing nothing.
+local function cycleTo(direction)
+    local list = providerList()
+    if #list == 0 then
+        return
+    end
+    local index = 1
+    if current ~= nil then
+        for i, entry in ipairs(list) do
+            if entry.id == current.id then
+                index = i
+                break
+            end
+        end
+        index = index + (direction == "prev" and -1 or 1)
+        if index < 1 then
+            index = #list
+        elseif index > #list then
+            index = 1
+        end
+    end
+    apply(list[index])
+end
+
 -- Apply requests from the widget/panel. The nonce is monotonic across
 -- writers (each seeds from the last request) and guards against replaying a
 -- stale request after a hot reload of this script.
 local handledNonce = 0
 do
-    local pendingReq = noctalia.state.get("apply_request")
+    local pendingReq = noctalia.state.get(shared.REQUEST_KEY)
     if type(pendingReq) == "table" and type(pendingReq.nonce) == "number" then
         handledNonce = pendingReq.nonce
     end
 end
-noctalia.state.watch("apply_request", function(req)
+noctalia.state.watch(shared.REQUEST_KEY, function(req)
     if type(req) ~= "table" or type(req.nonce) ~= "number" or req.nonce <= handledNonce then
         return
     end
@@ -389,7 +423,10 @@ end)
 -- Scriptable switching:
 --   noctalia msg plugin nightwatch75/dns-switcher:service all apply <id>
 -- where <id> is a provider id ("google", "default", "custom:<name>"…);
--- "poll" forces an immediate re-detection.
+-- "poll" forces an immediate re-detection; "cycle next"/"cycle prev" steps to
+-- the neighbouring provider in the panel's own order (this is what the bar
+-- widget's scroll_up/scroll_down gesture defaults send, [widget.actions] in
+-- plugin.toml).
 function onIpc(event, payload)
     if nmcliMissing then
         return
@@ -401,6 +438,30 @@ function onIpc(event, payload)
         if not applyById(id) then
             noctalia.notifyError(tr("title"), tr("err_unknown_provider", { id = id }))
         end
+    elseif event == "cycle" then
+        local direction = type(payload) == "string" and trim(payload) or "next"
+        cycleTo(direction)
+    end
+end
+
+-- plugin_api >= 17. A hot reload (editing this file) tears this VM down and a
+-- fresh one starts moments later, which republishes its own state on load —
+-- nothing to do for "reload". On disable/uninstall/shutdown mid-apply,
+-- though, nothing ever republishes again: without this, every widget/panel
+-- instance reading the shared state would stay frozen on "changing" forever.
+-- The in-flight nmcli command is not ours to cancel either way — runAsync
+-- hands back no killable handle, and it is idempotent (con mod + reapply), so
+-- letting it finish in the background is harmless. This only stops
+-- describing it as in progress. The DNS choice itself is never touched here:
+-- it lives in the NetworkManager connection profile, independent of whether
+-- this plugin is enabled at all.
+function onExit(_signal, reason)
+    if reason == "reload" then
+        return
+    end
+    if changing then
+        changing = false
+        publish()
     end
 end
 

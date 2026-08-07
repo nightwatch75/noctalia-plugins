@@ -1,22 +1,26 @@
 --!nonstrict
 -- dns-switcher — bar widget: renders the state published by the service
--- entry (service.luau) and forwards user actions to it via "apply_request".
+-- entry (service.luau).
 --
--- Click mapping:
---   Left click   — open/close the provider panel
---   Right click  — reset to the connection default (ISP)
+-- Click mapping is declared in plugin.toml's [widget.actions] (plugin_api >=
+-- 14), not hard-coded here, so the user can remap it from the bar's own
+-- gesture settings like any built-in widget:
+--   Left click    — panel-toggle nightwatch75/dns-switcher:panel
+--   Right click   — plugin nightwatch75/dns-switcher:service all apply default
+--   Scroll up/down — plugin nightwatch75/dns-switcher:service all cycle next/prev
 --
--- No middle-click handler: every bar widget carries a built-in `middle` binding
--- that opens its own settings, and a user binding wins over a script callback,
--- so one here would never fire. The panel's copy button does the same job.
+-- No middle-click binding: every bar widget carries a built-in `middle`
+-- binding that opens its own settings, and that default is exactly what's
+-- wanted here.
 
-local PANEL_ID = "nightwatch75/dns-switcher:panel"
+local shared = require("./shared.luau")
+
 local GLYPH_UNKNOWN = "globe"
 
-local snapshot = nil -- last "dns_state" published by the service
+local snapshot = nil -- last state published by the service
 
 local function tr(key, args)
-    return noctalia.tr(key, args)
+    return shared.tr(key, args)
 end
 
 local function setLabel(text)
@@ -64,34 +68,12 @@ local function render()
     })
 end
 
-noctalia.state.watch("dns_state", function(value)
+noctalia.state.watch(shared.STATE_KEY, function(value)
     if type(value) == "table" then
         snapshot = value
         render()
     end
 end)
 
--- The nonce is monotonic across writers (widget instances and the panel):
--- each seeds from the last request in the shared state.
-local function requestApply(id, label, ip)
-    local prev = noctalia.state.get("apply_request")
-    local nonce = (type(prev) == "table" and tonumber(prev.nonce) or 0) + 1
-    noctalia.state.set("apply_request", { nonce = nonce, id = id, label = label, ip = ip })
-end
-
-function onClick()
-    noctalia.togglePanel(PANEL_ID)
-end
-
-function onRightClick()
-    if snapshot == nil or snapshot.changing == true then
-        return
-    end
-    if snapshot.current ~= nil and snapshot.current.id == "default" then
-        return
-    end
-    requestApply("default", tr("status_default"), "")
-end
-
-snapshot = noctalia.state.get("dns_state")
+snapshot = noctalia.state.get(shared.STATE_KEY)
 render()
