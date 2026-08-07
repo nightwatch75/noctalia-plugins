@@ -2,7 +2,7 @@
   "clear_done_confirm": "Delete all done entries?",
   "clear_done_no": "Cancel",
   "clear_done_yes": "Delete",
-  "empty": "No tasks yet — add one with +",
+  "empty": "No tasks yet — add one with + (or press N)",
   "placeholder": "New task…",
   "prio_important": "Important",
   "prio_low": "Low",
@@ -13,6 +13,10 @@
       "description": "The glyph shown for the To Do widget on the bar.",
       "label": "Bar glyph"
     },
+    "sound_on_complete": {
+      "description": "Play a short sound when a task is marked done.",
+      "label": "Sound on complete"
+    },
     "todo_folder": {
       "description": "Folder holding the task list (todo.json). Defaults to ~/Documents/Todo.",
       "label": "To Do folder"
@@ -20,7 +24,7 @@
   },
   "sort_manual": "Manual",
   "sort_priority": "Priority",
-  "tip_add": "Add a task",
+  "tip_add": "Add a task (N)",
   "tip_clear_done": "Delete all done tasks",
   "tip_close": "Close",
   "tip_commit": "Save (Enter)",
@@ -29,7 +33,7 @@
   "tip_edit": "Edit",
   "tip_grip": "Drag to reorder",
   "tip_grip_drop": "Click another grip to drop here, or this one to cancel",
-  "tip_sort": "Switch ordering mode",
+  "tip_sort": "Switch ordering mode (S)",
   "tip_settings": "Plugin settings",
   "tip_undone": "Mark as to do",
   "title": "To Do",

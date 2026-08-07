@@ -6,8 +6,13 @@
 -- shows how many tasks are still to do. The count is read straight from
 -- todo.json, so it is correct before the panel is ever opened and reflects
 -- edits made to the file outside noctalia.
+--
+-- Left click is NOT wired here: plugin.toml declares it as a [widget.actions]
+-- default (`left = "panel-toggle nightwatch75/todo:panel"`, plugin_api >= 14),
+-- which lets the user remap the gesture from the bar's own settings. A bound
+-- gesture is taken off this widget's own input area entirely, so an onClick()
+-- here would simply never run.
 
-local PANEL_ID = "nightwatch75/todo:panel"
 local FILE_NAME = "todo.json"
 
 local open = false
@@ -62,10 +67,6 @@ end)
 function update()
     pending = pendingCount()
     render()
-end
-
-function onClick()
-    noctalia.togglePanel(PANEL_ID)
 end
 
 noctalia.setUpdateInterval(2000)

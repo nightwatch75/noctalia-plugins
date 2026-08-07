@@ -62,12 +62,15 @@ local function taskTextWidth(withGrip, trailing)
     return width
 end
 
+local storage = require("./storage.luau")
+
 local PRIORITIES = { "important", "medium", "low" }
 local RANK = { important = 1, medium = 2, low = 3 }
 local COLORS = { important = "#e06c75", medium = "#e5c07b", low = "#98c379" }
 local FILE_NAME = "todo.json"
 local AUTOSAVE_IDLE_TICKS = 2 -- 1s panel ticks with no edits before a flush
 local DRAG_TYPE = "todo-row" -- drag identifier matched by the row drop zones
+local COMPLETE_SOUND = "todo-complete" -- name registered with noctalia.sound.load
 
 local items = {} -- array, ALWAYS in manual order (priority mode sorts a copy for display)
 local nextId = 1 -- monotonic id source (identity only, not a sort key)
@@ -79,6 +82,7 @@ local editingId = nil -- id of the row currently in edit mode (at most one)
 local loaded = false -- guard so an early save() can never truncate the file
 local sortMode = "priority" -- "priority" (auto sort) or "manual" (drag reorder)
 local confirmingClear = false -- header trash pressed, awaiting confirm/cancel
+local soundReady = false -- true once COMPLETE_SOUND has finished loading
 
 local render
 
@@ -115,10 +119,6 @@ local function strike(text)
         table.insert(out, "\u{0336}")
     end
     return table.concat(out)
-end
-
-local function normalizePriority(value)
-    return RANK[value] ~= nil and value or "medium"
 end
 
 -- The rows to render, in display order. `items` itself is never reordered by
@@ -167,42 +167,10 @@ local function removeItem(id)
 end
 
 local function load()
-    items = {}
-    nextId = 1
-    sortMode = "priority"
-    local raw = noctalia.readFile(filePath)
-    if raw ~= nil and raw ~= "" then
-        local decoded = noctalia.json.decode(raw)
-        local list = nil
-        if type(decoded) == "table" then
-            -- Object form { version, sort, tasks }; a legacy plain array has no
-            -- `tasks` key and is read as-is (manual order, priority sort).
-            if decoded.tasks ~= nil then
-                if decoded.sort == "manual" or decoded.sort == "priority" then
-                    sortMode = decoded.sort
-                end
-                list = decoded.tasks
-            else
-                list = decoded
-            end
-        end
-        if type(list) == "table" then
-            for _, entry in ipairs(list) do
-                if type(entry) == "table" then
-                    local id = tonumber(entry.id) or nextId
-                    table.insert(items, {
-                        id = id,
-                        text = type(entry.text) == "string" and entry.text or "",
-                        priority = normalizePriority(entry.priority),
-                        done = entry.done == true,
-                    })
-                    if id >= nextId then
-                        nextId = id + 1
-                    end
-                end
-            end
-        end
-    end
+    local state = storage.load(filePath)
+    items = state.items
+    nextId = state.nextId
+    sortMode = state.sortMode
     -- The on-disk order IS the manual order; priority mode sorts at render time.
     loaded = true
 end
@@ -211,18 +179,7 @@ local function save()
     if not loaded then
         return -- never write before the first load reads what is on disk
     end
-    -- Blank tasks are in-progress placeholders; they never reach disk.
-    local toStore = {}
-    for _, item in ipairs(items) do
-        if not isBlank(item.text) then
-            table.insert(toStore, item)
-        end
-    end
-    local encoded = noctalia.json.encode({ version = 2, sort = sortMode, tasks = toStore }, true)
-    if encoded == nil then
-        return
-    end
-    local ok, err = noctalia.writeFile(filePath, encoded)
+    local ok, err = storage.save(filePath, items, sortMode)
     if not ok then
         noctalia.notifyError(tr("title"), err or tr("save_failed"))
         return
@@ -279,7 +236,14 @@ end
 local function toggleDone(id)
     local item = findItem(id)
     if item ~= nil then
+        local wasDone = item.done
         item.done = not item.done
+        -- Chime only on the false->true transition (completing, not
+        -- un-completing), and only when the setting is on and the sound
+        -- finished loading.
+        if item.done and not wasDone and soundReady and noctalia.getConfig("sound_on_complete") then
+            noctalia.sound.play(COMPLETE_SOUND)
+        end
         save()
         render()
     end
@@ -665,6 +629,23 @@ function onSortToggle()
     setSortMode(sortMode == "manual" and "priority" or "manual")
 end
 
+-- plugin_api >= 13, declared as capture_keys = ["n", "s"] in plugin.toml. The
+-- host only delivers a chord here when no ui.input has focus (a focused text
+-- field reserves every printable key for itself first), but editingId is
+-- checked too as a second, script-level guard in case that ever changes.
+-- Return/Escape are deliberately NOT bound: Return already reaches the
+-- editing input's onSubmit, and a panel can never capture Escape at all.
+function onKey(chord, pressed)
+    if not pressed or editingId ~= nil then
+        return
+    end
+    if chord == "n" then
+        onAdd()
+    elseif chord == "s" then
+        onSortToggle()
+    end
+end
+
 -- Drop callback for the insertion zones (declarative drag-and-drop). payload is
 -- the dragged row's id as text, value the target gap index as text.
 function onTodoDrop(payload, value)
@@ -695,3 +676,10 @@ end
 function onClosePanel()
     panel.close()
 end
+
+-- Loaded once when the script starts (and again on hot reload); playing is a
+-- no-op until this callback flips soundReady, so a slow/failed load just
+-- means the very first completion after a reload stays silent.
+noctalia.sound.load(COMPLETE_SOUND, "sounds/task-complete.wav", function(ok)
+    soundReady = ok == true
+end)
