@@ -76,8 +76,11 @@ local function startsWith(value, prefix)
     return value:sub(1, #prefix) == prefix
 end
 
+-- plugin_api >= 16: a direct wall-clock read, no string formatting/parsing (and
+-- no dependency on "%s" staying a Unix-epoch format) for a value only ever
+-- diffed against itself.
 local function now()
-    return tonumber(noctalia.formatTime("%s")) or 0
+    return noctalia.nowMs() / 1000
 end
 
 -- Same version gate as the panel: fzf learned --scheme in 0.36 and an older one
