@@ -13,14 +13,14 @@
 -- binding that opens its own settings, and that default is exactly what's
 -- wanted here.
 
-local shared = require("./shared.luau")
+local STATE_KEY = "dns_state" -- published by service.luau
 
 local GLYPH_UNKNOWN = "globe"
 
 local snapshot = nil -- last state published by the service
 
 local function tr(key, args)
-    return shared.tr(key, args)
+    return noctalia.tr(key, args)
 end
 
 local function setLabel(text)
@@ -68,12 +68,12 @@ local function render()
     })
 end
 
-noctalia.state.watch(shared.STATE_KEY, function(value)
+noctalia.state.watch(STATE_KEY, function(value)
     if type(value) == "table" then
         snapshot = value
         render()
     end
 end)
 
-snapshot = noctalia.state.get(shared.STATE_KEY)
+snapshot = noctalia.state.get(STATE_KEY)
 render()

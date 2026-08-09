@@ -6,8 +6,8 @@
 
 id = "nightwatch75/dns-switcher"
 name = "DNS Switcher"
-version = "0.1.1"
-plugin_api = 22
+version = "0.1.2"
+plugin_api = 17
 author = "nightwatch75"
 license = "MIT"
 # dig (bind-tools/dnsutils) is preferred for the panel's lookup tester;

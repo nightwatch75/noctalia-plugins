@@ -14,9 +14,13 @@
 -- reapply pushes the change onto the live connection without reactivating
 -- it, so the network never drops. The privilege command is empty by default:
 -- NetworkManager's polkit policy lets active local sessions modify system
--- connections on most desktop distros.
+-- connections on most desktop distros. When set, it is prefixed onto each
+-- of those two nmcli calls individually (never onto a wrapping shell), so a
+-- sudoers NOPASSWD rule naming the nmcli binary itself is enough — see
+-- apply() below and the README's Privileges section.
 
-local shared = require("./shared.luau")
+local STATE_KEY = "dns_state"       -- published here, read by widget + panel
+local REQUEST_KEY = "apply_request" -- sent by widget/panel, consumed here
 
 local BUILTIN = {
     { id = "google",     label = "Google",     ip = "8.8.8.8 8.8.4.4",               glyph = "brand-google" },
@@ -44,15 +48,11 @@ local function cfg(key)
 end
 
 local function tr(key, args)
-    return shared.tr(key, args)
+    return noctalia.tr(key, args)
 end
 
 local function trim(value)
     return (value:gsub("^%s+", ""):gsub("%s+$", ""))
-end
-
-local function shellQuote(value)
-    return "'" .. value:gsub("'", "'\\''") .. "'"
 end
 
 local function pollSeconds()
@@ -166,7 +166,7 @@ end
 
 local function publish()
     stateNonce += 1
-    noctalia.state.set(shared.STATE_KEY, {
+    noctalia.state.set(STATE_KEY, {
         nonce = stateNonce,
         current = current,
         servers = lastSeen,
@@ -301,23 +301,26 @@ local function apply(provider)
     else
         mods = 'ipv4.dns "' .. safeIp .. '" ipv4.ignore-auto-dns yes'
     end
-    local inner = 'ACT=$(LC_ALL=C nmcli -t -f TYPE,DEVICE,UUID connection show --active 2>/dev/null); '
-        .. [[LINE=$(printf '%s\n' "$ACT" | grep -E '^(802-11-wireless|802-3-ethernet):' | head -n 1); ]]
-        .. [=[[ -n "$LINE" ] || LINE=$(printf '%s\n' "$ACT" | grep -v '^loopback:' | head -n 1); ]=]
-        .. [=[[ -n "$LINE" ] || exit 9; ]=]
-        .. 'DEV=$(printf \'%s\' "$LINE" | cut -d: -f2); '
-        .. 'UUID=$(printf \'%s\' "$LINE" | cut -d: -f3); '
-        .. 'nmcli con mod "$UUID" ' .. mods .. ' && nmcli device reapply "$DEV"'
 
     local priv = cfg("privilege_command")
     if type(priv) ~= "string" then
         priv = ""
     end
     priv = trim(priv)
-    local cmd = inner
-    if priv ~= "" then
-        cmd = priv .. " sh -c " .. shellQuote(inner)
-    end
+    -- Prefixed onto each nmcli invocation individually, never onto a
+    -- wrapping `sh -c`: the README's sudoers example authorizes the nmcli
+    -- binary itself (NOPASSWD: /usr/bin/nmcli), which never covers a shell
+    -- run under sudo. Discovering the device/uuid stays unprivileged either
+    -- way (it's a plain read), so only the two mutating calls need it.
+    local privPrefix = priv ~= "" and (priv .. " ") or ""
+
+    local cmd = 'ACT=$(LC_ALL=C nmcli -t -f TYPE,DEVICE,UUID connection show --active 2>/dev/null); '
+        .. [[LINE=$(printf '%s\n' "$ACT" | grep -E '^(802-11-wireless|802-3-ethernet):' | head -n 1); ]]
+        .. [=[[ -n "$LINE" ] || LINE=$(printf '%s\n' "$ACT" | grep -v '^loopback:' | head -n 1); ]=]
+        .. [=[[ -n "$LINE" ] || exit 9; ]=]
+        .. 'DEV=$(printf \'%s\' "$LINE" | cut -d: -f2); '
+        .. 'UUID=$(printf \'%s\' "$LINE" | cut -d: -f3); '
+        .. privPrefix .. 'nmcli con mod "$UUID" ' .. mods .. ' && ' .. privPrefix .. 'nmcli device reapply "$DEV"'
 
     changing = true
     publish()
@@ -404,12 +407,12 @@ end
 -- stale request after a hot reload of this script.
 local handledNonce = 0
 do
-    local pendingReq = noctalia.state.get(shared.REQUEST_KEY)
+    local pendingReq = noctalia.state.get(REQUEST_KEY)
     if type(pendingReq) == "table" and type(pendingReq.nonce) == "number" then
         handledNonce = pendingReq.nonce
     end
 end
-noctalia.state.watch(shared.REQUEST_KEY, function(req)
+noctalia.state.watch(REQUEST_KEY, function(req)
     if type(req) ~= "table" or type(req.nonce) ~= "number" or req.nonce <= handledNonce then
         return
     end

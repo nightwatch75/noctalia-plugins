@@ -4,7 +4,8 @@
 -- "apply_request" entries this panel emits. Picking a provider applies it
 -- immediately (one nmcli change, no reactivation).
 
-local shared = require("./shared.luau")
+local STATE_KEY = "dns_state" -- published by service.luau
+local REQUEST_KEY = "apply_request" -- consumed by service.luau
 
 local RESOLVE_TIMEOUT_MS = 4000
 
@@ -35,7 +36,7 @@ local resolveResult = nil -- { tool, serverIp?, serverLabel?, lines? (dig), raw?
 local render
 
 local function tr(key, args)
-    return shared.tr(key, args)
+    return noctalia.tr(key, args)
 end
 
 local function trim(value)
@@ -46,11 +47,15 @@ local function shellQuote(value)
     return "'" .. value:gsub("'", "'\\''") .. "'"
 end
 
+-- The nonce is monotonic across writers (widget instances and the panel):
+-- each seeds from the last request already in the shared state.
 local function requestApply(entry)
     if snapshot == nil or snapshot.changing == true then
         return
     end
-    shared.requestApply(entry.id, entry.label, entry.ip)
+    local prev = noctalia.state.get(REQUEST_KEY)
+    local nonce = (type(prev) == "table" and tonumber(prev.nonce) or 0) + 1
+    noctalia.state.set(REQUEST_KEY, { nonce = nonce, id = entry.id, label = entry.label, ip = entry.ip })
 end
 
 -- A conservative hostname shape (letters/digits/dot/hyphen, no leading dot or
@@ -302,11 +307,11 @@ render = function()
 end
 
 function onOpen(_context)
-    snapshot = noctalia.state.get(shared.STATE_KEY)
+    snapshot = noctalia.state.get(STATE_KEY)
     render()
 end
 
-noctalia.state.watch(shared.STATE_KEY, function(value)
+noctalia.state.watch(STATE_KEY, function(value)
     if type(value) == "table" then
         snapshot = value
         render()
