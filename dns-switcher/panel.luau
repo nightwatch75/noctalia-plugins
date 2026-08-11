@@ -43,10 +43,6 @@ local function trim(value)
     return (value:gsub("^%s+", ""):gsub("%s+$", ""))
 end
 
-local function shellQuote(value)
-    return "'" .. value:gsub("'", "'\\''") .. "'"
-end
-
 -- The nonce is monotonic across writers (widget instances and the panel):
 -- each seeds from the last request already in the shared state.
 local function requestApply(entry)
@@ -59,9 +55,10 @@ local function requestApply(entry)
 end
 
 -- A conservative hostname shape (letters/digits/dot/hyphen, no leading dot or
--- hyphen, 253 chars max — the DNS wire-format limit). shellQuote() below is
--- the actual safety net; this only keeps an obviously-wrong query from ever
--- reaching a shell as a "valid enough" no-op.
+-- hyphen, 253 chars max — the DNS wire-format limit). Since 0.2.0 the lookup
+-- runs as an argv (plugin_api >= 24), so there is no shell to defend against
+-- and no quoting to get right: the name is one argument, whatever is in it.
+-- This check is now only about not sending an obviously-wrong query at all.
 local function isValidHostname(name)
     return name ~= "" and #name <= 253 and name:match("^[%w][%w%.%-]*$") ~= nil
 end
@@ -124,11 +121,16 @@ local function runResolve()
     local tool = useDig and "dig" or "nslookup"
     local cmd
     if useDig then
-        cmd = "dig +time=3 +tries=1 +short "
-            .. (server ~= nil and ("@" .. shellQuote(server.ip) .. " ") or "")
-            .. shellQuote(name)
+        cmd = { "dig", "+time=3", "+tries=1", "+short" }
+        if server ~= nil then
+            table.insert(cmd, "@" .. server.ip)
+        end
+        table.insert(cmd, name)
     else
-        cmd = "nslookup " .. shellQuote(name) .. (server ~= nil and (" " .. shellQuote(server.ip)) or "")
+        cmd = { "nslookup", name }
+        if server ~= nil then
+            table.insert(cmd, server.ip)
+        end
     end
 
     local ok = noctalia.runAsync(cmd, function(result)

@@ -75,9 +75,13 @@ neighbouring provider (what scroll sends).
 
 ## Requirements
 
-- noctalia v5.0.0-beta.7 or newer (`plugin_api = 17`, for the `onExit`
-  lifecycle cleanup in `service.luau`)
+- noctalia with `plugin_api = 24` — direct argv process execution, so every
+  command this plugin runs is an argument vector and no shell ever parses a
+  DNS address, a hostname or the privilege command. This is newer than
+  v5.0.0-beta.8, which tops out at 23; on beta.8 the plugin store keeps
+  serving 0.1.2 until the next release
 - NetworkManager (`networkmanager`, provides `nmcli`) with an active connection
+- `env` (coreutils) — runs `nmcli` under `LC_ALL=C`
 - Permission to modify system connections (see *Privileges* below)
 - `dig` (bind-tools/dnsutils) or `nslookup`, optional — only the lookup
   tester needs one of them; the rest of the plugin works without either
@@ -90,7 +94,10 @@ password. If you get a "not authorized" error, set it to `pkexec` (shows
 noctalia's own polkit prompt) or `sudo -n` with a matching sudoers rule.
 The privilege command is applied to the `nmcli con mod` and `nmcli device
 reapply` calls individually — never to a wrapping shell — so the sudoers
-rule only ever needs to name `nmcli` itself:
+rule only ever needs to name `nmcli` itself. It is split on whitespace into
+separate arguments (`sudo -n` is two), and `nmcli` stays the program it is
+asked to run, which is what the rule below matches on; a privilege command
+whose own path contains spaces is not supported — use a wrapper script.
 
 ```
 # /etc/sudoers.d/nmcli-dns
