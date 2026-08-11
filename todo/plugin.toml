@@ -8,8 +8,10 @@
 
 id = "nightwatch75/todo"
 name = "To Do"
-version = "0.0.16"
-plugin_api = 22
+version = "0.0.17"
+# 23 for noctalia.readFileAsync: the bar widget re-reads todo.json every 2
+# seconds and must not block the bar to do it.
+plugin_api = 23
 author = "nightwatch75"
 license = "MIT"
 dependencies = []

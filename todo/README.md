@@ -123,9 +123,10 @@ noctalia msg plugins enable nightwatch75/todo
 
 ## Requirements
 
-- noctalia v5.0.0-beta.6 or newer — the first tagged release that accepts
-  `plugin_api = 15` (`noctalia.openSettings()`, the panel's ⚙ button;
-  declarative drag-and-drop needs 5)
+- noctalia v5.0.0-beta.8 or newer — the first tagged release that accepts
+  `plugin_api = 23` (`noctalia.readFileAsync`, so the bar widget re-reads the
+  task count without blocking the bar; relative luau imports need 22,
+  `noctalia.openSettings()` 15, declarative drag-and-drop 5)
 - No external dependencies
 
 ## License
