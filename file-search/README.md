@@ -176,8 +176,9 @@ results whenever the index is out of date.
 
 ## Requirements
 
-- noctalia v5.0.0-beta.6 or newer — the first tagged release that accepts
-  `plugin_api = 15` (`noctalia.openSettings()`, the panel's ⚙ button)
+- noctalia v5.0.0-beta.8 or newer — the first tagged release that accepts
+  `plugin_api = 22` (relative luau imports: the three entries share one
+  `shared.luau`, which owns the index fingerprint they all agree on)
 - [`fzf`](https://github.com/junegunn/fzf) — the fuzzy matcher. 0.36 or newer
   for the path-aware ranking; older builds work, with fzf's default ranking
 - `find` (GNU findutils) — walks the roots into the index

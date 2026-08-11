@@ -7,8 +7,10 @@
 
 id = "nightwatch75/file-search"
 name = "File Search"
-version = "0.0.27"
-plugin_api = 18
+version = "0.0.28"
+# 22 for relative luau imports: the three entries share shared.luau, which owns
+# the index fingerprint they all have to agree on.
+plugin_api = 22
 author = "nightwatch75"
 license = "MIT"
 # The exact commands the plugin spawns (fzf, lsblk and gdbus aside, findutils +
