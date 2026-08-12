@@ -494,9 +494,31 @@ end
 -- 16). One noctalia.diskStats(path) call per mount — the same small, stable
 -- set `mounts` already holds, never per matched file — because each distinct
 -- path queried is retained by the host until the plugin unloads.
+--
+-- Memoized, because the caller is not what the comment above assumed. This
+-- feeds scopeButton()'s tooltip, so it runs from render() — and render() runs
+-- at SPINNER_STEP_MS while a first-time disk index builds, which turned "one
+-- call per mount" into one call per mount roughly eleven times a second. It is
+-- the same CPU-budget trap elidePathCached exists to close, except this one
+-- crosses into the host every frame instead of only burning Luau cycles. Free
+-- space has no business being sampled at frame rate anyway: it is a tooltip the
+-- user reads after hovering, so a few seconds stale is invisible.
+--
+-- Keyed on scope plus the mount list, so cycling the scope or a disk appearing
+-- refreshes it immediately instead of waiting out the TTL.
+local FREE_TTL_MS = 5000
+local freeCacheKey = nil
+local freeCacheValue = nil
+local freeCacheAtMs = 0
+
 local function diskFreeSummary()
     if shared.scope == "folder" or #shared.mounts == 0 then
         return nil
+    end
+    local key = shared.scope .. "\0" .. table.concat(shared.mounts, "\0")
+    local nowMs = noctalia.nowMs()
+    if key == freeCacheKey and nowMs - freeCacheAtMs < FREE_TTL_MS then
+        return freeCacheValue
     end
     local freeBytes = 0
     local sampled = 0
@@ -507,10 +529,14 @@ local function diskFreeSummary()
             sampled += 1
         end
     end
-    if sampled == 0 then
-        return nil
-    end
-    return shared.tr("tip_scope_free", { free = formatBytes(freeBytes), count = sampled })
+    freeCacheKey = key
+    freeCacheAtMs = nowMs
+    -- nil is cached too: with no readable mount, retrying every frame is the
+    -- worst case, not the safe one.
+    freeCacheValue = sampled > 0
+        and shared.tr("tip_scope_free", { free = formatBytes(freeBytes), count = sampled })
+        or nil
+    return freeCacheValue
 end
 
 local function formatDuration(ms)
