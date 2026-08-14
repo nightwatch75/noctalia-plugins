@@ -785,11 +785,12 @@ local function formatDuration(ms)
     return string.format("%dm %02ds", math.floor(seconds / 60), math.floor(seconds % 60))
 end
 
--- One dim line of fzf's extended-search operators, between the results and the
--- status bar. They are the difference between "many matches" and "the one", and
--- nothing else in the panel hints that the query field understands more than
--- letters. One label, not a row of chips: the cheapest node count for something
--- that renders on every keystroke.
+-- One dim line of fzf's extended-search operators, directly under the query
+-- input — next to the field they describe, rather than at the far end of the
+-- panel where the usage chart had pushed them out of sight of it. They are the
+-- difference between "many matches" and "the one", and nothing else here hints
+-- that the field understands more than letters. One label, not a row of chips:
+-- the cheapest node count for something that renders on every keystroke.
 -- Two labels rather than one string: the caption says what the row is, dimmed
 -- so it reads as a label and not as part of the syntax, and the operators
 -- themselves stay in the brighter colour because they are the content.
@@ -959,6 +960,7 @@ render = function()
             onChange = "onQueryChanged",
             onSubmit = "onOpenFirst",
         }),
+        syntaxLegend(),
     }
 
     local strip = usageFilterStrip()
@@ -1009,7 +1011,6 @@ render = function()
         table.insert(children, ui.separator({ key = "usage-rule" }))
         table.insert(children, chart)
     end
-    table.insert(children, syntaxLegend())
     table.insert(children, statusFooter())
 
     panel.render(ui.column({ flexGrow = 1, gap = 12, align = "stretch" }, children))

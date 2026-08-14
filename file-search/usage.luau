@@ -25,8 +25,11 @@ local shared = require("./shared.luau")
 
 local usage = {}
 
--- Six plus "other" is what fits beside a 108px donut without its own scroll.
-usage.MAX_SLICES = 6
+-- Eight, which is also the length of the palette, so no folder ever borrows a
+-- colour already on screen. Six left "other" as the second-biggest slice on a
+-- home directory (21% of it) while hiding two folders larger than the smallest
+-- one shown — and "other" is the one slice that cannot be clicked into.
+usage.MAX_SLICES = 8
 
 -- A day: du over a home directory takes ~7 seconds, disk usage moves over
 -- days, and the measurement is saved to disk. ↻ ignores this.
