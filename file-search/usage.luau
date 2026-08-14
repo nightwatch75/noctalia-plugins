@@ -17,6 +17,12 @@
 --
 -- du is spawned as an argv (plugin_api >= 24), never as a shell line.
 
+-- Only for formatBytes and now(): both existed here as private copies until the
+-- byte formatter drifted from the panel's and the same measurement started
+-- reading as "110 GB" in the donut and "110.4 GB" in the free-space tooltip.
+-- require is cached per VM, so this is the same table panel.luau holds.
+local shared = require("./shared.luau")
+
 local usage = {}
 
 -- Six plus "other" is what fits beside a 108px donut without its own scroll.
@@ -131,21 +137,6 @@ function usage.mountChildren(root)
     end
     table.sort(names)
     return names
-end
-
--- ── formatting ───────────────────────────────────────────────────────────────
-
-function usage.formatBytes(n)
-    local units = { "B", "KB", "MB", "GB", "TB" }
-    local index, value = 1, n + 0.0
-    while value >= 1024 and index < #units do
-        value /= 1024
-        index += 1
-    end
-    if value >= 100 or index == 1 then
-        return string.format("%.0f %s", value, units[index])
-    end
-    return string.format("%.1f %s", value, units[index])
 end
 
 -- ── du output ────────────────────────────────────────────────────────────────
@@ -394,14 +385,9 @@ end
 
 -- ── measuring ────────────────────────────────────────────────────────────────
 
--- The sandbox injects no `os` library. Only ever diffed against itself.
-local function now()
-    return noctalia.nowMs() / 1000
-end
-
 function usage.fresh(root)
     return usage.state == "ready" and usage.root == root
-        and (now() - usage.scannedAt) < usage.TTL_SECONDS
+        and (shared.now() - usage.scannedAt) < usage.TTL_SECONDS
 end
 
 -- Measure `root`, then call done() either way. `force` skips the TTL; a scan
@@ -450,7 +436,7 @@ function usage.scan(root, dataDir, force, done)
         usage.total = rootBytes
         usage.slices = toSlices(entries, rootBytes, usage.looseLabel, usage.otherLabel)
         usage.skipped = usage.mountChildren(root)
-        usage.scannedAt = now()
+        usage.scannedAt = shared.now()
         usage.state = "ready"
         usage.errText = nil
         usage.save(dataDir)

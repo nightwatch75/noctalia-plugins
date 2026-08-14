@@ -7,7 +7,7 @@
 
 id = "nightwatch75/file-search"
 name = "File Search"
-version = "0.1.0"
+version = "0.1.1"
 # 22 for relative luau imports: the three entries share shared.luau, which owns
 # the index fingerprint they all have to agree on. 24 for argv process
 # execution — the usage chart spawns `du` over the search folder with the

@@ -265,6 +265,13 @@ local function readTotal(dir)
     buildMs = nil -- belongs to the index of this scope, if that one recorded it
     local recorded = noctalia.readFile(dir .. "/count-" .. target)
     if recorded ~= nil then
+        -- The `or shared.trim(recorded)` is NOT dead: 0.0.22 added the elapsed
+        -- millis to this sidecar, and one written before that holds the count
+        -- alone. That file is still on disk for any scope not rebuilt since —
+        -- count-all here is a bare "1166625" — and without the fallback the
+        -- match fails and the footer reports 0 indexed for a perfectly good
+        -- index. buildMs stays nil for those, which is exactly right: that
+        -- build never recorded one.
         local count, elapsed = shared.trim(recorded):match("^(%d+)%s+(%d+)$")
         total = tonumber(count or shared.trim(recorded)) or 0
         buildMs = tonumber(elapsed)
@@ -525,23 +532,6 @@ local function resultRow(rel, index)
     })
 end
 
--- Milliseconds as something a person reads at a glance: "820 ms", "12.4 s",
--- "7m 41s". A disk walk is minutes, a warm home folder is under a second, and
--- the same string has to serve both.
-local function formatBytes(bytes)
-    local units = { "B", "KB", "MB", "GB", "TB" }
-    local value = bytes
-    local unit = 1
-    while value >= 1024 and unit < #units do
-        value /= 1024
-        unit += 1
-    end
-    if unit == 1 then
-        return string.format("%.0f %s", value, units[unit])
-    end
-    return string.format("%.1f %s", value, units[unit])
-end
-
 -- Free space across every mount the current scope would walk (plugin_api >=
 -- 16). One noctalia.diskStats(path) call per mount — the same small, stable
 -- set `mounts` already holds, never per matched file — because each distinct
@@ -586,7 +576,7 @@ local function diskFreeSummary()
     -- nil is cached too: with no readable mount, retrying every frame is the
     -- worst case, not the safe one.
     freeCacheValue = sampled > 0
-        and shared.tr("tip_scope_free", { free = formatBytes(freeBytes), count = sampled })
+        and shared.tr("tip_scope_free", { free = shared.formatBytes(freeBytes), count = sampled })
         or nil
     return freeCacheValue
 end
@@ -614,7 +604,7 @@ local function requestUsage(force)
         if usage.state == "ready" then
             usage.writeSvg(
                 dataDir, USAGE_SIZE, USAGE_THICKNESS,
-                usage.formatBytes(usage.total),
+                shared.formatBytes(usage.total),
                 shared.tr("usage_center")
             )
         end
@@ -686,7 +676,7 @@ local function usageLegendRow(slice, index)
         ui.label({
             key = "size",
             text = shared.tr("usage_amount", {
-                size = usage.formatBytes(slice.bytes),
+                size = shared.formatBytes(slice.bytes),
                 share = string.format("%.0f", share),
             }),
             fontSize = 11,
@@ -1141,7 +1131,7 @@ function onOpen(_context)
         if usage.load(dir) then
             usage.writeSvg(
                 dir, USAGE_SIZE, USAGE_THICKNESS,
-                usage.formatBytes(usage.total),
+                shared.formatBytes(usage.total),
                 shared.tr("usage_center")
             )
         end
@@ -1250,14 +1240,6 @@ function onToggleUsage()
     requestUsage(false)
 end
 
--- Allowed mid-build on purpose: a walk over a slow disk can run for minutes and
--- there is no way to cancel it, so blocking the button would trap the user in
--- the scope they are trying to leave. The in-flight build finishes against the
--- cache of the scope it started in and never starts another one by itself.
---
--- The press itself is deliberately cheap — a 6-byte write and a render. Every
--- process it might need (mount scan, count, search) goes through
--- requestReload, which collapses a burst of presses into one pass.
 -- The index is untouched; only the order of the rows changes, so the current
 -- query is simply run again through the other scheme.
 function onCycleRanking()
@@ -1283,6 +1265,14 @@ function onCycleRowAction()
     render()
 end
 
+-- Allowed mid-build on purpose: a walk over a slow disk can run for minutes and
+-- there is no way to cancel it, so blocking the button would trap the user in
+-- the scope they are trying to leave. The in-flight build finishes against the
+-- cache of the scope it started in and never starts another one by itself.
+--
+-- The press itself is deliberately cheap — a 6-byte write and a render. Every
+-- process it might need (mount scan, count, search) goes through
+-- requestReload, which collapses a burst of presses into one pass.
 function onCycleScope()
     shared.scope = shared.NEXT_SCOPE[shared.scope] or shared.DEFAULT_SCOPE
     local dir = shared.dataDir()

@@ -132,6 +132,25 @@ function shared.now()
     return noctalia.nowMs() / 1000
 end
 
+-- Byte counts as a person reads them. One implementation, because there were
+-- two and they disagreed: the panel's rounded to one decimal above KB and the
+-- chart's dropped the decimal at three digits, so the same measurement showed
+-- as "110.4 GB" in the free-space tooltip and "110 GB" in the donut. Three
+-- significant figures throughout is the rule kept — a tenth of a gigabyte is
+-- precision this plugin does not have and nobody asked for.
+function shared.formatBytes(n)
+    local units = { "B", "KB", "MB", "GB", "TB" }
+    local index, value = 1, n + 0.0
+    while value >= 1024 and index < #units do
+        value /= 1024
+        index += 1
+    end
+    if value >= 100 or index == 1 then
+        return string.format("%.0f %s", value, units[index])
+    end
+    return string.format("%.1f %s", value, units[index])
+end
+
 -- Open a path with the system MIME association. Detached (no callback), so the
 -- host runs it under /bin/sh -c and the redirection is the shell's.
 function shared.openPath(path)
