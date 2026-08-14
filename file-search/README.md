@@ -116,6 +116,40 @@ the footer says *out of date*. The ↻ button (or *Rebuild search index* in the
 launcher) is what rebuilds it, and a scope never indexed says so and waits. The
 search folder alone keeps re-indexing itself, as before — it takes seconds.
 
+### Disk usage chart
+
+Under the results, a donut shows what fills the search folder: its biggest
+direct children, the rest folded into *other*, and the loose files that belong
+to no subfolder. Each legend row gives the size and the share of the total.
+
+The ◕ button in the panel header shows and hides it, and the choice survives
+restarts. It is only offered on the *search folder* scope — measuring an
+external disk means walking it, which is exactly what this plugin refuses to do
+unasked.
+
+**Click a folder in the legend to search inside it.** The results narrow to
+that folder, a strip above them says which one, and the ✕ on that strip — or a
+second click on the same row — puts the search back to the whole tree. It is
+a plain filter, so it combines with whatever you type: pick `winboat`, type
+`img`, get `winboat/data.img`. *other* and *(loose files)* are not folders and
+are not clickable.
+
+Sizes come from `du`, measured once and kept for a day, on disk, so restarts and
+reopens cost nothing — `du` over a home directory takes about seven seconds and
+disk usage moves on the scale of days. The ↻ button re-measures immediately,
+along with the index; that is the button for "I just deleted something".
+
+**Other filesystems are never walked.** `du` is run with `-x`, so a mount point
+under the search folder — a network share, an rclone or sshfs remote, a second
+drive — is skipped whatever it holds, and a slow remote cannot stall the panel.
+Those folders are then missing from the total, so the chart names them under
+the legend: *not counted: … (other filesystem)*.
+
+For a folder that is slow but on the *same* filesystem, the
+`usage_exclude_dirs` setting keeps `du` out of it. `OneDrive` excludes every
+folder by that name below the search folder; `~/OneDrive` or
+`/home/you/OneDrive` excludes exactly that one.
+
 The panel header also carries a ⚙ button that opens this plugin's page in
 *Settings → Plugins*, and a ↻ button that rebuilds the index. The same settings
 page opens from the command line, so it can be bound in your compositor too:
@@ -161,6 +195,12 @@ results whenever the index is out of date.
 - The search-folder index rebuilds itself when the relevant settings change, and
   on demand via the panel's refresh button; any index covering an external disk
   rebuilds on demand only
+- A disk usage donut under the results: the biggest folders in the search
+  folder with their size and share, measured with `du -x`, so mounted
+  filesystems below it are skipped rather than walked (and named, so the total
+  is never quietly incomplete). Clicking a folder in its legend narrows the
+  search to that folder, which is the point — the chart is a way in, not a
+  poster
 - Panel placement (attached/floating), position and open-near-click are the
   standard per-panel settings noctalia exposes in Settings → Plugins
 
@@ -171,20 +211,25 @@ results whenever the index is out of date.
 | `search_folder` | `folder` | *(empty)* | Root folder the search indexes. Empty = your home folder. |
 | `exclude_dirs` | `string` | `.git, node_modules, .cache, .venv` | Folder names skipped while indexing, separated by `,` or `;`, matched anywhere in the tree. |
 | `show_hidden` | `bool` | `false` | Index files and folders whose name starts with a dot. |
+| `usage_exclude_dirs` | `string` | *(empty)* | Folders left out of the disk usage chart, separated by `,` or `;`. A bare name matches anywhere below the search folder; a path (absolute, or starting with `~`) matches that one folder. Folders on another filesystem are already skipped. |
 | `max_results` | `int` | `50` | How many matches the panel lists at most (10–200). |
 | `glyph` (widget) | `glyph` | `search` | Icon shown on the bar. |
 
 ## Requirements
 
-- noctalia v5.0.0-beta.8 or newer — the first tagged release that accepts
-  `plugin_api = 22` (relative luau imports: the three entries share one
-  `shared.luau`, which owns the index fingerprint they all agree on)
+- noctalia with `plugin_api = 24` — relative luau imports (22: the three entries
+  share one `shared.luau`, which owns the index fingerprint they all agree on)
+  and direct argv process execution (24), so the usage chart runs `du` over
+  your search folder with your own exclusion patterns as arguments and no shell
+  ever parses them. This is newer than v5.0.0-beta.8, which tops out at 23; on
+  beta.8 the plugin store keeps serving 0.0.29
 - [`fzf`](https://github.com/junegunn/fzf) — the fuzzy matcher. 0.36 or newer
   for the path-aware ranking; older builds work, with fzf's default ranking
 - `find` (GNU findutils) — walks the roots into the index
 - `xdg-open` (xdg-utils) — opens results with the MIME association
-- `mktemp`, `mv`, `wc`, `head`, `rm`, `date` — GNU coreutils, standard on any
-  Linux desktop (`date` times the index walk for the footer)
+- `mktemp`, `mv`, `wc`, `head`, `rm`, `date`, `du` — GNU coreutils, standard on
+  any Linux desktop (`date` times the index walk for the footer, `du` measures
+  the usage chart). Missing `du`, the chart says so and everything else works
 - `lsblk` (util-linux) — lists the mounted USB/removable volumes; only run when
   the scope includes them. Missing, it falls back to `/proc/mounts` and the
   udisks2 layout (`/run/media/<user>/…`, `/media/…`)

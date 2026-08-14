@@ -40,6 +40,10 @@ local ELLIPSIS = "…"
 -- widget through require() (plugin_api >= 22). See shared.luau for why.
 local shared = require("./shared.luau")
 
+-- The usage donut under the results. Panel-only, so it is not in shared.luau:
+-- the bar widget and the launcher have no chart to draw.
+local usage = require("./usage.luau")
+
 -- What a right click on a result does, switched by the second header button
 -- and persisted next to the scope. Two actions, one gesture: a panel row can
 -- only ever receive left and right — the declarative UI wires BTN_LEFT, plus
@@ -79,6 +83,12 @@ local reloadQueued = false
 local queuedForce = false
 local queuedBuild = false
 local totals = {}       -- scope → { count, size, mtime }: see readTotal
+local showUsage = true  -- the usage donut, toggled from the header
+-- Folder the results are restricted to, picked from the chart's legend, or nil.
+-- Kept apart from `query` rather than written into it as '^name/': the input
+-- stays the user's own text, and the restriction gets its own removable strip
+-- instead of being fzf syntax to recognise and edit out.
+local usageFilter = nil
 
 local render
 local runSearch
@@ -128,6 +138,21 @@ local function writeRowAction(dir, value)
     local ok, err = noctalia.writeFile(dir .. "/row-action", value)
     if not ok then
         noctalia.log("file-search: could not persist the row action: " .. tostring(err))
+    end
+end
+
+-- Whether the usage donut is shown, persisted next to the scope. A header
+-- button and a file rather than a bool setting: no API lets a plugin write its
+-- own settings (getSetting, added in 26, only reads), so a setting would only
+-- be changeable from the settings window, three clicks from the panel.
+local function readShowUsage(dir)
+    return shared.trim(noctalia.readFile(dir .. "/usage-chart") or "") ~= "0"
+end
+
+local function writeShowUsage(dir, value)
+    local ok, err = noctalia.writeFile(dir .. "/usage-chart", value and "1" or "0")
+    if not ok then
+        noctalia.log("file-search: could not persist the usage chart toggle: " .. tostring(err))
     end
 end
 
@@ -346,6 +371,31 @@ buildIndex = function()
     end
 end
 
+-- The fzf term that restricts the results to one direct child of the root.
+--
+-- '^' is fzf's EXACT prefix operator, not a fuzzy one (verified: '^x.y/' takes
+-- 'x.y/g', not 'xxy/g2'), and the trailing '/' keeps '^src/' off a sibling
+-- called 'srcold'. Only spaces need escaping — fzf splits terms on them; '!',
+-- '$' and '|' are special only at a token boundary this one does not put them
+-- at. Works on records relative to a single root (find -printf '%P'), which is
+-- the folder scope, the only scope offering the chart.
+local function folderToken(name)
+    return "^" .. name:gsub(" ", "\\ ") .. "/"
+end
+
+-- The restriction and what the user typed, ANDed as fzf does for
+-- space-separated terms.
+local function effectiveQuery()
+    if usageFilter == nil then
+        return query
+    end
+    local typed = shared.trim(query)
+    if typed == "" then
+        return folderToken(usageFilter)
+    end
+    return folderToken(usageFilter) .. " " .. typed
+end
+
 runSearch = function()
     if fzfMissing or indexing or searching or not haveIndex then
         return
@@ -355,7 +405,7 @@ runSearch = function()
         return
     end
     searching = true
-    local q = query
+    local q = effectiveQuery()
     local ok = noctalia.runAsync(shared.searchCommand(dir, q, maxResults()), function(result)
         searching = false
         if not result.timedOut then
@@ -366,7 +416,9 @@ runSearch = function()
         end
         -- The query moved on while this search ran: chase it. The stale
         -- rows rendered below are overwritten as soon as it completes.
-        if query ~= q then
+        -- Compared on the composed query, so picking a folder from the chart
+        -- mid-search is chased exactly like a keystroke would be.
+        if effectiveQuery() ~= q then
             runSearch()
         end
         render()
@@ -539,6 +591,199 @@ local function diskFreeSummary()
     return freeCacheValue
 end
 
+-- ── usage donut ──────────────────────────────────────────────────────────────
+
+local USAGE_SIZE = 108
+local USAGE_THICKNESS = 16
+local USAGE_LABEL_MAX = 16
+-- Pinned, because a Button sizes itself for the bar's chrome: at its natural
+-- height a legend row came out at ~50px, and seven of those made the legend
+-- three times the height of the donut. `height` sets a Button's min AND max.
+local USAGE_ROW_HEIGHT = 20
+
+-- Measure the current search root and redraw when it lands. Never on a disk
+-- scope: those roots are removable volumes, du over one is a minutes-long
+-- walk, and the panel already refuses to index them unasked.
+local function requestUsage(force)
+    if not showUsage or shared.scope ~= "folder" then
+        return
+    end
+    local root = shared.searchRoot()
+    local dataDir = shared.dataDir()
+    usage.scan(root, dataDir, force, function()
+        if usage.state == "ready" then
+            usage.writeSvg(
+                dataDir, USAGE_SIZE, USAGE_THICKNESS,
+                usage.formatBytes(usage.total),
+                shared.tr("usage_center")
+            )
+        end
+        render()
+    end)
+end
+
+-- Restrict the results to a folder from the chart, or lift the restriction by
+-- picking the same one again.
+--
+-- Spelled out rather than `(usageFilter == name) and nil or name`, the Lua trap
+-- that shipped in the first cut: `and nil` yields nil, which is falsy, so `or`
+-- takes the other branch and the expression returns `name` in BOTH cases.
+local function pickUsageFolder(name)
+    if usageFilter == name then
+        usageFilter = nil
+    else
+        usageFilter = name
+    end
+    render()
+    runSearch()
+end
+
+-- One legend row: swatch, folder, size and share. The swatch takes the SAME hex
+-- the SVG used, which is why the two halves of the chart agree.
+--
+-- Only the name is a Button, growing into the space between swatch and size, so
+-- the hover highlight covers the row while the numbers keep their right-aligned
+-- column. Only "folder" slices get one — "other" and the loose files name
+-- nothing fzf could be pointed at.
+local function usageLegendRow(slice, index)
+    -- utf8.len returns nil on an invalid sequence, which headChars would then
+    -- split mid-character. Left whole rather than risking a throw in render().
+    local label = slice.label
+    local labelLen = utf8.len(label)
+    if labelLen ~= nil and labelLen > USAGE_LABEL_MAX then
+        label = headChars(label, USAGE_LABEL_MAX - 1) .. ELLIPSIS
+    end
+    local share = usage.total > 0 and (slice.bytes / usage.total * 100) or 0
+    local name
+    if slice.kind == "folder" then
+        local active = usageFilter == slice.label
+        -- Keyed apart from the label below: a slice can change kind between
+        -- measurements, and the reconciler matches children by type AND key.
+        name = ui.button({
+            key = "name-folder",
+            text = label,
+            fontSize = 11,
+            variant = "ghost",
+            contentAlign = "start",
+            selected = active,
+            flexGrow = 1,
+            height = USAGE_ROW_HEIGHT,
+            tooltip = shared.tr(active and "tip_usage_folder_clear" or "tip_usage_folder", {
+                folder = slice.label,
+            }),
+            onClick = function()
+                pickUsageFolder(slice.label)
+            end,
+        })
+    else
+        name = ui.label({ key = "name-plain", text = label, fontSize = 11, color = "on_surface_variant", flexGrow = 1 })
+    end
+    return ui.row({ key = "ulegend-" .. index, gap = 6, align = "center", height = USAGE_ROW_HEIGHT }, {
+        ui.box({ key = "swatch", fill = slice.color, radius = 2, width = 9, height = 9 }),
+        name,
+        -- One label, not two: a label honours maxWidth but not width, so a
+        -- separate percent column would sit at a different offset per row.
+        ui.label({
+            key = "size",
+            text = shared.tr("usage_amount", {
+                size = usage.formatBytes(slice.bytes),
+                share = string.format("%.0f", share),
+            }),
+            fontSize = 11,
+            color = "on_surface_variant",
+        }),
+    })
+end
+
+-- The whole strip, or nil when it is off — which leaves the panel exactly the
+-- shape it had before the chart existed.
+local function usageSection()
+    if not showUsage or shared.scope ~= "folder" then
+        return nil
+    end
+
+    local children = {}
+    if usage.state == "ready" and usage.imagePath ~= nil then
+        local legend = {}
+        for index, slice in ipairs(usage.slices) do
+            table.insert(legend, usageLegendRow(slice, index))
+        end
+        -- Nothing else in the panel is a list of buttons that look like text,
+        -- so the rows being clickable is said once, in words. Dropped once a
+        -- restriction is on: the strip above the results is then what to read.
+        if usageFilter == nil then
+            table.insert(legend, ui.label({
+                key = "ulegend-hint",
+                text = shared.tr("usage_hint"),
+                fontSize = 10,
+                color = "on_surface_variant",
+            }))
+        end
+        -- Mount points are absent from the total, since `du -x` never crosses a
+        -- filesystem boundary. Naming them is the difference between a number
+        -- that is incomplete and one that is wrong.
+        if #usage.skipped > 0 then
+            table.insert(legend, ui.label({
+                key = "ulegend-skipped",
+                text = shared.tr("usage_skipped", { names = table.concat(usage.skipped, ", ") }),
+                fontSize = 10,
+                color = "on_surface_variant",
+            }))
+        end
+        table.insert(children, ui.image({
+            key = "usage-img",
+            path = usage.imagePath,
+            width = USAGE_SIZE,
+            height = USAGE_SIZE,
+        }))
+        table.insert(children, ui.column({ key = "usage-legend", gap = 1, flexGrow = 1 }, legend))
+    else
+        local text
+        if usage.state == "scanning" then
+            text = shared.tr("usage_scanning")
+        elseif usage.state == "error" then
+            text = shared.tr("usage_error", { reason = usage.errText or "?" })
+        else
+            text = shared.tr("usage_idle")
+        end
+        table.insert(children, ui.label({
+            key = "usage-msg",
+            text = text,
+            fontSize = 11,
+            color = usage.state == "error" and "error" or "on_surface_variant",
+            flexGrow = 1,
+        }))
+    end
+
+    return ui.row({ key = "usage", gap = 12, align = "center" }, children)
+end
+
+-- The active restriction as its own strip under the query input, or nil. In
+-- words with one way out, rather than as '^winboat/' inside the input, where it
+-- would be indistinguishable from what the user typed.
+local function usageFilterStrip()
+    if usageFilter == nil then
+        return nil
+    end
+    return ui.row({ key = "filter", gap = 6, align = "center" }, {
+        ui.glyph({ key = "filter-glyph", name = "folder", size = 12, color = "primary" }),
+        ui.label({
+            key = "filter-text",
+            text = shared.tr("usage_filter", { folder = usageFilter }),
+            fontSize = 11,
+            color = "primary",
+            flexGrow = 1,
+        }),
+        ui.button({
+            key = "filter-clear",
+            glyph = "close",
+            variant = "ghost",
+            tooltip = shared.tr("tip_usage_filter_clear"),
+            onClick = "onClearUsageFilter",
+        }),
+    })
+end
+
 local function formatDuration(ms)
     if ms < 1000 then
         return string.format("%d ms", ms)
@@ -656,6 +901,21 @@ local function rankingButton()
     })
 end
 
+-- Shows and hides the usage donut. Disabled outside the folder scope, where
+-- there is nothing it could measure without walking a removable disk.
+local function usageButton()
+    return ui.button({
+        key = "usage-toggle",
+        glyph = "chart-donut",
+        variant = showUsage and "secondary" or "ghost",
+        enabled = shared.scope == "folder",
+        tooltip = shared.scope == "folder"
+            and shared.tr(showUsage and "tip_usage_hide" or "tip_usage_show")
+            or shared.tr("tip_usage_folder_only"),
+        onClick = "onToggleUsage",
+    })
+end
+
 local function scopeButton()
     local tooltip = shared.tr("tip_scope", {
         current = shared.tr("scope." .. shared.scope),
@@ -695,6 +955,7 @@ render = function()
             ui.spacer({ key = "gap", flexGrow = 1 }),
             rankingButton(),
             rowActionButton(),
+            usageButton(),
             scopeButton(),
             ui.button({ key = "refresh", glyph = "refresh", variant = "ghost", tooltip = shared.tr("tip_refresh"), onClick = "onRefreshIndex" }),
             ui.button({ key = "settings", glyph = "settings", variant = "ghost", tooltip = shared.tr("tip_settings"), onClick = "onOpenSettings" }),
@@ -709,6 +970,11 @@ render = function()
             onSubmit = "onOpenFirst",
         }),
     }
+
+    local strip = usageFilterStrip()
+    if strip ~= nil then
+        table.insert(children, strip)
+    end
 
     -- Whatever the state, the body is ONE keyed column that grows: the results
     -- list and every message live inside it. Swapping node types at the top
@@ -747,6 +1013,12 @@ render = function()
         body = ui.scroll({ key = "hits", flexGrow = 1, gap = 2 }, rows)
     end
     table.insert(children, ui.column({ key = "body", flexGrow = 1, align = "stretch" }, { body }))
+    -- Below the results: the chart describes the folder, not the query.
+    local chart = usageSection()
+    if chart ~= nil then
+        table.insert(children, ui.separator({ key = "usage-rule" }))
+        table.insert(children, chart)
+    end
     table.insert(children, syntaxLegend())
     table.insert(children, statusFooter())
 
@@ -847,6 +1119,9 @@ function onOpen(_context)
     query = ""
     results = {}
     errMsg = nil
+    -- Not carried across opens: a restriction whose origin is off screen
+    -- ("why does this find nothing?") is worse than re-picking it.
+    usageFilter = nil
     -- Not trusted across opens: the scope may have moved under us (the
     -- launcher can cycle it), so nothing is searched until reload() has
     -- checked the fingerprint of the cache this scope actually uses.
@@ -860,6 +1135,16 @@ function onOpen(_context)
         shared.scope = shared.readScope(dir)
         rowAction = readRowAction(dir)
         shared.ranking = shared.readRanking(dir)
+        showUsage = readShowUsage(dir)
+        -- An earlier session's measurement, so the chart is up with the panel
+        -- and du only runs when it is actually out of date.
+        if usage.load(dir) then
+            usage.writeSvg(
+                dir, USAGE_SIZE, USAGE_THICKNESS,
+                usage.formatBytes(usage.total),
+                shared.tr("usage_center")
+            )
+        end
     end
     if fzfMissing then
         render()
@@ -867,6 +1152,9 @@ function onOpen(_context)
     end
     render() -- the panel is up while lsblk answers
     requestReload(false, false)
+    -- Independent of the index: one being stale says nothing about the other.
+    -- Cheap on a repeat open — usage.scan honours its own TTL.
+    requestUsage(false)
 end
 
 function onClose()
@@ -904,6 +1192,10 @@ function onConfigChanged()
     if dir ~= nil then
         shared.scope = shared.readScope(dir)
     end
+    -- Expired, not redone: this also fires with the panel closed. A changed
+    -- search_folder invalidates itself (usage.fresh compares the root); a
+    -- changed exclusion list does not, which is what this covers.
+    usage.scannedAt = 0
     requestReload(false, false)
 end
 
@@ -929,6 +1221,33 @@ function onRefreshIndex()
     -- A refresh is also how a disk plugged in after the panel opened gets
     -- noticed, so the mount scan is forced rather than reused.
     requestReload(true, true)
+    -- TTL ignored: "refresh" has to mean everything the panel shows.
+    requestUsage(true)
+end
+
+-- The strip's ✕. Same effect as re-clicking the highlighted legend row, offered
+-- where the restriction is shown: the chart can be switched off while it is on.
+function onClearUsageFilter()
+    if usageFilter == nil then
+        return
+    end
+    usageFilter = nil
+    render()
+    runSearch()
+end
+
+-- Hiding does not discard the measurement, so showing it again is instant.
+function onToggleUsage()
+    if shared.scope ~= "folder" then
+        return
+    end
+    showUsage = not showUsage
+    local dir = shared.dataDir()
+    if dir ~= nil then
+        writeShowUsage(dir, showUsage)
+    end
+    render()
+    requestUsage(false)
 end
 
 -- Allowed mid-build on purpose: a walk over a slow disk can run for minutes and
@@ -973,8 +1292,13 @@ function onCycleScope()
     results = {}
     total = nil
     errMsg = nil
+    -- The token is a relative-path prefix; a disk scope stores absolute
+    -- records, where it would silently match nothing.
+    usageFilter = nil
     render()
     requestReload(false, false)
+    -- A no-op on a disk scope, so this is safe on every leg.
+    requestUsage(false)
 end
 
 -- Opens the settings window on this plugin's own page (the host supplies the
@@ -989,3 +1313,9 @@ function onClosePanel()
 end
 
 shared.probeFzfScheme()
+
+-- usage.luau builds the slice labels, so the two it invents rather than reads
+-- off the filesystem are handed to it from here — every user-visible string
+-- still comes out of translations/en.json.
+usage.looseLabel = shared.tr("usage_loose")
+usage.otherLabel = shared.tr("usage_other")
