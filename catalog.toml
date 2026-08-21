@@ -116,15 +116,21 @@ rev = "34b05dfa074239f4a410de8303be81995bca0b78"
 [[plugin]]
 id = "nightwatch75/todo"
 name = "To Do"
-version = "0.0.17"
-updated_at = 1786451965
+version = "0.1.0"
+updated_at = 1787344296
 added_at = 1783932697
 author = "nightwatch75"
 license = "MIT"
 icon = "checklist"
 description = "A prioritised task list with a bar widget and editable panel."
-plugin_api = 23
+plugin_api = 28
 tags = ["bar", "panel", "productivity"]
+
+[[plugin.release]]
+plugin_api = 23
+version = "0.0.17"
+updated_at = 1786451965
+rev = "65f6b0c30c3e30b46968ef39bcd9a0466cf15745"
 
 [[plugin.release]]
 plugin_api = 22
