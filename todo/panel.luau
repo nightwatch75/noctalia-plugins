@@ -19,11 +19,14 @@
 --     grab the grip and drop onto one of the thin insertion zones between rows.
 --     Changing a priority only recolours the chip and never moves the row.
 --
--- Interaction: a row is a static line by default. Click its text or the pencil
--- button to edit; press Enter or the ✓ button to commit back to the static
--- line. The coloured chip cycles the priority (a legend at the foot of the
--- panel maps each colour to its category). The ☐/☑ button toggles done, which
--- strikes the text through. A header trash button deletes every done row after
+-- Interaction: a row is a static line by default. Click its text to edit;
+-- press Enter or the ✓ button to commit back to the static line. The coloured
+-- chip cycles the priority (a legend at the foot of the panel maps each colour
+-- to its category). The ☐/☑ button toggles done, which strikes the text
+-- through. Right-clicking the text raises a native context menu (plugin_api
+-- >= 28) with edit, done, an explicit priority pick and delete — see
+-- openRowMenu for why that one node, and why the row carries no pencil or
+-- trash button of its own. A header trash button deletes every done row after
 -- an inline confirmation strip (confirm/cancel) — the plugin UI has no dialog
 -- primitive. No external commands are run.
 --
@@ -54,6 +57,8 @@ local ROW_CONTENT_W = PANEL_WIDTH - (2 * PANEL_PADDING) - SCROLLBAR_GUTTER
 
 -- Width left for the task text once the chip, the optional grip and the
 -- `trailing` glyph buttons (each preceded by a gap) have taken their share.
+-- `trailing` is 1 since 0.1.0: pencil and trash moved into the row's context
+-- menu, and the ☐/☑ toggle is the only glyph button left beside the text.
 local function taskTextWidth(withGrip, trailing)
     local width = ROW_CONTENT_W - CHIP_W - ROW_GAP - (trailing * (GLYPH_BTN_W + ROW_GAP))
     if withGrip then
@@ -272,6 +277,18 @@ local function cyclePriority(id)
     end
 end
 
+-- Set an explicit priority (the context menu picks one directly, where the
+-- chip only cycles). Same rule as cyclePriority: the manual position is
+-- untouched, the priority view re-sorts on render.
+local function setPriority(id, priority)
+    local item = findItem(id)
+    if item ~= nil and RANK[priority] ~= nil and item.priority ~= priority then
+        item.priority = priority
+        save()
+        render()
+    end
+end
+
 -- Switch ordering mode. Only the `sort` choice is persisted — the task array
 -- is never rewritten, so the manual order survives any number of round trips
 -- through priority mode.
@@ -338,6 +355,48 @@ local function clearDone()
     end
     confirmingClear = false
     render()
+end
+
+-- Menu header label: the task itself, cut to about one line. utf8.offset keeps
+-- the cut off a multi-byte boundary; text that is not valid UTF-8 (utf8.len
+-- returns nil rather than throwing) falls through unchanged.
+local MENU_HEADER_CHARS = 42
+local function menuHeader(text)
+    local length = utf8.len(text)
+    if length == nil or length <= MENU_HEADER_CHARS then
+        return text
+    end
+    return text:sub(1, (utf8.offset(text, MENU_HEADER_CHARS + 1) or 0) - 1) .. "…"
+end
+
+-- The row's right-click menu (plugin_api >= 28). Only a ui.button's
+-- onRightClick carries the pointer serial openContextMenu needs, so the row's
+-- text button is the one node that can raise this — which is also why the row
+-- keeps just the done toggle: edit, priority and delete all live in here.
+-- `onActivate` must NAME a global (openContextMenu is a raw binding, not a UI
+-- tree prop, so closures are not registered for it); the row id rides along in
+-- `context` and comes back as the callback's second argument.
+local function openRowMenu(item)
+    local entries = {}
+    if not isBlank(item.text) then
+        table.insert(entries, { kind = "header", label = menuHeader(item.text) })
+    end
+    table.insert(entries, { id = "edit", label = tr("menu_edit") })
+    table.insert(entries, { id = "done", label = tr(item.done and "menu_undone" or "menu_done") })
+    table.insert(entries, { kind = "separator" })
+    table.insert(entries, { kind = "header", label = tr("menu_priority") })
+    for _, priority in ipairs(PRIORITIES) do
+        -- A bullet on the current one rather than enabled = false: greyed out
+        -- reads as "unavailable", and picking the priority a task already has
+        -- is a harmless no-op anyway.
+        table.insert(entries, {
+            id = "prio-" .. priority,
+            label = (item.priority == priority and "● " or "") .. tr("prio_" .. priority),
+        })
+    end
+    table.insert(entries, { kind = "separator" })
+    table.insert(entries, { id = "delete", label = tr("menu_delete") })
+    panel.openContextMenu({ onActivate = "onRowMenu", context = tostring(item.id), items = entries })
 end
 
 local function taskRow(item)
@@ -410,20 +469,26 @@ local function taskRow(item)
             end,
         }))
     else
-        -- Static text; clicking it re-opens the editor ("press on the text").
-        -- The explicit width is what makes a long task wrap onto another line
-        -- instead of running under the three buttons that follow it.
+        -- Static text; clicking it re-opens the editor ("press on the text"),
+        -- right-clicking it raises the row menu. The explicit width is what
+        -- makes a long task wrap onto another line instead of running under the
+        -- button that follows it.
         table.insert(children, ui.button({
             key = "view-" .. id,
             text = item.done and strike(item.text) or item.text,
             variant = "ghost",
             contentAlign = "start",
-            width = taskTextWidth(grip ~= nil, 3),
+            width = taskTextWidth(grip ~= nil, 1),
             onClick = function()
                 enterEdit(id)
             end,
+            onRightClick = function()
+                openRowMenu(item)
+            end,
         }))
-        -- Done toggle: strikes the text through.
+        -- Done toggle: strikes the text through. Kept on the row rather than
+        -- folded into the menu — ticking a task off is the one action worth a
+        -- single click.
         table.insert(children, ui.button({
             glyph = item.done and "square-check" or "square",
             variant = "ghost",
@@ -432,25 +497,7 @@ local function taskRow(item)
                 toggleDone(id)
             end,
         }))
-        -- Explicit edit affordance next to the row.
-        table.insert(children, ui.button({
-            glyph = "pencil",
-            variant = "ghost",
-            tooltip = tr("tip_edit"),
-            onClick = function()
-                enterEdit(id)
-            end,
-        }))
     end
-
-    table.insert(children, ui.button({
-        glyph = "trash",
-        variant = "ghost",
-        tooltip = tr("tip_delete"),
-        onClick = function()
-            deleteItem(id)
-        end,
-    }))
 
     return ui.row({
         -- edit/done/mode state flips the row's controls; key it to recreate cleanly
@@ -660,6 +707,29 @@ function onKey(chord, pressed)
         onAdd()
     elseif chord == "s" then
         onSortToggle()
+    end
+end
+
+-- Dispatch for the row context menu. `action` is the id of the entry that was
+-- picked, `context` the row id the menu was opened with, as text. The row can
+-- be gone by the time a menu entry is chosen (a reload, or the header trash
+-- clearing it), so re-resolve the id before acting on it.
+function onRowMenu(action, context)
+    local id = tonumber(context)
+    if id == nil or findItem(id) == nil then
+        return
+    end
+    if action == "edit" then
+        enterEdit(id)
+    elseif action == "done" then
+        toggleDone(id)
+    elseif action == "delete" then
+        deleteItem(id)
+    else
+        local priority = action:match("^prio%-(%l+)$")
+        if priority ~= nil then
+            setPriority(id, priority)
+        end
     end
 end
 
