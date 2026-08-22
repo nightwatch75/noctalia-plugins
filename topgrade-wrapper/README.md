@@ -15,12 +15,22 @@ count at a glance without giving up the interactive upgrade.
 
 ## Requirements
 
-Noctalia v5.0.0-beta.6 or newer — the first tagged release that accepts
-`plugin_api = 15`, which the panel's settings shortcut
-(`noctalia.openSettings()`) needs — and `topgrade` on `PATH`. A terminal emulator is needed for the update run:
-the plugin uses Noctalia's own detection (`$TERMINAL`, then `ghostty`, `kitty`,
-`alacritty`, `wezterm`, `foot`, `konsole`, `gnome-terminal`, `ptyxis`, `xterm`),
-or the one named in the **Terminal** setting.
+Noctalia v5.0.0-beta.9 or newer — the first tagged release that accepts
+`plugin_api = 24`, direct argv process execution: the dry-run check that
+produces the count execs `topgrade` itself, so no shell parses the path in the
+**Topgrade config** setting. (Relative luau imports need 22, the notification
+sound 20, the panel's settings shortcut `noctalia.openSettings()` 15.)
+
+Also `topgrade` on `PATH`, and `env` (coreutils) — it runs that check under
+`LC_ALL=C`, which with no shell in the picture is the only way left to fix the
+locale, and the parser matches topgrade's own English step headings.
+
+A terminal emulator is needed for the update run: the plugin uses Noctalia's own
+detection (`$TERMINAL`, then `ghostty`, `kitty`, `alacritty`, `wezterm`, `foot`,
+`konsole`, `gnome-terminal`, `ptyxis`, `xterm`), or the one named in the
+**Terminal** setting. That one path still goes through a shell — `runInTerminal`
+takes a string — so the command is assembled as an argv and quoted word by word
+out of the same vector the check execs, rather than built twice.
 
 Everything else is optional and affects only the count, never the upgrade.
 

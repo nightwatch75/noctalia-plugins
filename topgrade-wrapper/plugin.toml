@@ -11,11 +11,17 @@
 
 id = "nightwatch75/topgrade-wrapper"
 name = "Topgrade Wrapper"
-version = "0.0.8"
-plugin_api = 22
+version = "0.0.9"
+# 24 for direct argv process execution: the dry-run check that produces the
+# count execs topgrade itself, so no shell parses the configured config path.
+# 22 for relative luau imports (shared.luau), 20 for the notification sound.
+plugin_api = 24
 author = "nightwatch75"
 license = "MIT"
-dependencies = ["topgrade"]
+# `env` runs topgrade under LC_ALL=C for the dry-run check: with no shell in
+# the picture it is the only way left to fix the locale, and the parser
+# matches topgrade's own English step headings.
+dependencies = ["topgrade", "env"]
 tags = ["bar", "panel", "service", "system", "utility"]
 icon = "package"
 description = "Check how many packages topgrade would upgrade, then run the upgrade in a terminal window."

@@ -26,6 +26,12 @@
 -- package managers can prompt and sudo can ask for the password on the tty.
 -- While one runs, processMatches() polls for the topgrade process and re-counts
 -- as soon as it is gone, so the bar clears itself.
+--
+-- Since 0.0.9 the topgrade command line is an argument vector (buildArgv,
+-- plugin_api >= 24) and the dry-run check execs it directly, so no shell parses
+-- the configured config path on the automated path. The two lines that still
+-- need a shell keep one: the upgrade, because runInTerminal takes a string, and
+-- each per-manager counter, because those are genuine pipelines.
 
 local shared = require("./shared.luau")
 
@@ -289,31 +295,50 @@ local function commandSignature()
     return tostring(configOverride()) .. "\0" .. table.concat(excludedSteps(), ",")
 end
 
-local function buildCommand(dry)
-    local parts = { "topgrade" }
+-- The topgrade command line as an argument vector — the one source of truth for
+-- both callers. The dry-run check execs it directly (plugin_api >= 24), so
+-- nothing parses the configured config path; the upgrade needs a shell string,
+-- which buildCommand below quotes out of this same vector rather than building
+-- its own and risking the two drifting apart.
+local function buildArgv(dry)
+    local argv = { "topgrade" }
     local override = configOverride()
     if override ~= nil then
-        table.insert(parts, "--config " .. shellQuote(override))
+        table.insert(argv, "--config")
+        table.insert(argv, override)
     end
     -- One flag per step: repeating --disable keeps clap from swallowing the
     -- flags that follow, which a space-separated list would.
     for _, id in ipairs(excludedSteps()) do
-        table.insert(parts, "--disable " .. id)
+        table.insert(argv, "--disable")
+        table.insert(argv, id)
     end
     if dry then
         -- --no-self-update keeps the count from doing a release check it would
         -- never act on in dry mode.
-        table.insert(parts, "--dry-run --no-self-update")
+        table.insert(argv, "--dry-run")
+        table.insert(argv, "--no-self-update")
     else
         if cfg("assume_yes") == true then
-            table.insert(parts, "--yes")
+            table.insert(argv, "--yes")
         end
         if cfg("sudo_loop") == true then
-            table.insert(parts, "--sudoloop")
+            table.insert(argv, "--sudoloop")
         end
         if cfg("keep_terminal_open") == true then
-            table.insert(parts, "--keep")
+            table.insert(argv, "--keep")
         end
+    end
+    return argv
+end
+
+-- The same command as one shell line, for the upgrade: runInTerminal and the
+-- `<term> -e sh -lc` form are both string-only, so that path cannot leave the
+-- shell behind. Every element is quoted, config path included.
+local function buildCommand(dry)
+    local parts = {}
+    for index, value in ipairs(buildArgv(dry)) do
+        parts[index] = shellQuote(value)
     end
     return table.concat(parts, " ")
 end
@@ -523,7 +548,15 @@ startCheck = function()
     step = tr("step_planning")
     publish()
 
-    local started = noctalia.runAsync("export LC_ALL=C; " .. buildCommand(true), function(result)
+    -- LC_ALL=C through `env`: parseDryRun matches topgrade's own English step
+    -- headings, and with no shell in the picture `env` is the only way left to
+    -- fix the locale.
+    local dryArgv = { "env", "LC_ALL=C" }
+    for _, value in ipairs(buildArgv(true)) do
+        table.insert(dryArgv, value)
+    end
+
+    local started = noctalia.runAsync(dryArgv, function(result)
         if result.timedOut then
             failCheck(tr("err_dry_timeout"))
             return
