@@ -22,9 +22,10 @@ rebuilt on the v5 Luau plugin API.
 - **Detection**, not guessing — reads the connection's own `ipv4.dns` /
   `ipv4.ignore-auto-dns`, so a manually configured resolver (LAN ones
   included) shows as its provider, DHCP-assigned DNS shows as *Default (ISP)*
-- **DNS lookup tester** at the bottom of the panel: resolve any name against
-  the currently active provider's own address with `dig`/`nslookup`, to
-  confirm a switch took effect or check whether a provider blocks a domain
+- **DNS lookup tester** at the bottom of the panel: resolve a name with
+  `dig`/`nslookup` against the active provider, or against any other provider
+  from its row menu. Use it to confirm a switch, or to find out if a provider
+  blocks a domain before you switch to it
 - **Fully rebindable gestures** — left click, right click and scroll are
   declared in the manifest (`[widget.actions]`), so any of them can be
   remapped from the bar's own gesture settings; scroll cycles providers
@@ -45,18 +46,16 @@ Add the `dns-switcher` widget from Noctalia's widget picker. Default gestures:
 
 All three are bar-level defaults and can be remapped from *Settings → Bar*.
 
-In the panel, right-clicking a provider opens a row menu:
+In the panel, right-click a provider to open its row menu:
 
-| Entry                                  | Effect                                                        |
-|----------------------------------------|---------------------------------------------------------------|
-| Apply / Re-apply this provider         | Same as a left click; on the active row it pushes the profile back onto the live connection |
-| Copy these addresses                   | Put that provider's addresses on the clipboard                |
-| Look up *name* through this resolver   | Send the hostname from the *DNS lookup* box to that provider **without switching to it** |
+| Entry | Effect |
+| --- | --- |
+| **Apply this provider** | Same as a left click. On the active row it applies the profile again. |
+| **Copy these addresses** | Copies that provider's addresses to the clipboard. |
+| **Look up *name* through this resolver** | Sends the hostname from the *DNS lookup* box to that provider. It does not change the system DNS. |
 
-The lookup entry is what the panel could not do before: it answers "would this
-resolver find that name" while you are still on the resolver you have. It needs
-a valid hostname in the box below and a provider with addresses of its own, so
-it stays disabled on *Default (ISP)*. The menu needs plugin API ≥ 28.
+The lookup entry needs a valid hostname in the box, and a provider that has its
+own addresses. It is disabled for *Default (ISP)*.
 
 The panel itself, and the plugin's settings page, also open from the CLI:
 
@@ -89,11 +88,11 @@ neighbouring provider (what scroll sends).
 
 ## Requirements
 
-- noctalia with `plugin_api = 28` — native context menus in a plugin panel
-  (28: the provider row menu) and direct argv process execution (24), so every
-  command this plugin runs is an argument vector and no shell ever parses a
-  DNS address, a hostname or the privilege command. 28 needs v5.0.0-beta.9; on
-  beta.8 the plugin store keeps serving 0.1.2
+- noctalia v5.0.0-beta.9 or newer — the first release that accepts
+  `plugin_api = 28`. The plugin needs 28 for the provider row menu
+  (`panel.openContextMenu`), and 24 for argv process execution: every command
+  it runs is an argument vector, so no shell parses a DNS address, a hostname
+  or the privilege command. On beta.8 the plugin store keeps serving 0.1.2
 - NetworkManager (`networkmanager`, provides `nmcli`) with an active connection
 - `env` (coreutils) — runs `nmcli` under `LC_ALL=C`
 - Permission to modify system connections (see *Privileges* below)
