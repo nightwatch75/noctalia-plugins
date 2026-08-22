@@ -44,6 +44,20 @@ Add the `dns-switcher` widget from Noctalia's widget picker. Default gestures:
 | Scroll       | Cycle to the next/previous configured provider    |
 
 All three are bar-level defaults and can be remapped from *Settings → Bar*.
+
+In the panel, right-clicking a provider opens a row menu:
+
+| Entry                                  | Effect                                                        |
+|----------------------------------------|---------------------------------------------------------------|
+| Apply / Re-apply this provider         | Same as a left click; on the active row it pushes the profile back onto the live connection |
+| Copy these addresses                   | Put that provider's addresses on the clipboard                |
+| Look up *name* through this resolver   | Send the hostname from the *DNS lookup* box to that provider **without switching to it** |
+
+The lookup entry is what the panel could not do before: it answers "would this
+resolver find that name" while you are still on the resolver you have. It needs
+a valid hostname in the box below and a provider with addresses of its own, so
+it stays disabled on *Default (ISP)*. The menu needs plugin API ≥ 28.
+
 The panel itself, and the plugin's settings page, also open from the CLI:
 
 ```sh
@@ -75,11 +89,11 @@ neighbouring provider (what scroll sends).
 
 ## Requirements
 
-- noctalia with `plugin_api = 24` — direct argv process execution, so every
+- noctalia with `plugin_api = 28` — native context menus in a plugin panel
+  (28: the provider row menu) and direct argv process execution (24), so every
   command this plugin runs is an argument vector and no shell ever parses a
-  DNS address, a hostname or the privilege command. This is newer than
-  v5.0.0-beta.8, which tops out at 23; on beta.8 the plugin store keeps
-  serving 0.1.2 until the next release
+  DNS address, a hostname or the privilege command. 28 needs v5.0.0-beta.9; on
+  beta.8 the plugin store keeps serving 0.1.2
 - NetworkManager (`networkmanager`, provides `nmcli`) with an active connection
 - `env` (coreutils) — runs `nmcli` under `LC_ALL=C`
 - Permission to modify system connections (see *Privileges* below)

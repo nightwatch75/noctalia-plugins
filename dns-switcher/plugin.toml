@@ -3,14 +3,17 @@
 # widget shows the active provider and toggles a panel listing the configured
 # providers; picking one applies it immediately via `nmcli con mod` +
 # `nmcli device reapply` (no reactivation, the connection never drops).
+# Right-click a provider to apply it, copy its addresses, or run the panel's
+# DNS lookup through it without switching to it.
 
 id = "nightwatch75/dns-switcher"
 name = "DNS Switcher"
-version = "0.2.0"
-# 24 for direct argv process execution: every command this plugin runs is an
+version = "0.3.0"
+# 28 for panel.openContextMenu: the provider row's right-click menu. Also 24
+# for direct argv process execution — every command this plugin runs is an
 # argument vector, so no shell ever parses a DNS address, a hostname or the
 # privilege command.
-plugin_api = 24
+plugin_api = 28
 author = "nightwatch75"
 license = "MIT"
 # dig (bind-tools/dnsutils) is preferred for the panel's lookup tester;
