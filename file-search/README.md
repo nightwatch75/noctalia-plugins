@@ -4,8 +4,9 @@ A [noctalia](https://github.com/noctalia-dev/noctalia) v5 bar plugin: fuzzy
 search files and folders as you type, with [fzf](https://github.com/junegunn/fzf)
 as the matching subsystem. Click the bar glyph to open a search panel; picking
 a result opens it with the system MIME association (`xdg-open`) — directories
-open in your file manager. One button widens the search to the USB disks you
-have plugged in, or narrows it to those alone.
+open in your file manager. Right-click a result for a menu with open, reveal,
+copy path and copy name. One button widens the search to the USB disks you have
+plugged in, or narrows it to those alone.
 
 ## Plugin
 
@@ -46,12 +47,22 @@ On a result row:
 | Action      | Effect                                                   |
 |-------------|----------------------------------------------------------|
 | Left click  | Open it with the system MIME association                 |
-| Right click | Copy its path, *or* reveal it in the file manager        |
+| Right click | Open the row menu                                        |
 
-The 🗐/🗁 button in the panel header picks which of the two, and remembers it.
-*Reveal* opens the containing folder with the item selected. Both leave the
-panel up, so several rows can be picked off in a row. (Middle click is not an
-option: a panel row only ever receives left and right clicks.)
+The row menu:
+
+| Entry                | Effect                                              |
+|----------------------|-----------------------------------------------------|
+| Open                 | Same as a left click                                |
+| Show in file manager | Open the containing folder with the item selected   |
+| Copy full path       | Put the absolute path on the clipboard              |
+| Copy name            | Put just the file or folder name on the clipboard   |
+
+Everything but *Open* leaves the panel up, so several rows can be picked off in
+a row. The menu needs plugin API ≥ 28; before it, the header carried a toggle
+that chose one single secondary action for a right click, because a panel row
+only ever receives left and right clicks and middle click is a bar-widget
+gesture.
 
 A path too long for one row is shortened in the middle rather than at the end,
 so the file name — the part the query matched — always stays readable:
@@ -217,12 +228,13 @@ results whenever the index is out of date.
 
 ## Requirements
 
-- noctalia with `plugin_api = 24` — relative luau imports (22: the three entries
-  share one `shared.luau`, which owns the index fingerprint they all agree on)
-  and direct argv process execution (24), so the usage chart runs `du` over
-  your search folder with your own exclusion patterns as arguments and no shell
-  ever parses them. This is newer than v5.0.0-beta.8, which tops out at 23; on
-  beta.8 the plugin store keeps serving 0.0.29
+- noctalia with `plugin_api = 28` — native context menus in a plugin panel (28:
+  the row menu), relative luau imports (22: the three entries share one
+  `shared.luau`, which owns the index fingerprint they all agree on) and direct
+  argv process execution (24), so `du`, `xdg-open` and the reveal call all take
+  their arguments — your exclusion patterns, a path out of the index, a file
+  name inside a GVariant literal — with no shell parsing any of them. 28 needs
+  v5.0.0-beta.9; on beta.8 the plugin store keeps serving 0.0.29
 - [`fzf`](https://github.com/junegunn/fzf) — the fuzzy matcher. 0.36 or newer
   for the path-aware ranking; older builds work, with fzf's default ranking
 - `find` (GNU findutils) — walks the roots into the index
@@ -234,8 +246,9 @@ results whenever the index is out of date.
   the scope includes them. Missing, it falls back to `/proc/mounts` and the
   udisks2 layout (`/run/media/<user>/…`, `/media/…`)
 - `gdbus` (glib2) — reveals a result in the file manager
-  (`FileManager1.ShowItems`); only run on that right click. Missing, or with no
-  file manager implementing it, the click opens the containing folder instead
+  (`FileManager1.ShowItems`); only run on *Show in file manager*. Missing, or
+  with no file manager implementing it, that entry opens the containing folder
+  instead
 
 ## Install
 
@@ -259,8 +272,7 @@ noctalia msg plugins enable nightwatch75/file-search
   `NOCTALIA_STATE_HOME`/`XDG_STATE_HOME`): `list-<scope>` is a plain list of
   paths, `meta-<scope>` records the scope, roots and exclusions that built it,
   `count-<scope>` its line count and the walk's duration in milliseconds, and
-  `scope`, `row-action` and `ranking` the one word each
-  header toggle cycles. A fingerprint that no longer matches — a settings
+  `scope` and `ranking` the one word each header toggle cycles. A fingerprint that no longer matches — a settings
   change, a scope change, a disk plugged in or removed — rebuilds the
   search-folder index automatically and marks a disk index out of date.
 - Several disks share one index, not one each: a rebuild walks every mounted

@@ -22,8 +22,8 @@
 -- pluginDataDir() remain the only channel between the entries, exactly as
 -- before.
 --
--- What stays out: anything one entry alone has. The panel keeps its row-action
--- toggle, path elision, spinner and footer counts; the launcher keeps its row
+-- What stays out: anything one entry alone has. The panel keeps its row menu,
+-- path elision, spinner and footer counts; the launcher keeps its row
 -- construction and its query echo.
 
 local shared = {}
@@ -151,10 +151,11 @@ function shared.formatBytes(n)
     return string.format("%.1f %s", value, units[index])
 end
 
--- Open a path with the system MIME association. Detached (no callback), so the
--- host runs it under /bin/sh -c and the redirection is the shell's.
+-- Open a path with the system MIME association. An argv (plugin_api >= 24) is
+-- exec'd directly, so nothing parses the path and it needs no quoting; the host
+-- points a detached child's stdio at /dev/null itself.
 function shared.openPath(path)
-    noctalia.runAsync("xdg-open " .. shared.shellQuote(path) .. " >/dev/null 2>&1")
+    noctalia.runAsync({ "xdg-open", path })
 end
 
 -- ── fzf capability + scoring ─────────────────────────────────────────────────

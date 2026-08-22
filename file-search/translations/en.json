@@ -1,6 +1,7 @@
 {
   "build_time": "indexed in {duration}",
   "copied_entry": "Path copied to clipboard",
+  "copied_name": "Name copied to clipboard",
   "counts": "{shown} shown · {total} indexed",
   "counts_disks": " · {disks} external",
   "counts_stale": " · out of date",
@@ -17,15 +18,17 @@
     "scope_next": "Switch to: {next}",
     "scope_title": "Searching: {current}"
   },
+  "menu": {
+    "copy_name": "Copy name",
+    "copy_path": "Copy full path",
+    "open": "Open",
+    "reveal": "Show in file manager"
+  },
   "no_external": "No external disk mounted — plug one in, then rebuild the index",
   "no_results": "No matches for \"{query}\"",
   "ranking": {
     "default": "generic — the shortest path wins",
     "path": "path-aware — a match starting a name wins"
-  },
-  "row_action": {
-    "copy": "copies its path",
-    "reveal": "shows it in the file manager"
   },
   "scope": {
     "all": "search folder + external disks",
@@ -67,7 +70,6 @@
   "tip_ranking": "Ranking: {current}\ne.g. \"config\" → .ssh/config, not …/Steam Controller Configs/\nClick to switch to: {next}",
   "tip_ranking_unsupported": "Path-aware ranking needs fzf 0.36 or newer",
   "tip_refresh": "Rebuild the file index",
-  "tip_row_action": "Right click on a result {current}\nClick to switch to: {next}",
   "tip_scope": "Searching: {current}\nClick to search {next}",
   "tip_scope_free": "{free} free across {count} disk(s)",
   "tip_settings": "Plugin settings",

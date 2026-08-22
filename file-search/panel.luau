@@ -6,7 +6,9 @@
 -- after that every keystroke runs `fzf --filter=<query>` over the cache, so
 -- typing stays responsive even on large trees. Results update live; picking
 -- one opens it with the system MIME association (xdg-open) — directories
--- open in the file manager. Enter opens the top match.
+-- open in the file manager. Enter opens the top match. Right-clicking a row
+-- raises a native context menu (plugin_api >= 28) with open, reveal in the
+-- file manager, copy path and copy name.
 --
 -- The roots come from the search scope, cycled with the panel's disk button
 -- and persisted in the plugin data directory so the launcher entry follows the
@@ -44,16 +46,6 @@ local shared = require("./shared.luau")
 -- the bar widget and the launcher have no chart to draw.
 local usage = require("./usage.luau")
 
--- What a right click on a result does, switched by the second header button
--- and persisted next to the scope. Two actions, one gesture: a panel row can
--- only ever receive left and right — the declarative UI wires BTN_LEFT, plus
--- BTN_RIGHT once an onRightClick is attached, and nothing else. Middle click
--- exists for bar widgets only (onMiddleClick), never inside a panel, so the
--- second action lives on a toggle instead of a third button.
-local ROW_ACTION_GLYPHS = { copy = "copy", reveal = "folder-open" }
-local NEXT_ROW_ACTION = { copy = "reveal", reveal = "copy" }
-local DEFAULT_ROW_ACTION = "copy"
-
 -- Read out of the plugin's own manifest (readFile resolves a relative path
 -- against the plugin directory), so the header cannot drift from the version
 -- the store shows. Empty when unreadable — a missing version is not worth an
@@ -76,7 +68,6 @@ local errMsg = nil
 local fzfMissing = false
 local inputRev = 0      -- bumped to reseed the query input on open
 local haveIndex = false -- the cache on disk matches the current settings
-local rowAction = DEFAULT_ROW_ACTION
 local indexState = "fresh" -- "fresh" | "stale" (usable, out of date) | "missing"
 local reloading = false -- a refresh pass is in flight
 local reloadQueued = false
@@ -120,24 +111,6 @@ local function setSpinnerTicking(on)
     if not on then
         spinnerAccumMs = 0
         spinnerIndex = 1
-    end
-end
-
-local function readRowAction(dir)
-    local raw = noctalia.readFile(dir .. "/row-action")
-    if type(raw) == "string" then
-        local value = shared.trim(raw)
-        if ROW_ACTION_GLYPHS[value] ~= nil then
-            return value
-        end
-    end
-    return DEFAULT_ROW_ACTION
-end
-
-local function writeRowAction(dir, value)
-    local ok, err = noctalia.writeFile(dir .. "/row-action", value)
-    if not ok then
-        noctalia.log("file-search: could not persist the row action: " .. tostring(err))
     end
 end
 
@@ -218,7 +191,7 @@ end
 
 -- Cache keyed by the raw record: elidePath is pure, so the same rel never
 -- needs recomputing across the many render() calls that leave `results`
--- untouched (toggling row-action, resizing, other settings changes all
+-- untouched (toggling the usage chart, resizing, other settings changes all
 -- re-render the whole row list). On a flatpak-heavy $HOME almost every
 -- visible row is over PATH_MAX_CHARS (runtime trees nest well past 56
 -- chars), so the "common case skips this" comment above routinely fails and
@@ -461,6 +434,18 @@ local function copyEntry(rel)
     noctalia.notify(shared.tr("title"), shared.tr("copied_entry"))
 end
 
+-- Just the last path segment. absolutePath has already dropped a directory
+-- record's trailing "/", so the match needs no help.
+local function copyName(rel)
+    local path = shared.absolutePath(rel)
+    if path == nil then
+        rejectRecord(rel)
+        return
+    end
+    noctalia.copyToClipboard(path:match("[^/]+$") or path, "text/plain")
+    noctalia.notify(shared.tr("title"), shared.tr("copied_name"))
+end
+
 -- file:// URI for a local path. Every byte outside the unreserved set is
 -- percent-encoded one byte at a time, which is also the correct encoding for
 -- the UTF-8 sequences of a non-ASCII name — and it leaves the result free of
@@ -478,10 +463,14 @@ end
 -- ShowItems on the org.freedesktop.FileManager1 interface is the portable way
 -- to say "reveal this": Thunar, Nautilus, Dolphin, Nemo, Caja and PCManFM-Qt
 -- all implement it, and the session bus activates the handler on demand, so
--- the file manager does not need to be running. When there is no such handler
--- (or no gdbus at all: the `||` also catches a 127 from the shell), the
+-- the file manager does not need to be running. When there is no such handler,
+-- or no gdbus at all (execvp failing is a 127 exit like any other), the
 -- fallback opens the containing folder through the MIME association, which is
 -- the same window minus the selection.
+--
+-- An argv (plugin_api >= 24) rather than a shell line: the GVariant literal
+-- carries a file name straight from the index and nothing parses it. That moves
+-- the `||` fallback out of the shell and into the callback.
 local function revealEntry(rel)
     local path = shared.absolutePath(rel)
     if path == nil then
@@ -492,19 +481,58 @@ local function revealEntry(rel)
     if parent == nil or parent == "" then
         parent = "/"
     end
-    local cmd = "gdbus call --session --dest org.freedesktop.FileManager1"
-        .. " --object-path /org/freedesktop/FileManager1"
-        .. " --method org.freedesktop.FileManager1.ShowItems "
-        .. shared.shellQuote('["' .. fileUri(path) .. '"]') .. " ''"
-        .. " >/dev/null 2>&1 || xdg-open " .. shared.shellQuote(parent) .. " >/dev/null 2>&1"
-    noctalia.runAsync(cmd)
+    local ok = noctalia.runAsync({
+        "gdbus",
+        "call",
+        "--session",
+        "--dest",
+        "org.freedesktop.FileManager1",
+        "--object-path",
+        "/org/freedesktop/FileManager1",
+        "--method",
+        "org.freedesktop.FileManager1.ShowItems",
+        '["' .. fileUri(path) .. '"]',
+        "",
+    }, function(result)
+        if result.exitCode ~= 0 or result.timedOut then
+            shared.openPath(parent)
+        end
+    end, 5000)
+    if not ok then
+        shared.openPath(parent)
+    end
+end
+
+-- The result row's right-click menu (plugin_api >= 28). Only a ui.button's
+-- onRightClick reports the pointer serial openContextMenu needs, so the row
+-- itself is what raises it. `onActivate` must NAME a global (openContextMenu is
+-- a raw binding, not a UI tree prop, so closures are not registered for it),
+-- and the record rides along in `context` — a path, so it comes back verbatim
+-- and every action re-validates it through absolutePath.
+--
+-- The header is the elided path, not the full one: it is the same string the row
+-- shows, which is what makes the menu read as belonging to that row.
+local function openResultMenu(rel)
+    panel.openContextMenu({
+        onActivate = "onResultMenu",
+        context = rel,
+        items = {
+            { kind = "header", label = elidePathCached(rel) },
+            { id = "open", label = shared.tr("menu.open") },
+            { id = "reveal", label = shared.tr("menu.reveal") },
+            { kind = "separator" },
+            { id = "copy_path", label = shared.tr("menu.copy_path") },
+            { id = "copy_name", label = shared.tr("menu.copy_name") },
+        },
+    })
 end
 
 local function resultRow(rel, index)
     local isDir = rel:sub(-1) == "/"
     -- The row carries no tooltip on purpose: one string per row is enough
     -- extra weight, over a list this long, to get the render's callback killed
-    -- for exceeding its CPU budget. Right click yields the full path instead.
+    -- for exceeding its CPU budget. The row menu's copy entries yield the
+    -- full path instead.
     local shown = elidePathCached(rel)
     return ui.button({
         key = "hit-" .. index,
@@ -515,19 +543,12 @@ local function resultRow(rel, index)
         onClick = function()
             openEntry(rel) -- always the full record, never the elided label
         end,
-        -- The secondary action, whichever the header toggle currently names.
         -- Right rather than middle because a ui.button never receives the
         -- middle button: it accepts BTN_LEFT, plus BTN_RIGHT only once an
         -- onRightClick is attached, and no node in the declarative UI exposes
         -- a middle-click callback at all — that one is a bar-widget gesture.
-        -- Read at click time, not captured, so flipping the toggle changes
-        -- what the rows already on screen do.
         onRightClick = function()
-            if rowAction == "reveal" then
-                revealEntry(rel)
-            else
-                copyEntry(rel)
-            end
+            openResultMenu(rel)
         end,
     })
 end
@@ -852,26 +873,6 @@ local function statusFooter()
     return ui.row({ key = "footer", gap = 8, align = "center" }, children)
 end
 
--- The scope button cycles folder → folder+disks → disks only. A cycling button
--- rather than a ui.select: the panel is 480px tall and the header row is the
--- only space that costs nothing, and the tooltip names both the current scope
--- and the next one, which a select's collapsed state would not.
--- Names what a right click does, and switches it. Its glyph is the answer to
--- "what happens if I right-click a result", which is the question a user of a
--- two-gesture list actually asks.
-local function rowActionButton()
-    return ui.button({
-        key = "rowaction-" .. rowAction,
-        glyph = ROW_ACTION_GLYPHS[rowAction],
-        variant = "ghost",
-        tooltip = shared.tr("tip_row_action", {
-            current = shared.tr("row_action." .. rowAction),
-            next = shared.tr("row_action." .. NEXT_ROW_ACTION[rowAction]),
-        }),
-        onClick = "onCycleRowAction",
-    })
-end
-
 -- Names the scoring scheme and switches it. The tooltip has to carry the whole
 -- explanation: the difference only shows up in the order of the rows, and there
 -- is nowhere else to say what changed. When fzf is too old for --scheme the
@@ -907,6 +908,10 @@ local function usageButton()
     })
 end
 
+-- The scope button cycles folder → folder+disks → disks only. A cycling button
+-- rather than a ui.select: the panel is 480px tall and the header row is the
+-- only space that costs nothing, and the tooltip names both the current scope
+-- and the next one, which a select's collapsed state would not.
 local function scopeButton()
     local tooltip = shared.tr("tip_scope", {
         current = shared.tr("scope." .. shared.scope),
@@ -945,7 +950,6 @@ render = function()
             ui.label({ key = "version", text = pluginVersion, fontSize = 10, color = "on_surface_variant" }),
             ui.spacer({ key = "gap", flexGrow = 1 }),
             rankingButton(),
-            rowActionButton(),
             usageButton(),
             scopeButton(),
             ui.button({ key = "refresh", glyph = "refresh", variant = "ghost", tooltip = shared.tr("tip_refresh"), onClick = "onRefreshIndex" }),
@@ -1124,7 +1128,6 @@ function onOpen(_context)
         -- Re-read on every open: the launcher may have cycled the scope, and
         -- a script reload drops both of these from memory.
         shared.scope = shared.readScope(dir)
-        rowAction = readRowAction(dir)
         shared.ranking = shared.readRanking(dir)
         showUsage = readShowUsage(dir)
         -- An earlier session's measurement, so the chart is up with the panel
@@ -1256,16 +1259,6 @@ function onCycleRanking()
     runSearch()
 end
 
--- Nothing to reload: this only changes what a right click will do next.
-function onCycleRowAction()
-    rowAction = NEXT_ROW_ACTION[rowAction] or DEFAULT_ROW_ACTION
-    local dir = shared.dataDir()
-    if dir ~= nil then
-        writeRowAction(dir, rowAction)
-    end
-    render()
-end
-
 -- Allowed mid-build on purpose: a walk over a slow disk can run for minutes and
 -- there is no way to cancel it, so blocking the button would trap the user in
 -- the scope they are trying to leave. The in-flight build finishes against the
@@ -1290,6 +1283,23 @@ function onCycleScope()
     requestReload(false, false)
     -- A no-op on a disk scope, so this is safe on every leg.
     requestUsage(false)
+end
+
+-- Dispatch for a result row's context menu. `action` is the id of the entry
+-- picked, `context` the index record the menu was opened on.
+function onResultMenu(action, context)
+    if type(context) ~= "string" or context == "" then
+        return
+    end
+    if action == "open" then
+        openEntry(context)
+    elseif action == "reveal" then
+        revealEntry(context)
+    elseif action == "copy_path" then
+        copyEntry(context)
+    elseif action == "copy_name" then
+        copyName(context)
+    end
 end
 
 -- Opens the settings window on this plugin's own page (the host supplies the
