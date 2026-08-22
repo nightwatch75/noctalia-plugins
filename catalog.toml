@@ -11,15 +11,21 @@
 [[plugin]]
 id = "nightwatch75/dns-switcher"
 name = "DNS Switcher"
-version = "0.2.0"
-updated_at = 1786451981
+version = "0.3.0"
+updated_at = 1787383021
 added_at = 1783852430
 author = "nightwatch75"
 license = "MIT"
 icon = "world"
 description = "Switch the system DNS between popular providers, custom servers, or the ISP default (NetworkManager)."
-plugin_api = 24
+plugin_api = 28
 tags = ["bar", "panel", "service", "network", "privacy"]
+
+[[plugin.release]]
+plugin_api = 24
+version = "0.2.0"
+updated_at = 1786451981
+rev = "d7bbaf2cd159362c05080410d0cf886db76cecf9"
 
 [[plugin.release]]
 plugin_api = 17
@@ -171,15 +177,21 @@ rev = "34b05dfa074239f4a410de8303be81995bca0b78"
 [[plugin]]
 id = "nightwatch75/topgrade-wrapper"
 name = "Topgrade Wrapper"
-version = "0.0.8"
-updated_at = 1786261109
+version = "0.0.9"
+updated_at = 1787383274
 added_at = 1785076212
 author = "nightwatch75"
 license = "MIT"
 icon = "package"
 description = "Check how many packages topgrade would upgrade, then run the upgrade in a terminal window."
-plugin_api = 22
+plugin_api = 24
 tags = ["bar", "panel", "service", "system", "utility"]
+
+[[plugin.release]]
+plugin_api = 22
+version = "0.0.8"
+updated_at = 1786261109
+rev = "885486b28522b5748e3f7418de76e85e1752c5de"
 
 [[plugin.release]]
 plugin_api = 15
