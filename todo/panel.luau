@@ -22,13 +22,15 @@
 -- Interaction: a row is a static line by default. Click its text to edit;
 -- press Enter or the ✓ button to commit back to the static line. The coloured
 -- chip cycles the priority (a legend at the foot of the panel maps each colour
--- to its category). The ☐/☑ button toggles done, which strikes the text
--- through. Right-clicking the text raises a native context menu (plugin_api
--- >= 28) with edit, done, an explicit priority pick and delete — see
--- openRowMenu for why that one node, and why the row carries no pencil or
--- trash button of its own. A header trash button deletes every done row after
--- an inline confirmation strip (confirm/cancel) — the plugin UI has no dialog
--- primitive. No external commands are run.
+-- to its category, and each entry's glyph button sets every task to it). The
+-- ☐/☑ button toggles done, which strikes the text through. Right-clicking the
+-- text raises a native context menu (plugin_api >= 28) with edit, done, an
+-- explicit priority pick and delete — see openRowMenu for why that one node,
+-- and why the row carries no pencil or trash button of its own. A header
+-- trash button deletes every done row after an inline confirmation strip
+-- (confirm/cancel) — the plugin UI has no dialog primitive. The header + adds
+-- a task at the head of the manual order, not the foot. No external commands
+-- are run.
 --
 -- The bar widget (todo.luau) lights its glyph while the panel is open via the
 -- shared "todo_open" state; it reads todo.json itself for the pending count.
@@ -207,9 +209,9 @@ end
 local function addItem()
     local item = { id = nextId, text = "", priority = "medium", done = false }
     nextId += 1
-    -- Appended at the foot of the manual order; the priority view shows it at
-    -- the foot of its group.
-    table.insert(items, item)
+    -- Inserted at the head of the manual order, so a new task is visible
+    -- right away instead of scrolled off the bottom.
+    table.insert(items, 1, item)
     editingId = item.id -- new task opens straight into edit mode
     render()
 end
@@ -287,6 +289,19 @@ local function setPriority(id, priority)
         save()
         render()
     end
+end
+
+-- Set every task to `priority` (the legend's bulk glyphs). Manual positions
+-- are untouched, same as cyclePriority/setPriority.
+local function setAllPriority(priority)
+    if RANK[priority] == nil or #items == 0 then
+        return
+    end
+    for _, item in ipairs(items) do
+        item.priority = priority
+    end
+    save()
+    render()
 end
 
 -- Switch ordering mode. Only the `sort` choice is persisted — the task array
@@ -511,11 +526,22 @@ local function taskRow(item)
     }, children)
 end
 
--- A footer legend mapping each chip colour to its category.
+-- A footer legend mapping each chip colour to its category. The trailing
+-- glyph button applies that priority to every task (setAllPriority).
+local BULK_GLYPH = { important = "chevrons-up", medium = "equal", low = "chevrons-down" }
 local function legendEntry(priority)
     return ui.row({ gap = 6, align = "center" }, {
         ui.box({ width = 12, height = 12, radius = 3, fill = COLORS[priority] }),
         ui.label({ text = tr("prio_" .. priority), fontSize = 11, color = "on_surface_variant" }),
+        ui.button({
+            key = "set-all-" .. priority,
+            glyph = BULK_GLYPH[priority],
+            variant = "ghost",
+            tooltip = tr("tip_set_all_" .. priority),
+            onClick = function()
+                setAllPriority(priority)
+            end,
+        }),
     })
 end
 

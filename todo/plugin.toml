@@ -10,7 +10,7 @@
 
 id = "nightwatch75/todo"
 name = "To Do"
-version = "0.1.0"
+version = "1.0.0"
 # 28 for panel.openContextMenu: the row's right-click menu carries edit,
 # priority and delete, which is what let the row drop two glyph buttons. Also
 # 23 for noctalia.readFileAsync — the bar widget re-reads todo.json every 2
@@ -43,7 +43,7 @@ default = false
 id = "panel"
 entry = "panel.luau"
 width = 400
-height = 460
+height = 600
 placement = "attached"
 open_near_click = true
 # "n"/"s" reach onKey only while no ui.input has focus (the host reserves
