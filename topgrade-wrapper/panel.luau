@@ -8,6 +8,9 @@
 -- result is a per-manager breakdown plus, when something could not be counted,
 -- the names of the steps it left out. Only then do "Update" (open a terminal
 -- and run topgrade) and "Dismiss" (keep the numbers, quiet the bar) light up.
+-- The header's ▶ button is the escape hatch: it sends the same "update"
+-- request straight away, skipping the count, for anyone who just wants to run
+-- topgrade now.
 
 local shared = require("./shared.luau")
 
@@ -389,6 +392,19 @@ render = function()
                 tooltip = tr("tip_check"),
                 onClick = function()
                     request("check")
+                end,
+            }),
+            -- Runs topgrade straight away, the same request the bottom "Update"
+            -- button sends once a check finds something — for anyone who does
+            -- not want to count first.
+            ui.button({
+                key = "header-run" .. (busy() and "-off" or ""),
+                glyph = "player-play",
+                variant = "ghost",
+                enabled = not busy() and phase ~= "missing",
+                tooltip = tr("tip_run_now"),
+                onClick = function()
+                    request("update")
                 end,
             }),
             -- Opens the settings window on this plugin's own page (the host

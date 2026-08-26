@@ -72,6 +72,7 @@ noctalia msg panel-toggle nightwatch75/topgrade-wrapper:panel
 | **Update** (panel) | Run topgrade in a terminal window |
 | **Dismiss** (panel) | Keep the numbers, return the glyph to its resting colour |
 | ↻ refresh (panel header) | Same as **Check Updates** |
+| ▶ run now (panel header) | Same as **Update** — run topgrade straight away, skipping the check |
 | ⚙ settings (panel header) | Open this plugin's page in *Settings → Plugins* |
 
 Left and right click are declared as separate, remappable actions, so you can

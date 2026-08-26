@@ -108,6 +108,7 @@
   "step_unnamed": "topgrade",
   "tip_check": "Check for updates now",
   "tip_close": "Close",
+  "tip_run_now": "Run topgrade now, skipping the check",
   "tip_settings": "Plugin settings",
   "tip_update": "Run topgrade in a terminal window",
   "title": "Topgrade Wrapper",
