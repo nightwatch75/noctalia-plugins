@@ -2,10 +2,10 @@
 
 A [noctalia](https://github.com/noctalia-dev/noctalia) v5 bar plugin: a
 prioritised to-do list. Click the bar glyph to toggle a panel of task rows —
-add tasks with **+** or **N**, tick them off (the text is struck through), and
-set each task's priority one at a time or all at once. Right-click a task for
-edit, done, priority and delete. The list is stored as a single JSON file; no
-external commands are run.
+add tasks with **+** or **N**, tick them off (the text is struck through), edit
+or delete with the row's own buttons, and set each task's priority one at a
+time or all at once. Right-click a task for the same actions in a context
+menu. The list is stored as a single JSON file; no external commands are run.
 
 ## Plugin
 
@@ -34,7 +34,9 @@ noctalia msg panel-toggle nightwatch75/todo:panel
 | **Right-click** the task's text   | Open the row menu: edit, done, priority, delete       |
 | **Enter**, or ✓ (row)             | Commit the edit — the row goes back to a static line  |
 | ☐ / ☑ button (row)                | Toggle done/to-do (done tasks are struck through)     |
+| ✏️ / 🗑 button (row)               | Edit / delete that task                               |
 | Glyph next to a legend entry      | Set every task to that priority                       |
+| ✔️✔️ / ☐ button (panel header)     | Mark every task done / undone                         |
 | 🗑 button (panel header)           | Delete every done task (asks first)                   |
 | ⚙ button (panel header)           | Open this plugin's page in *Settings → Plugins*       |
 
@@ -88,17 +90,16 @@ Right-click a task's text to open a native context menu:
 | Priority            | Set the priority directly (● marks the current one)     |
 | Delete task         | Remove the task                                         |
 
-The menu is why a row carries only one button: everything that used to need a
-pencil and a trash icon on every line lives here now, which leaves the task
-text much more room.
+It offers the same actions as the row's own buttons, plus an explicit
+priority pick.
 
 ## Editing
 
-Rows are static lines by default. Click a task's text (or pick **Edit task**
-from the row menu) to edit it; press **Enter** or the ✓ button to commit back
-to a static line. A new task (**+** or **N**) lands at the top of the list,
-already in edit mode — committing it while still empty simply discards it.
-Edits are also autosaved after a short idle pause and on close.
+Rows are static lines by default. Click a task's text, its ✏️ button, or pick
+**Edit task** from the row menu to edit it; press **Enter** or the ✓ button to
+commit back to a static line. A new task (**+** or **N**) lands at the top of
+the list, already in edit mode — committing it while still empty simply
+discards it. Edits are also autosaved after a short idle pause and on close.
 
 Tick a task (☐ → ☑) to complete it — its text is struck through until you
 un-tick it. The bar glyph's tooltip shows how many tasks are still to do.

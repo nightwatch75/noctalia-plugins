@@ -26,11 +26,12 @@
 -- ☐/☑ button toggles done, which strikes the text through. Right-clicking the
 -- text raises a native context menu (plugin_api >= 28) with edit, done, an
 -- explicit priority pick and delete — see openRowMenu for why that one node,
--- and why the row carries no pencil or trash button of its own. A header
--- trash button deletes every done row after an inline confirmation strip
--- (confirm/cancel) — the plugin UI has no dialog primitive. The header + adds
--- a task at the head of the manual order, not the foot. No external commands
--- are run.
+-- and why the row carries no pencil or trash button of its own. The header
+-- also carries two glyph buttons that mark every task done/undone in one
+-- click (setAllDone), and a trash button that deletes every done row after
+-- an inline confirmation strip (confirm/cancel) — the plugin UI has no
+-- dialog primitive. The header + adds a task at the head of the manual
+-- order, not the foot. No external commands are run.
 --
 -- The bar widget (todo.luau) lights its glyph while the panel is open via the
 -- shared "todo_open" state; it reads todo.json itself for the pending count.
@@ -59,8 +60,9 @@ local ROW_CONTENT_W = PANEL_WIDTH - (2 * PANEL_PADDING) - SCROLLBAR_GUTTER
 
 -- Width left for the task text once the chip, the optional grip and the
 -- `trailing` glyph buttons (each preceded by a gap) have taken their share.
--- `trailing` is 1 since 0.1.0: pencil and trash moved into the row's context
--- menu, and the ☐/☑ toggle is the only glyph button left beside the text.
+-- `trailing` is 3: the ☐/☑ toggle, the pencil (edit) and the trash (delete)
+-- buttons — kept on the row alongside the right-click context menu, which
+-- offers the same actions plus priority for anyone who prefers it.
 local function taskTextWidth(withGrip, trailing)
     local width = ROW_CONTENT_W - CHIP_W - ROW_GAP - (trailing * (GLYPH_BTN_W + ROW_GAP))
     if withGrip then
@@ -291,6 +293,27 @@ local function setPriority(id, priority)
     end
 end
 
+-- Mark every task done/undone (the header's bulk glyphs). Chimes once on a
+-- bulk-complete, same rule as toggleDone: only when something actually
+-- flips to done and the sound setting is on.
+local function setAllDone(doneValue)
+    if #items == 0 then
+        return
+    end
+    local anyNewlyDone = false
+    for _, item in ipairs(items) do
+        if doneValue and not item.done then
+            anyNewlyDone = true
+        end
+        item.done = doneValue
+    end
+    if anyNewlyDone and soundReady and noctalia.getConfig("sound_on_complete") then
+        noctalia.sound.play(COMPLETE_SOUND)
+    end
+    save()
+    render()
+end
+
 -- Set every task to `priority` (the legend's bulk glyphs). Manual positions
 -- are untouched, same as cyclePriority/setPriority.
 local function setAllPriority(priority)
@@ -493,7 +516,7 @@ local function taskRow(item)
             text = item.done and strike(item.text) or item.text,
             variant = "ghost",
             contentAlign = "start",
-            width = taskTextWidth(grip ~= nil, 1),
+            width = taskTextWidth(grip ~= nil, 3),
             onClick = function()
                 enterEdit(id)
             end,
@@ -501,15 +524,31 @@ local function taskRow(item)
                 openRowMenu(item)
             end,
         }))
-        -- Done toggle: strikes the text through. Kept on the row rather than
-        -- folded into the menu — ticking a task off is the one action worth a
-        -- single click.
+        -- Done toggle: strikes the text through.
         table.insert(children, ui.button({
             glyph = item.done and "square-check" or "square",
             variant = "ghost",
             tooltip = tr(item.done and "tip_undone" or "tip_done"),
             onClick = function()
                 toggleDone(id)
+            end,
+        }))
+        -- Explicit edit affordance next to the row, same action as clicking
+        -- the text or picking "Edit task" from the row menu.
+        table.insert(children, ui.button({
+            glyph = "pencil",
+            variant = "ghost",
+            tooltip = tr("tip_edit"),
+            onClick = function()
+                enterEdit(id)
+            end,
+        }))
+        table.insert(children, ui.button({
+            glyph = "trash",
+            variant = "ghost",
+            tooltip = tr("tip_delete"),
+            onClick = function()
+                deleteItem(id)
             end,
         }))
     end
@@ -589,6 +628,22 @@ render = function()
         ui.label({ key = "version", text = pluginVersion, fontSize = 10, color = "on_surface_variant" }),
         ui.spacer({ key = "gap", flexGrow = 1 }),
         sortToggle,
+        ui.button({
+            key = "header-all-done",
+            glyph = "checks",
+            variant = "ghost",
+            enabled = done < #items,
+            tooltip = tr("tip_all_done"),
+            onClick = "onAllDone",
+        }),
+        ui.button({
+            key = "header-all-undone",
+            glyph = "square",
+            variant = "ghost",
+            enabled = done > 0,
+            tooltip = tr("tip_all_undone"),
+            onClick = "onAllUndone",
+        }),
         ui.button({
             key = "header-clear-done" .. (done == 0 and "-off" or ""),
             glyph = "trash",
@@ -763,6 +818,14 @@ end
 -- the dragged row's id as text, value the target gap index as text.
 function onTodoDrop(payload, value)
     moveItemTo(tonumber(payload), tonumber(value))
+end
+
+function onAllDone()
+    setAllDone(true)
+end
+
+function onAllUndone()
+    setAllDone(false)
 end
 
 function onClearDone()
