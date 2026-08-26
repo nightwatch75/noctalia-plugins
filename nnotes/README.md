@@ -1,8 +1,8 @@
 # nnotes
 
 A [noctalia](https://github.com/noctalia-dev/noctalia) bar plugin: a one-click scratchpad.
-Click the bar glyph to toggle a floating editor panel on a single notes file
-(plain `.txt`), with autosave. The glyph lights up while the panel is open.
+Click the bar glyph to toggle a floating editor panel on a single text file,
+with autosave. The glyph lights up while the panel is open.
 
 > **Note:** this plugin was created as a stopgap while waiting for an official
 > notes plugin, which has since been released by the Noctalia developers and is
@@ -31,19 +31,19 @@ noctalia msg panel-toggle nightwatch75/nnotes:panel
 | Right click  | Open the notes folder in the file manager     |
 | Middle click | Copy the notes file path to the clipboard     |
 
-Middle click needs the manifest to unbind it: every bar widget carries a
-built-in binding for it that opens the widget's own settings, and a bound
-gesture never reaches the plugin. This widget declares `middle = "none"`, so
-the button is the plugin's again — the panel's ⚙ button is the settings route.
+Every bar widget has a built-in middle-click binding that opens its settings,
+which would otherwise swallow this action. This widget frees middle click in
+its manifest (`middle = "none"`), so the panel's ⚙ button is the settings
+route instead.
 
 | Key          | Action                                    |
 |--------------|-------------------------------------------|
 | `Ctrl+Enter` | Save now                                  |
 | `Esc`        | Close the panel (noctalia default; saves) |
 
-The panel header carries a ⚙ button that opens this plugin's page in
-*Settings → Plugins*, next to the folder and copy-path buttons. The same page
-opens from the command line, so it can be bound in your compositor too:
+The panel header carries folder, copy-path, ⚙ and close buttons. The ⚙ button
+opens this plugin's page in *Settings → Plugins*. The same page opens from the
+command line, so it can be bound in your compositor too:
 
 ```sh
 noctalia msg settings-open-plugin nightwatch75/nnotes
@@ -51,15 +51,10 @@ noctalia msg settings-open-plugin nightwatch75/nnotes
 
 ## Features
 
-- Configurable glyph, notes folder, file name
-- Left click: open/close the panel — Right click: open the notes folder —
-  Middle click: copy the file path (same actions available as panel buttons)
-- Autosave after N idle seconds (configurable, `0` disables the timer) plus
-  save on `Ctrl+Enter` and on panel close, so toggling it shut never loses
-  what you just typed
-- Live word/char count and saved/editing status in the panel footer
+- The panel footer shows a live word/character count and a saved/editing
+  status.
 - Panel placement (attached/floating), position and open-near-click are the
-  standard per-panel settings noctalia exposes in Settings → Plugins
+  standard per-panel settings noctalia exposes in *Settings → Plugins*.
 
 ## Settings
 
@@ -67,7 +62,7 @@ noctalia msg settings-open-plugin nightwatch75/nnotes
 | --- | --- | --- | --- |
 | `notes_folder` | `folder` | *(empty)* | Where the notes file lives. Empty = `~/Notes`. |
 | `file_name` | `string` | `notes.txt` | Single text file the panel edits. |
-| `autosave_seconds` | `int` | `5` | Idle seconds before unsaved changes are written. `0` saves only on close / `Ctrl+Enter`. |
+| `autosave_seconds` | `int` | `5` | Idle seconds before unsaved changes are written (0–300). `0` saves only on close / `Ctrl+Enter`. |
 | `glyph` (widget) | `glyph` | `notes` | Icon shown on the bar. |
 
 ## Requirements
@@ -75,8 +70,8 @@ noctalia msg settings-open-plugin nightwatch75/nnotes
 - noctalia v5.0.0-beta.6 or newer — the first tagged release that accepts
   `plugin_api = 15` (`noctalia.openSettings()`, the panel's ⚙ button; the
   manifest gesture default that frees middle click needs 14)
-- `xdg-open` (`xdg-utils`) — used to open the notes folder in your file
-  manager (right-click on the bar widget, folder button in the panel)
+- `xdg-open` (`xdg-utils`) — opens the notes folder (right-click on the bar
+  widget, folder button in the panel)
 
 ## Install
 
