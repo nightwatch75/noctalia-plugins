@@ -30,11 +30,14 @@ shopt -s nullglob
 # Output:
 #   { "generatedAt": <epoch>, "sessions": [
 #       { "id", "cwd", "projectDir", "gitBranch", "version",
-#         "mtime", "size", "title", "lastPrompt" }, ... ] }
+#         "mtime", "size", "title", "firstPrompt" }, ... ] }
 # "cwd" is the real path Claude Code recorded for the session; "projectDir"
 # is the basename of the project dir the file was found in (the encoded
 # path), kept as a fallback for the rare session that never states a cwd at
-# all (a "bridge-session"-only stub with no real turn in it).
+# all (a "bridge-session"-only stub with no real turn in it). "firstPrompt"
+# is the session's opening message, used for a preview when there is no
+# "title" yet — deliberately the FIRST turn, not the last: a preview should
+# say what a session is about, not where it happens to have stopped.
 
 CLAUDE_DIR="${HOME}/.claude"
 PROJECTS_DIR="${CLAUDE_DIR}/projects"
@@ -61,26 +64,26 @@ write_head_json() {
     ' > "$out"
 }
 
-# "ai-title" and "last-prompt" lines are appended repeatedly as a session
-# grows, each rewriting the last one — so the LAST occurrence of each is the
-# only one that matters. `tac` (reverse line order) + a single awk pass that
-# exits as soon as both are found reads only as far back as the more distant
-# of the two, not the whole file. The two candidate lines are then handed to
-# jq together over stdin (one per line), never as an argument.
+# "ai-title" lines are appended repeatedly as a session grows, each
+# rewriting the last one — so the LAST occurrence is the current title, and
+# `tac` (reverse line order) + `grep -m1` reads only back as far as that one
+# line. "last-prompt" lines work the same way (Claude Code rewrites one on
+# every turn), but this wants the OPPOSITE end of that: its FIRST occurrence
+# is the session's opening message — a forward `grep -m1` reads only as far
+# as THAT one line, usually within the first few KB. Both candidate lines
+# are handed to jq together over stdin (one per line), never as an argument.
 write_meta_json() {
     local file="$1" out="$2"
-    { tac -- "$file" 2>/dev/null || true; } | awk '
-        /"type":"ai-title"/ && !t { title = $0; t = 1 }
-        /"type":"last-prompt"/ && !p { prompt = $0; p = 1 }
-        t && p { exit }
-        END { print title; print prompt }
-    ' | jq -R -s -c '
+    local title_line prompt_line
+    title_line=$(tac -- "$file" 2>/dev/null | grep -m1 -F '"type":"ai-title"' || true)
+    prompt_line=$(grep -m1 -F '"type":"last-prompt"' -- "$file" 2>/dev/null || true)
+    printf '%s\n%s\n' "$title_line" "$prompt_line" | jq -R -s -c '
         (split("\n")) as $l
         | ($l[0] // "") as $t
         | ($l[1] // "") as $p
         | {
             title: ($t | if . == "" then "" else ((try fromjson catch {}).aiTitle // "") end),
-            lastPrompt: ($p | if . == "" then "" else ((try fromjson catch {}).lastPrompt // "") end)
+            firstPrompt: ($p | if . == "" then "" else ((try fromjson catch {}).lastPrompt // "") end)
           }
     ' > "$out"
 }

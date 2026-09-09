@@ -239,6 +239,29 @@ function M.formatCountdown(iso)
     return `{m}m`
 end
 
+-- Same countdown, narrowed for somewhere with a column to fit: once a window
+-- is days out the minutes are noise, and the bar tooltip's value column is
+-- not wide enough to spend eight characters on them.
+function M.formatCountdownShort(iso)
+    local epoch = M.resetEpoch(iso)
+    if not epoch then
+        return nil
+    end
+    local secs = epoch - os.time()
+    if secs <= 0 then
+        return M.tr("resetting")
+    end
+    local d = secs // 86400
+    if d > 0 then
+        return `{d}d {(secs % 86400) // 3600}h`
+    end
+    local h = secs // 3600
+    if h > 0 then
+        return `{h}h {(secs % 3600) // 60}m`
+    end
+    return `{secs // 60}m`
+end
+
 -- 1-based index into the Mon..Sun daily arrays for today (Lua wday: Sun=1).
 function M.todayIndex()
     local t = os.date("*t")

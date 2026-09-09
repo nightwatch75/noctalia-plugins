@@ -7,11 +7,12 @@
 --             jrohland/claudecode's panel.luau, MIT, see README Notes.
 --   Sessions  every local Claude Code session, grouped by the project (cwd)
 --             it ran in. Click a session to resume it in a terminal
---             (`claude --resume <id>`), the eye glyph expands a cheap
---             preview (the last prompt, already in the fetched data — no
---             extra I/O), the trash glyph deletes it after an inline
---             confirm. Fetched on-demand (first open of this tab, or the
---             refresh button) via sessions.luau — never polled.
+--             (`claude --resume <id>`), the eye glyph toggles a cheap
+--             preview (the AI recap if one exists, else the opening prompt
+--             — both already in the fetched data, no extra I/O), the trash
+--             glyph deletes it after an inline confirm. Fetched on-demand
+--             (first open of this tab, or the refresh button) via
+--             sessions.luau — never polled.
 --   CLAUDE.md One row for the global file plus one per known project, each
 --             with an exists/missing badge and a button that opens it in an
 --             external editor (never inside a terminal — these are GUI
@@ -21,7 +22,7 @@
 -- Rename was deliberately left out: Claude Code has no command to rename a
 -- session after it is created, and a plugin-local alias would only ever be
 -- shown here, not in Claude's own /resume picker — the AI-generated title
--- (or the last prompt, cut short) is the label instead.
+-- (or the opening prompt, cut short) is the label instead.
 
 local shared = require("./shared.luau")
 local sessions = require("./sessions.luau")
@@ -436,8 +437,22 @@ end
 
 local function matchesSearch(session, cwd, needle)
     return session.label:lower():find(needle, 1, true) ~= nil
-        or session.lastPrompt:lower():find(needle, 1, true) ~= nil
+        or session.firstPrompt:lower():find(needle, 1, true) ~= nil
         or cwd:lower():find(needle, 1, true) ~= nil
+end
+
+-- The AI-generated recap when Claude Code has already produced one, else
+-- the full opening prompt (not truncated to 72 chars like the row label) —
+-- never the session's most recent turn, which says where it stopped, not
+-- what it is about.
+local function previewText(session)
+    if session.aiTitle ~= "" then
+        return session.aiTitle
+    end
+    if session.firstPrompt ~= "" then
+        return session.firstPrompt
+    end
+    return tr("no_preview")
 end
 
 local function resumeSession(session)
@@ -477,8 +492,19 @@ local function toggleGroup(cwd)
     render()
 end
 
+local function setAllGroups(open)
+    if sessionsState.projects == nil then
+        return
+    end
+    for _, group in ipairs(sessionsState.projects) do
+        expandedGroups[group.cwd] = open
+    end
+    render()
+end
+
 local function sessionRow(session)
     local id = session.id
+    local previewOpen = expandedSessionId == id
     local metaBits = { relativeTime(session.mtime) }
     if session.gitBranch then
         table.insert(metaBits, session.gitBranch)
@@ -492,8 +518,12 @@ local function sessionRow(session)
                     tooltip = tr("tip_resume"),
                     onClick = function() resumeSession(session) end,
                 }),
+                -- The glyph itself flips (eye / eye-off) so the row shows,
+                -- not just implements, that the same button opens and
+                -- closes the preview.
                 ui.button({
-                    glyph = "eye", variant = "ghost", tooltip = tr("tip_preview"),
+                    glyph = previewOpen and "eye-off" or "eye", variant = "ghost",
+                    tooltip = tr(previewOpen and "tip_hide_preview" or "tip_preview"),
                     onClick = function() togglePreview(id) end,
                 }),
                 ui.button({
@@ -513,10 +543,10 @@ local function sessionRow(session)
         }))
     end
 
-    if expandedSessionId == id then
+    if previewOpen then
         table.insert(blocks, ui.label({
             key = "preview-" .. id,
-            text = (session.lastPrompt ~= "" and session.lastPrompt or tr("no_preview")),
+            text = previewText(session),
             fontSize = 11, color = "on_surface_variant", maxLines = 6,
         }))
     end
@@ -542,14 +572,27 @@ local function renderSessionsTab()
     loadSessions(false)
 
     local rows = {
-        ui.input({
-            key = "sess-search",
-            value = searchText,
-            placeholder = tr("search_placeholder"),
-            onChange = function(value)
-                searchText = value
-                render()
-            end,
+        ui.row({ gap = 6, align = "center" }, {
+            ui.input({
+                key = "sess-search",
+                value = searchText,
+                placeholder = tr("search_placeholder"),
+                flexGrow = 1,
+                onChange = function(value)
+                    searchText = value
+                    render()
+                end,
+            }),
+            ui.button({
+                glyph = "chevrons-down", variant = "ghost", controlSize = "sm",
+                tooltip = tr("tip_expand_all"),
+                onClick = function() setAllGroups(true) end,
+            }),
+            ui.button({
+                glyph = "chevrons-up", variant = "ghost", controlSize = "sm",
+                tooltip = tr("tip_collapse_all"),
+                onClick = function() setAllGroups(false) end,
+            }),
         }),
     }
 

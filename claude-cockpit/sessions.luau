@@ -35,15 +35,19 @@ local function decodeProjectDir(encoded)
 end
 
 -- One session record from the script, reshaped for the panel: a stable
--- label (the AI title, else the last prompt cut short, else the id) plus
--- the jsonl path and subagent sidecar dir a delete acts on.
+-- label (the AI title, else the opening prompt cut short, else the id) plus
+-- the jsonl path and subagent sidecar dir a delete acts on. `aiTitle` and
+-- `firstPrompt` are kept as their own fields (not folded into `label`) so
+-- the panel's preview can prefer the title when there is one and fall back
+-- to the FULL opening prompt otherwise, rather than the truncated label.
 local function shapeSession(raw, cwd)
     local id = raw.id
-    local lastPrompt = (type(raw.lastPrompt) == "string") and raw.lastPrompt or ""
-    local label = raw.title
-    if type(label) ~= "string" or label == "" then
-        if lastPrompt ~= "" then
-            label = (#lastPrompt > 72) and (lastPrompt:sub(1, 72) .. "…") or lastPrompt
+    local aiTitle = (type(raw.title) == "string") and raw.title or ""
+    local firstPrompt = (type(raw.firstPrompt) == "string") and raw.firstPrompt or ""
+    local label = aiTitle
+    if label == "" then
+        if firstPrompt ~= "" then
+            label = (#firstPrompt > 72) and (firstPrompt:sub(1, 72) .. "…") or firstPrompt
         else
             label = noctalia.tr("session_untitled", { id = id:sub(1, 8) })
         end
@@ -56,7 +60,8 @@ local function shapeSession(raw, cwd)
         mtime = tonumber(raw.mtime) or 0,
         size = tonumber(raw.size) or 0,
         label = label,
-        lastPrompt = lastPrompt,
+        aiTitle = aiTitle,
+        firstPrompt = firstPrompt,
         jsonlPath = PROJECTS_DIR .. "/" .. dir .. "/" .. id .. ".jsonl",
         sidecarDir = PROJECTS_DIR .. "/" .. dir .. "/" .. id,
     }
