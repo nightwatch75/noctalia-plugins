@@ -36,10 +36,10 @@ end
 
 -- One session record from the script, reshaped for the panel: a stable
 -- label (the AI title, else the opening prompt cut short, else the id) plus
--- the jsonl path and subagent sidecar dir a delete acts on. `aiTitle` and
--- `firstPrompt` are kept as their own fields (not folded into `label`) so
--- the panel's preview can prefer the title when there is one and fall back
--- to the FULL opening prompt otherwise, rather than the truncated label.
+-- the jsonl path and subagent sidecar dir a delete acts on. `firstPrompt` is
+-- kept as its own field (not folded into `label`) so the panel's preview can
+-- show the FULL opening prompt rather than the label's truncated one — and
+-- deliberately not the AI title, which the label already shows verbatim.
 local function shapeSession(raw, cwd)
     local id = raw.id
     local aiTitle = (type(raw.title) == "string") and raw.title or ""
@@ -60,7 +60,6 @@ local function shapeSession(raw, cwd)
         mtime = tonumber(raw.mtime) or 0,
         size = tonumber(raw.size) or 0,
         label = label,
-        aiTitle = aiTitle,
         firstPrompt = firstPrompt,
         jsonlPath = PROJECTS_DIR .. "/" .. dir .. "/" .. id .. ".jsonl",
         sidecarDir = PROJECTS_DIR .. "/" .. dir .. "/" .. id,

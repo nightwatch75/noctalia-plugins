@@ -441,14 +441,11 @@ local function matchesSearch(session, cwd, needle)
         or cwd:lower():find(needle, 1, true) ~= nil
 end
 
--- The AI-generated recap when Claude Code has already produced one, else
--- the full opening prompt (not truncated to 72 chars like the row label) —
--- never the session's most recent turn, which says where it stopped, not
--- what it is about.
+-- The session's opening prompt, in full (not truncated to 72 chars like the
+-- row label) — never the AI title, which is already the row's own label
+-- and would just repeat it, and never the most recent turn, which says
+-- where a session stopped, not what it is about.
 local function previewText(session)
-    if session.aiTitle ~= "" then
-        return session.aiTitle
-    end
     if session.firstPrompt ~= "" then
         return session.firstPrompt
     end
@@ -551,7 +548,15 @@ local function sessionRow(session)
         }))
     end
 
-    return ui.column({ key = "sess-wrap-" .. id, gap = 4, align = "stretch", paddingL = 20 }, blocks)
+    -- The key carries both toggle states, not just the id: without it the
+    -- reconciler diffs this subtree in place instead of rebuilding it, and
+    -- the eye glyph could flip while the preview it is supposed to gate
+    -- stayed put — the same reason todo/panel.luau's row key encodes
+    -- editing/done instead of relying on the buttons' own props alone.
+    local key = "sess-wrap-" .. id
+        .. (previewOpen and "-prev" or "")
+        .. (confirmingDeleteId == id and "-del" or "")
+    return ui.column({ key = key, gap = 4, align = "stretch", paddingL = 20 }, blocks)
 end
 
 local function groupHeader(group, count)
