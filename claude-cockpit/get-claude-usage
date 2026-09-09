@@ -5,11 +5,17 @@ set -eu
 # tests/). Pass --json to emit a single JSON object instead, for the Noctalia plugin
 # (parsed with noctalia.json.decode). The computation is identical either way.
 OUTPUT_JSON=false
+CURRENCY_API_URL="https://api.frankfurter.dev/v1/latest"
 for arg in "$@"; do
     case "$arg" in
         --json) OUTPUT_JSON=true ;;
+        --currency-api-url=*) CURRENCY_API_URL="${arg#--currency-api-url=}" ;;
     esac
 done
+# Every non-USD currency the plugin's `currency` setting offers; fetched
+# together in one request and cached, so switching currencies in settings
+# never needs a new fetch.
+CURRENCY_TARGETS="EUR,GBP,JPY,CNY,CHF,AUD,CAD,INR"
 
 TMPDIR_ROOT=$(mktemp -d)
 trap 'rm -rf "$TMPDIR_ROOT"' EXIT
@@ -91,12 +97,14 @@ refresh_pricing() {
                 }})
           | from_entries)
     }' 2>/dev/null) || return 1
-    # Fetch USD→EUR exchange rate from ECB via Frankfurter
-    local eur_rate
-    eur_rate=$(curl -s --max-time 5 "https://api.frankfurter.dev/v1/latest?from=USD&to=EUR" 2>/dev/null \
-        | jq -r '.rates.EUR // empty' 2>/dev/null) || eur_rate=""
-    if [ -n "$eur_rate" ] && [[ "$eur_rate" =~ ^[0-9]+\.?[0-9]*$ ]]; then
-        result=$(echo "$result" | jq -c '. + {usd_eur_rate: '"$eur_rate"'}' 2>/dev/null)
+    # Exchange rates from USD to every currency the settings offer, via
+    # CURRENCY_API_URL (a plugin setting; ECB rates through Frankfurter by
+    # default).
+    local rates_json
+    rates_json=$(curl -s --max-time 5 "${CURRENCY_API_URL}?from=USD&to=${CURRENCY_TARGETS}" 2>/dev/null \
+        | jq -c '.rates // {}' 2>/dev/null) || rates_json="{}"
+    if echo "$rates_json" | jq -e 'type == "object" and length > 0' >/dev/null 2>&1; then
+        result=$(echo "$result" | jq -c --argjson rates "$rates_json" '. + {currency_rates: $rates}' 2>/dev/null)
     fi
 
     # Validate that we got at least one model with pricing
@@ -119,12 +127,12 @@ fi
 
 # Build awk-friendly pricing string: "opus:input:output:cache_read:cache_write,sonnet:...,haiku:..."
 PRICING_AWK=""
-USD_EUR_RATE="0"
+CURRENCY_RATES_JSON="{}"
 if [ -n "$PRICING_JSON" ]; then
     PRICING_AWK=$(echo "$PRICING_JSON" | jq -r '
         [.models | to_entries[] | "\(.key):\(.value.input):\(.value.output):\(.value.cache_read):\(.value.cache_write)"]
         | join(",")' 2>/dev/null || echo "")
-    USD_EUR_RATE=$(echo "$PRICING_JSON" | jq -r '.usd_eur_rate // 0' 2>/dev/null || echo "0")
+    CURRENCY_RATES_JSON=$(echo "$PRICING_JSON" | jq -c '.currency_rates // {}' 2>/dev/null || echo "{}")
 fi
 
 # --- Per-profile token counting ---
@@ -526,9 +534,10 @@ if [ "$OUTPUT_JSON" = true ]; then
         --arg as "$ALLTIME_SESSIONS" --arg am "$ALLTIME_MESSAGES" --arg first "$FIRST_SESSION" \
         --arg daily "$DAILY" --arg dcosts "$DAILY_COSTS" \
         --arg tc "$TODAY_COST" --arg wc "$WEEK_COST" --arg mc "$MONTH_COST" \
-        --arg rate "$USD_EUR_RATE" --arg profiles "$PROFILES" \
+        --arg profiles "$PROFILES" \
         --argjson profile_data "[${PROFILE_JSON}]" \
         --argjson limits "$LIMITS_JSON" \
+        --argjson rates "$CURRENCY_RATES_JSON" \
         '{
             subscription_type: $sub, rate_limit_tier: $tier,
             five_hour_util: ($fu|tonumber? // 0), five_hour_reset: $fr,
@@ -543,7 +552,7 @@ if [ "$OUTPUT_JSON" = true ]; then
             daily: ($daily|split(",")|map(tonumber? // 0)),
             daily_costs: ($dcosts|split(",")|map(tonumber? // 0)),
             today_cost: ($tc|tonumber? // 0), week_cost: ($wc|tonumber? // 0), month_cost: ($mc|tonumber? // 0),
-            usd_eur_rate: ($rate|tonumber? // 0),
+            currency_rates: $rates,
             profiles: ($profiles|split(",")),
             profile_data: $profile_data
         }'
@@ -572,7 +581,7 @@ echo "TODAY_COST=${TODAY_COST}"
 echo "WEEK_COST=${WEEK_COST}"
 echo "MONTH_COST=${MONTH_COST}"
 echo "DAILY_COSTS=${DAILY_COSTS}"
-echo "USD_EUR_RATE=${USD_EUR_RATE}"
+echo "CURRENCY_RATES=${CURRENCY_RATES_JSON}"
 echo "PROFILES=${PROFILES}"
 echo "PROFILE_SUBSCRIPTION=${PROF_SUBSCRIPTION_LIST}"
 echo "PROFILE_TIER=${PROF_TIER_LIST}"

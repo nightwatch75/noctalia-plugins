@@ -86,7 +86,7 @@ local function usageTooltip()
     end
 
     local todayTokens = (type(usage.daily) == "table" and usage.daily[shared.todayIndex()]) or 0
-    local rate = usage.usd_eur_rate
+    local rate = usage.currency_rates
     row(noctalia.tr("today"), `{shared.formatTokens(todayTokens)}  ({shared.formatCost(usage.today_cost, rate)})`)
     row(noctalia.tr("week"), `{shared.formatTokens(usage.week_tokens)}  ({shared.formatCost(usage.week_cost, rate)})`)
 

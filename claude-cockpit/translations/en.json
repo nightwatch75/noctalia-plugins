@@ -42,10 +42,21 @@
       "description": "Currency for displayed costs. Auto follows the interface language.",
       "label": "Currency",
       "options": {
+        "aud": "AUD (A$)",
         "auto": "Auto",
+        "cad": "CAD (C$)",
+        "chf": "CHF",
+        "cny": "CNY (¥)",
         "eur": "EUR (€)",
+        "gbp": "GBP (£)",
+        "inr": "INR (₹)",
+        "jpy": "JPY (¥)",
         "usd": "USD ($)"
       }
+    },
+    "currency_api_url": {
+      "description": "Exchange-rate API get-claude-usage fetches every non-USD rate from.",
+      "label": "Currency API URL"
     },
     "editor_command": {
       "description": "Command to open a CLAUDE.md file. Empty tries \"code\", then \"zed\".",

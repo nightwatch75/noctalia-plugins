@@ -99,31 +99,54 @@ function M.formatTokens(n)
     return tostring(math.floor(n + 0.5))
 end
 
+-- prefix/suffix for each currency the "currency" setting offers; keys match
+-- both the setting's option values and get-claude-usage's currency_rates keys (uppercased).
+M.CURRENCY_SYMBOLS = {
+    usd = { prefix = "$", suffix = "" },
+    eur = { prefix = "", suffix = " €" },
+    gbp = { prefix = "£", suffix = "" },
+    jpy = { prefix = "¥", suffix = "" },
+    cny = { prefix = "CN¥", suffix = "" },
+    chf = { prefix = "", suffix = " CHF" },
+    aud = { prefix = "A$", suffix = "" },
+    cad = { prefix = "C$", suffix = "" },
+    inr = { prefix = "₹", suffix = "" },
+}
+
 function M.currencyMode()
     local c = noctalia.getConfig("currency")
-    if c == "usd" or c == "eur" then
+    if type(c) == "string" and M.CURRENCY_SYMBOLS[c] then
         return c
     end
     return M.tr("currency.auto_default")
 end
 
-function M.formatCost(usd, rate)
+-- `rates` is the whole currency_rates object (USD -> currency code -> rate);
+-- looked up by the configured currency, USD needs none.
+function M.formatCost(usd, rates)
     usd = tonumber(usd) or 0
-    rate = tonumber(rate) or 0
-    local useEur = M.currencyMode() == "eur" and rate > 0
-    local n = useEur and usd * rate or usd
-    local sym = useEur and "" or "$"
-    local suffix = useEur and " €" or ""
+    local mode = M.currencyMode()
+    -- Falls back to USD, symbol included, when no rate is available yet —
+    -- never the target currency's symbol around a still-USD amount.
+    local sym = M.CURRENCY_SYMBOLS.usd
+    local n = usd
+    if mode ~= "usd" and type(rates) == "table" then
+        local rate = tonumber(rates[mode:upper()])
+        if rate and rate > 0 then
+            n = usd * rate
+            sym = M.CURRENCY_SYMBOLS[mode] or M.CURRENCY_SYMBOLS.usd
+        end
+    end
     if n >= 1000 then
-        return `{sym}{string.format("%.1f", n / 1000)}K{suffix}`
+        return `{sym.prefix}{string.format("%.1f", n / 1000)}K{sym.suffix}`
     end
     if n >= 100 then
-        return `{sym}{math.floor(n + 0.5)}{suffix}`
+        return `{sym.prefix}{math.floor(n + 0.5)}{sym.suffix}`
     end
     if n >= 10 then
-        return `{sym}{string.format("%.1f", n)}{suffix}`
+        return `{sym.prefix}{string.format("%.1f", n)}{sym.suffix}`
     end
-    return `{sym}{string.format("%.2f", n)}{suffix}`
+    return `{sym.prefix}{string.format("%.2f", n)}{sym.suffix}`
 end
 
 function M.shortModelName(name)

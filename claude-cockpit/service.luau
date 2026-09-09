@@ -45,7 +45,12 @@ local function fetch()
     fetching = true
     publishStatus("loading")
 
-    local launched = noctalia.runAsync(`bash '{scriptPath}' --json`, function(result)
+    local apiUrl = noctalia.getConfig("currency_api_url")
+    if type(apiUrl) ~= "string" or apiUrl == "" then
+        apiUrl = "https://api.frankfurter.dev/v1/latest"
+    end
+
+    local launched = noctalia.runAsync({ "bash", scriptPath, "--json", "--currency-api-url=" .. apiUrl }, function(result)
         fetching = false
 
         if type(result) ~= "table" or result.success == false or result.exitCode ~= 0 then

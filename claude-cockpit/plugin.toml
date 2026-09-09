@@ -14,7 +14,7 @@
 
 id = "nightwatch75/claude-cockpit"
 name = "Claude Cockpit"
-version = "0.5.0"
+version = "0.6.0"
 # 24 for direct argv process execution: session delete (rm -rf on two fixed
 # paths) and opening a CLAUDE.md in an editor both exec directly, with no
 # shell parsing the path. 22 for the relative luau imports (shared.luau,
@@ -54,7 +54,23 @@ options = [
   { value = "auto", label_key = "settings.currency.options.auto" },
   { value = "usd", label_key = "settings.currency.options.usd" },
   { value = "eur", label_key = "settings.currency.options.eur" },
+  { value = "gbp", label_key = "settings.currency.options.gbp" },
+  { value = "jpy", label_key = "settings.currency.options.jpy" },
+  { value = "cny", label_key = "settings.currency.options.cny" },
+  { value = "chf", label_key = "settings.currency.options.chf" },
+  { value = "aud", label_key = "settings.currency.options.aud" },
+  { value = "cad", label_key = "settings.currency.options.cad" },
+  { value = "inr", label_key = "settings.currency.options.inr" },
 ]
+
+# Exchange-rate API get-claude-usage fetches every non-USD rate from, in one
+# request (ECB rates via Frankfurter by default).
+[[setting]]
+key = "currency_api_url"
+type = "string"
+label_key = "settings.currency_api_url.label"
+description_key = "settings.currency_api_url.description"
+default = "https://api.frankfurter.dev/v1/latest"
 
 # Empty = Noctalia's own terminal discovery ($TERMINAL, then the usual
 # emulators). Set a command to force one, e.g. "kitty" or "ghostty".

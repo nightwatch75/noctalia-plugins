@@ -244,7 +244,7 @@ local function metricCol(label, tokens, cost, rate)
 end
 
 local function tokensCard(u, todayTokens)
-    local rate = u.usd_eur_rate
+    local rate = u.currency_rates
     return card({
         heading(tr("token_consumption")),
         ui.row({ gap = 8, align = "start" }, {
@@ -397,7 +397,7 @@ local function renderUsageTab()
         table.insert(cards, rateCard(w))
     end
     table.insert(cards, tokensCard(usage, todayTokens))
-    table.insert(cards, dailyChart(usage.daily, usage.daily_costs, usage.usd_eur_rate))
+    table.insert(cards, dailyChart(usage.daily, usage.daily_costs, usage.currency_rates))
     local models = modelsCard(usage.week_models, usage.week_tokens)
     if models then
         table.insert(cards, models)
