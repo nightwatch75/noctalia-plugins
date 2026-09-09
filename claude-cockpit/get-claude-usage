@@ -70,6 +70,16 @@ FIRST_SESSION="unknown"
 
 # --- Pricing cache (refresh once per day from LiteLLM) ---
 PRICING_JSON=""
+
+# Exchange rates from USD to every currency the settings offer, via
+# CURRENCY_API_URL (a plugin setting; ECB rates through Frankfurter by
+# default). Prints {} on any failure — never lets a bad response abort the
+# caller.
+fetch_currency_rates() {
+    curl -s --max-time 5 "${CURRENCY_API_URL}?from=USD&to=${CURRENCY_TARGETS}" 2>/dev/null \
+        | jq -c '.rates // {}' 2>/dev/null || echo '{}'
+}
+
 refresh_pricing() {
     local raw
     raw=$(curl -s --max-time 10 "$LITELLM_URL" 2>/dev/null) || return 1
@@ -97,12 +107,8 @@ refresh_pricing() {
                 }})
           | from_entries)
     }' 2>/dev/null) || return 1
-    # Exchange rates from USD to every currency the settings offer, via
-    # CURRENCY_API_URL (a plugin setting; ECB rates through Frankfurter by
-    # default).
     local rates_json
-    rates_json=$(curl -s --max-time 5 "${CURRENCY_API_URL}?from=USD&to=${CURRENCY_TARGETS}" 2>/dev/null \
-        | jq -c '.rates // {}' 2>/dev/null) || rates_json="{}"
+    rates_json=$(fetch_currency_rates)
     if echo "$rates_json" | jq -e 'type == "object" and length > 0' >/dev/null 2>&1; then
         result=$(echo "$result" | jq -c --argjson rates "$rates_json" '. + {currency_rates: $rates}' 2>/dev/null)
     fi
@@ -123,6 +129,19 @@ if [ -f "$PRICING_CACHE" ]; then
 else
     refresh_pricing || true
     [ -f "$PRICING_CACHE" ] && PRICING_JSON=$(cat "$PRICING_CACHE")
+fi
+
+# Currency rates are cheap (one small request) and volatile enough to retry
+# on their own schedule: if the cached pricing snapshot for today has none —
+# the rate fetch can fail independently of the pricing fetch that cached it
+# — every run tries again here until one succeeds, without re-fetching the
+# whole LiteLLM pricing table.
+if [ -n "$PRICING_JSON" ] && ! echo "$PRICING_JSON" | jq -e '(.currency_rates // {}) | length > 0' >/dev/null 2>&1; then
+    rates_json=$(fetch_currency_rates)
+    if echo "$rates_json" | jq -e 'type == "object" and length > 0' >/dev/null 2>&1; then
+        PRICING_JSON=$(echo "$PRICING_JSON" | jq -c --argjson rates "$rates_json" '. + {currency_rates: $rates}' 2>/dev/null)
+        echo "$PRICING_JSON" > "$PRICING_CACHE" 2>/dev/null || true
+    fi
 fi
 
 # Build awk-friendly pricing string: "opus:input:output:cache_read:cache_write,sonnet:...,haiku:..."
