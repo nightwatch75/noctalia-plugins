@@ -10,22 +10,11 @@ shopt -s nullglob
 # sibling "<uuid>/subagents/*.jsonl" dir holds Task/subagent sub-transcripts,
 # not sessions a person would resume, and is excluded by construction
 # (-mindepth 2 -maxdepth 2 never reaches it). Grouping sessions by project is
-# left to sessions.luau: it already has to filter/sort the same data, so
-# doing it once in Lua is simpler than building nested JSON here.
+# left to sessions.luau, which already filters/sorts this data.
 #
-# A session file can exceed 10 MB and any single line in it can too (a
-# "file-history-snapshot" line can embed a whole file's contents, hundreds of
-# KB on its own). Two things that fell out of that in testing, both fixed
-# below:
-#   - a byte-bounded `head`/`tail` cut a huge early line in half instead of
-#     ever reaching the small "user" line just past it, and every cwd came
-#     back empty — replaced with `grep -m1` (line-based: a giant line in the
-#     way is skipped whole, and it still stops at the first match).
-#   - passing a matched line to `jq --arg` hit the kernel's single-argument
-#     size limit on the session whose "cwd" line happened to be huge —
-#     everything below is piped to jq over stdin instead, and every
-#     intermediate result is written to a file, never handed back through a
-#     command-line argument.
+# A session file, and any single line in it, can exceed 10 MB — matches are
+# found with `grep -m1`/`tac` (line-based, no byte budget) and always piped
+# to jq over stdin, never passed as an argument.
 #
 # Output:
 #   { "generatedAt": <epoch>, "sessions": [
@@ -33,16 +22,11 @@ shopt -s nullglob
 #         "mtime", "size", "title", "firstPrompt", "model", "contextTokens" }, ... ] }
 # "cwd" is the real path Claude Code recorded for the session; "projectDir"
 # is the basename of the project dir the file was found in (the encoded
-# path), kept as a fallback for the rare session that never states a cwd at
-# all (a "bridge-session"-only stub with no real turn in it). "firstPrompt"
+# path), used as a fallback when a session states no cwd at all. "firstPrompt"
 # is the session's opening message, used for a preview when there is no
-# "title" yet — deliberately the FIRST turn, not the last: a preview should
-# say what a session is about, not where it happens to have stopped.
-# "model"/"contextTokens" come from the session's LAST "assistant" turn:
-# message.model, and input_tokens + cache_read_input_tokens +
-# cache_creation_input_tokens — the total input a turn actually sent, i.e.
-# how full the context window was at that point (not a cumulative total
-# across the session, which would say nothing about "how full is it now").
+# "title" yet. "model"/"contextTokens" come from the session's last
+# "assistant" turn: message.model, and input_tokens + cache_read_input_tokens
+# + cache_creation_input_tokens (how full the context window was at that turn).
 
 CLAUDE_DIR="${HOME}/.claude"
 PROJECTS_DIR="${CLAUDE_DIR}/projects"
@@ -50,17 +34,10 @@ PROJECTS_DIR="${CLAUDE_DIR}/projects"
 WORKDIR=$(mktemp -d)
 trap 'rm -rf "$WORKDIR"' EXIT
 
-# The first line carrying cwd/gitBranch/version — usually "user", sometimes
-# "assistant" or "system" — is rarely line 1: queue-operation/mode/
-# bridge-session/atis-latch events come first. grep -m1 finds it wherever it
-# sits without a byte budget to get wrong, and the match is piped into jq
-# over stdin so its length never touches an argv limit.
+# First line with a cwd field — queue-operation/mode/bridge-session/
+# atis-latch events can precede it, so this is rarely line 1.
 write_head_json() {
     local file="$1" out="$2"
-    # grep with no match exits 1 and prints nothing, which would feed jq -R
-    # zero lines — and zero lines means the filter never runs at all, not
-    # even on the "" branch, so the file ends up empty instead of holding
-    # the {cwd:"",...} default. The fallback printf keeps it at one line.
     { grep -m1 -F '"cwd":"' -- "$file" 2>/dev/null || printf '\n'; } | jq -R -c '
         if . == "" then { cwd: "", gitBranch: "", version: "" } else
             (try fromjson catch {}) as $o
@@ -69,15 +46,9 @@ write_head_json() {
     ' > "$out"
 }
 
-# "ai-title" and the last "assistant" turn are both LAST-occurrence lookups,
-# so one backward scan (tac) finds both together, stopping as soon as it has
-# both instead of re-reading the file once per field. "last-prompt" lines
-# work the other way (Claude Code rewrites one on every turn, but this wants
-# the FIRST — the session's opening message), so that one stays a forward
-# `grep -m1`, reading only as far as THAT one line, usually within the first
-# few KB. Every candidate line is handed to jq together over stdin (one per
-# line), never as an argument — the assistant line in particular can be
-# huge (a turn's `usage` sits next to its full response text).
+# ai-title (last occurrence) and the last assistant turn are found in one
+# backward scan; last-prompt uses its first occurrence (the opening
+# message) via a forward scan. All three go to jq over stdin, not as args.
 write_meta_json() {
     local file="$1" out="$2"
     local title_line="" assistant_line="" prompt_line=""

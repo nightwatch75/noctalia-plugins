@@ -448,9 +448,6 @@ local function resumeSession(session)
 end
 
 local function togglePreview(id)
-    -- Not `(expandedSessionId == id) and nil or id`: Lua's and/or idiom
-    -- breaks when the "true" branch is nil — `true and nil` is itself nil
-    -- (falsy), so `or id` always wins and this could never close.
     if expandedSessionId == id then
         expandedSessionId = nil
     else
@@ -578,8 +575,6 @@ local function sessionRow(session)
         }))
     end
 
-    -- Key carries both toggle states so the reconciler rebuilds the subtree
-    -- on change, same as todo/panel.luau's row key.
     local key = "sess-wrap-" .. id
         .. (previewOpen and "-prev" or "")
         .. (confirmingDeleteId == id and "-del" or "")
@@ -595,7 +590,6 @@ local function groupHeader(group, count)
     }, {
         ui.glyph({ name = expanded and "chevron-down" or "chevron-right", size = 14, color = "on_surface_variant" }),
         ui.glyph({ name = "folder", size = 14, color = "on_surface_variant" }),
-        -- ui.label has no tooltip prop; a ghost button reads the same and does.
         ui.button({
             text = basename, variant = "ghost", contentAlign = "start", flexGrow = 1,
             controlSize = "sm", fontSize = 13, tooltip = group.cwd,

@@ -23,7 +23,5 @@ for path in "$@"; do
     PRUNE+=(-o -path "$path")
 done
 
-# -type f -o -type l (not just -type f): a CLAUDE.md symlinked to AGENTS.md
-# is a common convention to share instructions across AI tools, and -type f
-# alone silently drops every one of them.
+# Includes symlinks: CLAUDE.md -> AGENTS.md is a common convention.
 find "$ROOT" \( "${PRUNE[@]}" \) -prune -o \( -type f -o -type l \) -iname 'CLAUDE.md' -print 2>/dev/null
