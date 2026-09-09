@@ -19,14 +19,10 @@ M.GLOBAL_CLAUDE_MD = noctalia.expandPath("~/.claude/CLAUDE.md")
 local scriptPath = `{noctalia.pluginDir()}/list-claude-sessions`
 local findClaudeMdPath = `{noctalia.pluginDir()}/find-claude-md`
 
--- Best-effort decode of an encoded project dir name back to a path, used
--- ONLY when a session never states its own cwd (a "bridge-session"-only stub
--- with no real turn in it — list-claude-sessions still lists it). The
--- encoding (every "/" becomes "-") is not reversible in general — a project
--- whose real path contains a literal "-" cannot be told apart from an
--- encoded "/" — so this is a DISPLAY fallback only, never used to build a
--- path an action (resume, delete, open CLAUDE.md) runs against; those always
--- use the session's own recorded paths.
+-- Best-effort decode of an encoded project dir name, used ONLY when a
+-- session never states its own cwd. Not reversible in general (a literal
+-- "-" in a path is indistinguishable from an encoded "/"), so this is a
+-- display fallback only — actions always use the session's recorded paths.
 local function decodeProjectDir(encoded)
     if type(encoded) ~= "string" or encoded == "" or encoded:sub(1, 1) ~= "-" then
         return nil
@@ -35,11 +31,9 @@ local function decodeProjectDir(encoded)
 end
 
 -- One session record from the script, reshaped for the panel: a stable
--- label (the AI title, else the opening prompt cut short, else the id) plus
--- the jsonl path and subagent sidecar dir a delete acts on. `firstPrompt` is
--- kept as its own field (not folded into `label`) so the panel's preview can
--- show the FULL opening prompt rather than the label's truncated one — and
--- deliberately not the AI title, which the label already shows verbatim.
+-- label (AI title, else opening prompt cut short, else the id) plus the
+-- jsonl path and subagent sidecar dir a delete acts on. `firstPrompt` stays
+-- its own field, untruncated, for the panel's preview.
 local function shapeSession(raw, cwd)
     local id = raw.id
     local aiTitle = (type(raw.title) == "string") and raw.title or ""
@@ -61,9 +55,8 @@ local function shapeSession(raw, cwd)
         size = tonumber(raw.size) or 0,
         label = label,
         firstPrompt = firstPrompt,
-        -- From the session's LAST assistant turn: which model answered, and
-        -- how much context that turn actually sent (input + cache tokens).
-        -- 0/"" for a session with no assistant turn yet.
+        -- Model + context size from the session's last assistant turn; 0/""
+        -- for a session with no assistant turn yet.
         model = (type(raw.model) == "string") and raw.model or "",
         contextTokens = tonumber(raw.contextTokens) or 0,
         jsonlPath = PROJECTS_DIR .. "/" .. dir .. "/" .. id .. ".jsonl",

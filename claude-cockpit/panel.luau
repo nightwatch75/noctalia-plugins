@@ -1,28 +1,18 @@
 --!nonstrict
 -- Claude Cockpit — the attached panel, three tabs over one shared header:
 --
---   Usage     a thin client of service.luau's published "usage"/"status"
---             state (rate windows, token consumption, daily activity,
---             per-model breakdown, all-time stats) — a trimmed port of
---             jrohland/claudecode's panel.luau, MIT, see README Notes.
---   Sessions  every local Claude Code session, grouped by the project (cwd)
---             it ran in. Click a session to resume it in a terminal
---             (`claude --resume <id>`), the eye glyph toggles a cheap
---             preview (the AI recap if one exists, else the opening prompt
---             — both already in the fetched data, no extra I/O), the trash
---             glyph deletes it after an inline confirm. Fetched on-demand
---             (first open of this tab, or the refresh button) via
---             sessions.luau — never polled.
---   CLAUDE.md One row for the global file plus one per known project, each
---             with an exists/missing badge and a button that opens it in an
---             external editor (never inside a terminal — these are GUI
---             editors). Reuses the same project list the Sessions tab
---             fetched, so switching tabs costs nothing extra.
+--   Usage     jrohland/claudecode's panel.luau, trimmed port (MIT, see
+--             README Notes) — a thin client of service.luau's "usage"/
+--             "status" state.
+--   Sessions  every local session, grouped by project. Click to resume in
+--             a terminal, eye toggles a preview, trash deletes after an
+--             inline confirm. Fetched on-demand via sessions.luau, never
+--             polled.
+--   CLAUDE.md Global file + one row per known project, each opening in an
+--             external editor. Reuses the Sessions tab's project list.
 --
--- Rename was deliberately left out: Claude Code has no command to rename a
--- session after it is created, and a plugin-local alias would only ever be
--- shown here, not in Claude's own /resume picker — the AI-generated title
--- (or the opening prompt, cut short) is the label instead.
+-- No rename: Claude Code has no command to rename a session after it is
+-- created, so the label is the AI title (or the opening prompt, cut short).
 
 local shared = require("./shared.luau")
 local sessions = require("./sessions.luau")
@@ -441,10 +431,8 @@ local function matchesSearch(session, cwd, needle)
         or cwd:lower():find(needle, 1, true) ~= nil
 end
 
--- The session's opening prompt, in full (not truncated to 72 chars like the
--- row label) — never the AI title, which is already the row's own label
--- and would just repeat it, and never the most recent turn, which says
--- where a session stopped, not what it is about.
+-- The opening prompt in full, untruncated — the label already shows the
+-- AI title (or a truncated version of this same text).
 local function previewText(session)
     if session.firstPrompt ~= "" then
         return session.firstPrompt
@@ -460,12 +448,9 @@ local function resumeSession(session)
 end
 
 local function togglePreview(id)
-    -- NOT `(expandedSessionId == id) and nil or id`: Lua's and/or idiom
-    -- breaks when the "true" branch is nil/false — `true and nil` is
-    -- itself nil (falsy), so the `or id` after it always wins and the
-    -- preview could never close. Confirmed with a diagnostic log before
-    -- fixing: `before` was already the clicked id, yet `after` stayed the
-    -- id instead of becoming nil.
+    -- Not `(expandedSessionId == id) and nil or id`: Lua's and/or idiom
+    -- breaks when the "true" branch is nil — `true and nil` is itself nil
+    -- (falsy), so `or id` always wins and this could never close.
     if expandedSessionId == id then
         expandedSessionId = nil
     else
@@ -509,11 +494,9 @@ local function setAllGroups(open)
     render()
 end
 
--- The advertised long-context ceiling for current Sonnet-class models
--- (Anthropic's extended-context beta). Real accounts vary — a plan without
--- that beta caps out at 200K — so this is a rough gauge, not a guarantee;
--- the exact token count is always shown as text next to the bar so the bar
--- never substitutes for the real number.
+-- Rough gauge, not a guarantee: Sonnet-class extended-context ceiling.
+-- Accounts without that beta cap out lower, so the exact count is always
+-- shown as text next to the bar too.
 local CONTEXT_WINDOW = 1000000
 
 -- "claude-sonnet-5" -> "Sonnet", "claude-haiku-4-5-20251001" -> "Haiku".
@@ -522,9 +505,8 @@ local function shortModelId(model)
     return family and shared.shortModelName(family) or model
 end
 
--- Model + a thin bar for how full the context window was on the session's
--- last turn — nil (nothing rendered) for a session with no assistant turn
--- yet, same as a fresh "bridge-session"-only stub.
+-- Model + a thin bar for how full the context window was on the last turn;
+-- nil for a session with no assistant turn yet.
 local function contextRow(session)
     if session.model == "" or session.contextTokens <= 0 then
         return nil
@@ -565,9 +547,7 @@ local function sessionRow(session)
                     controlSize = "sm", tooltip = tr("tip_resume"),
                     onClick = function() resumeSession(session) end,
                 }),
-                -- The glyph itself flips (eye / eye-off) so the row shows,
-                -- not just implements, that the same button opens and
-                -- closes the preview.
+                -- Glyph flips eye/eye-off with the toggle state.
                 ui.button({
                     glyph = previewOpen and "eye-off" or "eye", variant = "ghost", controlSize = "sm",
                     tooltip = tr(previewOpen and "tip_hide_preview" or "tip_preview"),
@@ -598,11 +578,8 @@ local function sessionRow(session)
         }))
     end
 
-    -- The key carries both toggle states, not just the id: without it the
-    -- reconciler diffs this subtree in place instead of rebuilding it, and
-    -- the eye glyph could flip while the preview it is supposed to gate
-    -- stayed put — the same reason todo/panel.luau's row key encodes
-    -- editing/done instead of relying on the buttons' own props alone.
+    -- Key carries both toggle states so the reconciler rebuilds the subtree
+    -- on change, same as todo/panel.luau's row key.
     local key = "sess-wrap-" .. id
         .. (previewOpen and "-prev" or "")
         .. (confirmingDeleteId == id and "-del" or "")
@@ -618,9 +595,7 @@ local function groupHeader(group, count)
     }, {
         ui.glyph({ name = expanded and "chevron-down" or "chevron-right", size = 14, color = "on_surface_variant" }),
         ui.glyph({ name = "folder", size = 14, color = "on_surface_variant" }),
-        -- A ui.label has no `tooltip` prop (the host silently ignores it —
-        -- only interactive controls carry a tooltip), so the full path was
-        -- never showing. A ghost button reads the same and does support one.
+        -- ui.label has no tooltip prop; a ghost button reads the same and does.
         ui.button({
             text = basename, variant = "ghost", contentAlign = "start", flexGrow = 1,
             controlSize = "sm", fontSize = 13, tooltip = group.cwd,
@@ -708,11 +683,8 @@ local function claudeMdRow(label, path)
     })
 end
 
--- Union of two sources: every CLAUDE.md the $HOME scan actually found (a
--- project with no session, or one nested under another project, included),
--- plus every session-linked project that has none yet — so a "create"
--- affordance stays available for a project the scan correctly reports as
--- having nothing to find.
+-- Union of the $HOME scan results and every session-linked project that has
+-- no file yet, so a "create" row stays available for those too.
 local function renderClaudeMdTab()
     loadSessions(false)
     loadClaudeMd(false)

@@ -1,21 +1,12 @@
 --!nonstrict
--- Claude Cockpit — bar widget that toggles the panel.
+-- Claude Cockpit — bar widget: toggles the panel, and shows an optional
+-- "sNN% wMM%" usage badge (session/weekly rate windows) tinted and
+-- arrow-flagged the same way jrohland/claudecode's pill is. No ring — that
+-- needs plugin_api 26 (noctalia.getSetting) for a number the panel's Usage
+-- tab already shows one click away.
 --
--- Just a glyph that lights up while the panel is open (shared
--- "claude_cockpit_open" state, published by panel.luau), plus an optional
--- text badge mirroring service.luau's published "usage" state: "sNN% wMM%"
--- — s for the 5-hour session window, w for the 7-day weekly one, the two
--- windows every plan reports. No ring — that would mean porting
--- jrohland/claudecode's ring.luau (which needs plugin_api 26 for
--- noctalia.getSetting) for numbers the panel's Usage tab already shows one
--- click away; a plain text badge needs neither. The badge still borrows two
--- of the pill's cues: it tints (setColor) by pace status and gets an "↑"
--- when a shown window runs ahead of the clock. The tooltip mirrors that
--- plugin's own pill tooltip content (plan, rate windows, today/week tokens).
---
--- Left click is NOT wired here: plugin.toml declares it as a
--- [widget.actions] default (`left = "panel-toggle nightwatch75/claude-cockpit:panel"`),
--- so the user can remap the gesture from the bar's own settings.
+-- Left click is a [widget.actions] default in plugin.toml, not wired here,
+-- so the user can remap the gesture.
 
 local shared = require("./shared.luau")
 
@@ -23,9 +14,6 @@ local open = false
 local usage = noctalia.state.get("usage")
 local status = noctalia.state.get("status")
 
--- "" when the setting is "none", the service has no data yet, or it
--- reported itself unavailable (missing jq/curl) — never a stale or
--- half-built badge.
 local function usageText()
     local mode = noctalia.getConfig("usage_percent_display") or "both"
     if mode == "none" then
@@ -48,10 +36,8 @@ local function usageText()
     return `s{session}% w{weekly}%`
 end
 
--- Worst pace status among the window(s) usage_percent_display shows — same
--- cue jrohland/claudecode's pill uses to color itself and add an off-track
--- arrow. shared.pace/paceColor/SEVERITY are the exact functions the panel's
--- Usage tab rate cards use, so the bar never disagrees with the panel.
+-- Worst pace status among the window(s) usage_percent_display shows, via
+-- the same shared.pace/paceColor/SEVERITY the panel's Usage tab uses.
 local function worstPaceStatus()
     if type(usage) ~= "table" then
         return "unknown"
@@ -72,10 +58,8 @@ local function worstPaceStatus()
     return worst
 end
 
--- Same tooltip content as jrohland/claudecode's pill (see its widget.luau):
--- key/value rows so the shell lays them out as a two-column grid instead of
--- a wall of text. A row per rate window (percent, countdown, reset clock),
--- then today's and this week's tokens with their cost.
+-- Key/value rows (same shape jrohland/claudecode's pill tooltip uses) so
+-- the shell lays them out as a two-column grid.
 local function usageTooltip()
     if type(status) == "table" and status.available == false then
         return status.message ~= "" and status.message or noctalia.tr("unavailable")
@@ -114,9 +98,6 @@ local function render()
 
     local text = usageText()
     local worst = worstPaceStatus()
-    -- Same off-track cue as the pill: an "↑" when a shown window is running
-    -- ahead of the clock, on top of (not instead of) the open/closed glyph
-    -- tint above.
     if text ~= "" and (worst == "over" or worst == "over_quota") then
         text = `{text} ↑`
     end
