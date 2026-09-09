@@ -522,19 +522,19 @@ local function sessionRow(session)
             ui.row({ gap = 6, align = "center" }, {
                 ui.button({
                     text = session.label, variant = "ghost", contentAlign = "start", flexGrow = 1,
-                    tooltip = tr("tip_resume"),
+                    controlSize = "sm", tooltip = tr("tip_resume"),
                     onClick = function() resumeSession(session) end,
                 }),
                 -- The glyph itself flips (eye / eye-off) so the row shows,
                 -- not just implements, that the same button opens and
                 -- closes the preview.
                 ui.button({
-                    glyph = previewOpen and "eye-off" or "eye", variant = "ghost",
+                    glyph = previewOpen and "eye-off" or "eye", variant = "ghost", controlSize = "sm",
                     tooltip = tr(previewOpen and "tip_hide_preview" or "tip_preview"),
                     onClick = function() togglePreview(id) end,
                 }),
                 ui.button({
-                    glyph = "trash", variant = "ghost", tooltip = tr("tip_delete_session"),
+                    glyph = "trash", variant = "ghost", controlSize = "sm", tooltip = tr("tip_delete_session"),
                     onClick = function() requestDelete(id) end,
                 }),
             }),
@@ -583,7 +583,7 @@ local function groupHeader(group, count)
         -- never showing. A ghost button reads the same and does support one.
         ui.button({
             text = basename, variant = "ghost", contentAlign = "start", flexGrow = 1,
-            fontSize = 13, tooltip = group.cwd,
+            controlSize = "sm", fontSize = 13, tooltip = group.cwd,
             onClick = function() toggleGroup(group.cwd) end,
         }),
         muted(tostring(count), 11),
@@ -647,7 +647,7 @@ local function renderSessionsTab()
         end
     end
 
-    return ui.scroll({ key = "sessions-scroll", flexGrow = 1, gap = 8, align = "stretch" }, rows)
+    return ui.scroll({ key = "sessions-scroll", flexGrow = 1, gap = 6, align = "stretch" }, rows)
 end
 
 -- ── CLAUDE.md tab ────────────────────────────────────────────────────────
