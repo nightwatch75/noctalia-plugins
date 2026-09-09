@@ -20,10 +20,12 @@ local open = false
 local usage = noctalia.state.get("usage")
 local status = noctalia.state.get("status")
 
--- "" when the setting is off, the service has no data yet, or it reported
--- itself unavailable (missing jq/curl) — never a stale or half-built badge.
+-- "" when the setting is "none", the service has no data yet, or it
+-- reported itself unavailable (missing jq/curl) — never a stale or
+-- half-built badge.
 local function usageText()
-    if noctalia.getConfig("show_usage_percent") ~= true then
+    local mode = noctalia.getConfig("usage_percent_display") or "both"
+    if mode == "none" then
         return ""
     end
     if type(status) == "table" and status.available == false then
@@ -34,6 +36,12 @@ local function usageText()
     end
     local session = shared.round(tonumber(usage.five_hour_util) or 0)
     local weekly = shared.round(tonumber(usage.seven_day_util) or 0)
+    if mode == "session" then
+        return `s{session}%`
+    end
+    if mode == "weekly" then
+        return `w{weekly}%`
+    end
     return `s{session}% w{weekly}%`
 end
 

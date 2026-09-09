@@ -12,10 +12,12 @@
 
 local M = {}
 
+local HOME = noctalia.expandPath("~")
 local PROJECTS_DIR = noctalia.expandPath("~/.claude/projects")
 M.GLOBAL_CLAUDE_MD = noctalia.expandPath("~/.claude/CLAUDE.md")
 
 local scriptPath = `{noctalia.pluginDir()}/list-claude-sessions`
+local findClaudeMdPath = `{noctalia.pluginDir()}/find-claude-md`
 
 -- Best-effort decode of an encoded project dir name back to a path, used
 -- ONLY when a session never states its own cwd (a "bridge-session"-only stub
@@ -122,6 +124,70 @@ function M.deleteSession(session, done)
     end)
     if not ok then
         done(false)
+    end
+end
+
+-- ── CLAUDE.md discovery ──────────────────────────────────────────────────
+-- The Sessions/CLAUDE.md tabs otherwise only know about projects that have
+-- run a Claude Code session — a real CLAUDE.md nested deeper, or sitting in
+-- a directory nobody has run `claude` from yet, would never show up. This
+-- scans $HOME for every one instead.
+
+-- Filesystem types find-claude-md must never walk into: a stalled NFS/SMB/
+-- sshfs share would otherwise stall (or badly slow down) a scan that is
+-- meant to be a quick $HOME walk.
+local REMOTE_FSTYPES = {
+    nfs = true, nfs4 = true, cifs = true, smb = true, smbfs = true, smb3 = true,
+    sshfs = true, ["fuse.sshfs"] = true, davfs = true, davfs2 = true, ["fuse.davfs"] = true,
+    ftpfs = true, ["fuse.ftpfs"] = true, afpfs = true, ceph = true, glusterfs = true,
+    ["9p"] = true, ["fuse.rclone"] = true,
+}
+
+-- Mount points of remote filesystems under `root`. /proc/mounts fields are
+-- space-separated with a "\NNN" octal escape for space/tab in a path — same
+-- convention file-search's fallbackMounts already decodes.
+local function remoteMountsUnder(root)
+    local text = noctalia.readFile("/proc/mounts")
+    if type(text) ~= "string" then
+        return {}
+    end
+    local prefix = root:gsub("/+$", "") .. "/"
+    local found = {}
+    for line in text:gmatch("[^\n]+") do
+        local mountPoint, fstype = line:match("^%S+%s+(%S+)%s+(%S+)")
+        if mountPoint ~= nil and REMOTE_FSTYPES[fstype] then
+            local decoded = mountPoint:gsub("\\(%d%d%d)", function(octal)
+                local code = tonumber(octal, 8)
+                return (code ~= nil) and string.char(code) or ""
+            end)
+            if decoded == root or decoded:sub(1, #prefix) == prefix then
+                table.insert(found, decoded)
+            end
+        end
+    end
+    return found
+end
+
+-- Every real CLAUDE.md under $HOME, skipping .git/node_modules/.cache/.venv
+-- and any remote mount. done(paths, err) — err is nil on success.
+function M.findClaudeMdFiles(done)
+    local argv = { "bash", findClaudeMdPath, HOME }
+    for _, mount in ipairs(remoteMountsUnder(HOME)) do
+        table.insert(argv, mount)
+    end
+    local ok = noctalia.runAsync(argv, function(result)
+        if type(result) ~= "table" or result.exitCode ~= 0 then
+            done(nil, noctalia.tr("err_claudemd_scan"))
+            return
+        end
+        local paths = {}
+        for line in (result.stdout or ""):gmatch("[^\n]+") do
+            table.insert(paths, line)
+        end
+        done(paths, nil)
+    end, 60000)
+    if not ok then
+        done(nil, noctalia.tr("err_claudemd_scan"))
     end
 end
 

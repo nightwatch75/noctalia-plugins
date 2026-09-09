@@ -55,8 +55,11 @@ The panel has three tabs:
   search box filters by title, last prompt or project path. Fetched when the
   tab is first opened and on the header refresh button — never polled in the
   background.
-- **CLAUDE.md** — the global file plus one row per known project, each with
-  an exists/missing badge and a button that opens it in your editor.
+- **CLAUDE.md** — the global file, every CLAUDE.md `find-claude-md` finds
+  under `$HOME` (symlinks to e.g. `AGENTS.md` included, noise dirs — `.git`,
+  `node_modules`, `.cache`, `.venv` — and remote/network mounts excluded),
+  plus one row per session-linked project that has none yet so it can still
+  be created. Each row has a badge and a button that opens it in your editor.
 
 Rename is deliberately not offered: Claude Code has no command to rename a
 session after it is created, so there is nothing this panel could persist
@@ -71,6 +74,7 @@ AI-generated title, or its last prompt cut short when no title exists yet.
 | `terminal` | `string` | `""` | Command to open a terminal for resuming a session. Empty uses the system's own terminal discovery ($TERMINAL, then the usual emulators). |
 | `editor_command` | `string` | `""` | Command to open a CLAUDE.md file. Empty tries `code`, then `zed`. |
 | `glyph` | `glyph` | `robot` | Bar widget glyph. |
+| `usage_percent_display` | `select` | `both` | What rides beside the glyph: `session` (`sNN%`, the 5-hour window), `weekly` (`wMM%`, the 7-day window), `both`, or `none`. |
 
 ## Notes
 
@@ -85,9 +89,13 @@ What this plugin touches, so nothing is a surprise:
   LiteLLM's public model-price table to cost the tokens; Frankfurter (ECB
   rates) for USD to EUR. All over HTTPS, on the usage refresh interval —
   the Sessions and CLAUDE.md tabs make no network calls.
-- **Spawns** `get-claude-usage` and `list-claude-sessions` through `bash`; a
-  configured or auto-discovered terminal to resume a session; `code`/`zed`
-  (or `editor_command`) to open a CLAUDE.md.
+- **Spawns** `get-claude-usage`, `list-claude-sessions` and `find-claude-md`
+  through `bash`; a configured or auto-discovered terminal to resume a
+  session; `code`/`zed` (or `editor_command`) to open a CLAUDE.md.
+  `find-claude-md` walks `$HOME` on the CLAUDE.md tab's first open and its
+  refresh button only, never on a timer — remote/network mounts (NFS, SMB,
+  sshfs, and similar) under `$HOME` are detected via `/proc/mounts` and
+  excluded, so a stalled share cannot stall it.
 - **Deletes** files: the trash glyph on a session removes its
   `<uuid>.jsonl` transcript and, if present, its `<uuid>/` subagent sidecar
   directory — after an inline confirm, never without one.

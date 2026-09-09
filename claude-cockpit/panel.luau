@@ -52,6 +52,9 @@ local status = noctalia.state.get("status")
 
 -- Sessions/CLAUDE.md share one fetch: both tabs need the same project list.
 local sessionsState = { loading = false, error = nil, projects = nil }
+-- CLAUDE.md tab only: every real CLAUDE.md found under $HOME (see
+-- sessions.findClaudeMdFiles), on top of the project list above.
+local mdState = { loading = false, error = nil, paths = nil }
 local searchText = ""
 local expandedGroups = {} -- cwd -> bool, seeded on first load (see loadSessions)
 local expandedSessionId = nil -- one preview open at a time
@@ -105,10 +108,35 @@ local function loadSessions(force)
     end)
 end
 
+local function loadClaudeMd(force)
+    if mdState.loading then
+        return
+    end
+    if mdState.paths ~= nil and not force then
+        return
+    end
+    mdState.loading = true
+    mdState.error = nil
+    render()
+    sessions.findClaudeMdFiles(function(paths, err)
+        mdState.loading = false
+        if err ~= nil then
+            mdState.error = err
+        else
+            mdState.error = nil
+            mdState.paths = paths
+        end
+        render()
+    end)
+end
+
 local function setActiveTab(id)
     activeTab = id
-    if id ~= "usage" then
+    if id == "sessions" or id == "claudemd" then
         loadSessions(false)
+    end
+    if id == "claudemd" then
+        loadClaudeMd(false)
     end
     render()
 end
@@ -117,9 +145,25 @@ end
 
 local function headerRow()
     local usageLoading = type(status) == "table" and status.state == "loading"
-    local loading = (activeTab == "usage") and usageLoading or sessionsState.loading
-    local onRefresh = (activeTab == "usage") and shared.requestUsageRefresh or function()
-        loadSessions(true)
+    local loading
+    if activeTab == "usage" then
+        loading = usageLoading
+    elseif activeTab == "sessions" then
+        loading = sessionsState.loading
+    else
+        loading = sessionsState.loading or mdState.loading
+    end
+
+    local onRefresh = shared.requestUsageRefresh
+    if activeTab == "sessions" then
+        onRefresh = function()
+            loadSessions(true)
+        end
+    elseif activeTab == "claudemd" then
+        onRefresh = function()
+            loadSessions(true)
+            loadClaudeMd(true)
+        end
     end
 
     return ui.row({ gap = 10, align = "center" }, {
@@ -559,20 +603,41 @@ local function claudeMdRow(label, path)
     })
 end
 
+-- Union of two sources: every CLAUDE.md the $HOME scan actually found (a
+-- project with no session, or one nested under another project, included),
+-- plus every session-linked project that has none yet — so a "create"
+-- affordance stays available for a project the scan correctly reports as
+-- having nothing to find.
 local function renderClaudeMdTab()
     loadSessions(false)
+    loadClaudeMd(false)
 
     local rows = { claudeMdRow(tr("global_claude_md"), sessions.GLOBAL_CLAUDE_MD) }
 
-    if sessionsState.error ~= nil then
+    if mdState.error ~= nil then
+        table.insert(rows, ui.label({ text = mdState.error, color = "error" }))
+    elseif sessionsState.error ~= nil then
         table.insert(rows, ui.label({ text = sessionsState.error, color = "error" }))
-    elseif sessionsState.projects == nil then
+    elseif mdState.paths == nil or sessionsState.projects == nil then
         table.insert(rows, muted(tr("loading")))
     else
+        local seen = { [sessions.GLOBAL_CLAUDE_MD] = true }
+
+        local found = { table.unpack(mdState.paths) }
+        table.sort(found)
+        for _, path in ipairs(found) do
+            if not seen[path] then
+                seen[path] = true
+                local label = path:match("([^/]+)/CLAUDE%.md$") or path
+                table.insert(rows, claudeMdRow(label, path))
+            end
+        end
+
         for _, group in ipairs(sessionsState.projects) do
             -- Only a group whose cwd is a real path gets a row: the "unknown
             -- project" fallback label is not a path an editor could open.
-            if group.cwd:sub(1, 1) == "/" then
+            if group.cwd:sub(1, 1) == "/" and not seen[group.claudeMdPath] then
+                seen[group.claudeMdPath] = true
                 local basename = group.cwd:match("([^/]+)/?$") or group.cwd
                 table.insert(rows, claudeMdRow(basename, group.claudeMdPath))
             end
@@ -622,8 +687,11 @@ function onOpen(_context)
     status = noctalia.state.get("status")
     panel.setWantsSecondTicks(true)
     noctalia.state.set("claude_cockpit_open", true)
-    if activeTab ~= "usage" then
+    if activeTab == "sessions" or activeTab == "claudemd" then
         loadSessions(false)
+    end
+    if activeTab == "claudemd" then
+        loadClaudeMd(false)
     end
     render()
 end
