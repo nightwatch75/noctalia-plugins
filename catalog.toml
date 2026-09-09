@@ -177,8 +177,8 @@ rev = "34b05dfa074239f4a410de8303be81995bca0b78"
 [[plugin]]
 id = "nightwatch75/topgrade-wrapper"
 name = "Topgrade Wrapper"
-version = "0.0.9"
-updated_at = 1787383274
+version = "0.1.0"
+updated_at = 1787756604
 added_at = 1785076212
 author = "nightwatch75"
 license = "MIT"
@@ -210,3 +210,16 @@ plugin_api = 3
 version = "0.0.1"
 updated_at = 1785076212
 rev = "2dc2ebdc9ff5642368204b1f9c76e72233c0fe9e"
+
+[[plugin]]
+id = "nightwatch75/claude-cockpit"
+name = "Claude Cockpit"
+version = "0.3.1"
+updated_at = 1788954180
+added_at = 1788949531
+author = "nightwatch75"
+license = "MIT"
+icon = "robot"
+description = "Monitor Claude Code usage, browse and manage local sessions, edit CLAUDE.md files."
+plugin_api = 24
+tags = ["ai", "development", "bar", "panel", "service", "productivity"]
