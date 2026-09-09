@@ -310,6 +310,9 @@ M.PACE_MARGIN = 5
 
 M.SEVERITY = { unknown = 0, under = 0, on = 0, over = 1, over_quota = 2 }
 
+-- Are we burning quota faster than the clock? Windows are treated as
+-- fixed-length and elapsed time is derived from the reset timestamp — an
+-- approximation of Anthropic's rolling limits, good enough as a cue.
 function M.pace(util, resetIso, durationSecs)
     util = tonumber(util) or 0
     local epoch = M.resetEpoch(resetIso)
