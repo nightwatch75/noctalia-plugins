@@ -460,7 +460,17 @@ local function resumeSession(session)
 end
 
 local function togglePreview(id)
-    expandedSessionId = (expandedSessionId == id) and nil or id
+    -- NOT `(expandedSessionId == id) and nil or id`: Lua's and/or idiom
+    -- breaks when the "true" branch is nil/false — `true and nil` is
+    -- itself nil (falsy), so the `or id` after it always wins and the
+    -- preview could never close. Confirmed with a diagnostic log before
+    -- fixing: `before` was already the clicked id, yet `after` stayed the
+    -- id instead of becoming nil.
+    if expandedSessionId == id then
+        expandedSessionId = nil
+    else
+        expandedSessionId = id
+    end
     render()
 end
 
