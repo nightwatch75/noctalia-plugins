@@ -509,12 +509,52 @@ local function setAllGroups(open)
     render()
 end
 
+-- The advertised long-context ceiling for current Sonnet-class models
+-- (Anthropic's extended-context beta). Real accounts vary — a plan without
+-- that beta caps out at 200K — so this is a rough gauge, not a guarantee;
+-- the exact token count is always shown as text next to the bar so the bar
+-- never substitutes for the real number.
+local CONTEXT_WINDOW = 1000000
+
+-- "claude-sonnet-5" -> "Sonnet", "claude-haiku-4-5-20251001" -> "Haiku".
+local function shortModelId(model)
+    local family = model:match("^claude%-(%a+)")
+    return family and shared.shortModelName(family) or model
+end
+
+-- Model + a thin bar for how full the context window was on the session's
+-- last turn — nil (nothing rendered) for a session with no assistant turn
+-- yet, same as a fresh "bridge-session"-only stub.
+local function contextRow(session)
+    if session.model == "" or session.contextTokens <= 0 then
+        return nil
+    end
+    local frac = math.min(1, session.contextTokens / CONTEXT_WINDOW)
+    local fill = "on_surface_variant"
+    if frac >= 0.9 then
+        fill = "error"
+    elseif frac >= 0.7 then
+        fill = "tertiary"
+    end
+    return ui.row({ gap = 6, align = "center" }, {
+        muted(shortModelId(session.model), 10),
+        ui.progress({ progress = frac, fill = fill, track = "on_surface/0.14", height = 4, radius = 2, flexGrow = 1 }),
+        muted(shared.formatTokens(session.contextTokens), 10),
+    })
+end
+
 local function sessionRow(session)
     local id = session.id
     local previewOpen = expandedSessionId == id
     local metaBits = { relativeTime(session.mtime) }
     if session.gitBranch then
         table.insert(metaBits, session.gitBranch)
+    end
+
+    local infoChildren = { muted(table.concat(metaBits, " · "), 10) }
+    local ctxRow = contextRow(session)
+    if ctxRow then
+        table.insert(infoChildren, ctxRow)
     end
 
     local blocks = {
@@ -538,7 +578,7 @@ local function sessionRow(session)
                     onClick = function() requestDelete(id) end,
                 }),
             }),
-            muted(table.concat(metaBits, " · "), 10),
+            table.unpack(infoChildren),
         }),
     }
 

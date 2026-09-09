@@ -30,7 +30,7 @@ shopt -s nullglob
 # Output:
 #   { "generatedAt": <epoch>, "sessions": [
 #       { "id", "cwd", "projectDir", "gitBranch", "version",
-#         "mtime", "size", "title", "firstPrompt" }, ... ] }
+#         "mtime", "size", "title", "firstPrompt", "model", "contextTokens" }, ... ] }
 # "cwd" is the real path Claude Code recorded for the session; "projectDir"
 # is the basename of the project dir the file was found in (the encoded
 # path), kept as a fallback for the rare session that never states a cwd at
@@ -38,6 +38,11 @@ shopt -s nullglob
 # is the session's opening message, used for a preview when there is no
 # "title" yet — deliberately the FIRST turn, not the last: a preview should
 # say what a session is about, not where it happens to have stopped.
+# "model"/"contextTokens" come from the session's LAST "assistant" turn:
+# message.model, and input_tokens + cache_read_input_tokens +
+# cache_creation_input_tokens — the total input a turn actually sent, i.e.
+# how full the context window was at that point (not a cumulative total
+# across the session, which would say nothing about "how full is it now").
 
 CLAUDE_DIR="${HOME}/.claude"
 PROJECTS_DIR="${CLAUDE_DIR}/projects"
@@ -64,26 +69,41 @@ write_head_json() {
     ' > "$out"
 }
 
-# "ai-title" lines are appended repeatedly as a session grows, each
-# rewriting the last one — so the LAST occurrence is the current title, and
-# `tac` (reverse line order) + `grep -m1` reads only back as far as that one
-# line. "last-prompt" lines work the same way (Claude Code rewrites one on
-# every turn), but this wants the OPPOSITE end of that: its FIRST occurrence
-# is the session's opening message — a forward `grep -m1` reads only as far
-# as THAT one line, usually within the first few KB. Both candidate lines
-# are handed to jq together over stdin (one per line), never as an argument.
+# "ai-title" and the last "assistant" turn are both LAST-occurrence lookups,
+# so one backward scan (tac) finds both together, stopping as soon as it has
+# both instead of re-reading the file once per field. "last-prompt" lines
+# work the other way (Claude Code rewrites one on every turn, but this wants
+# the FIRST — the session's opening message), so that one stays a forward
+# `grep -m1`, reading only as far as THAT one line, usually within the first
+# few KB. Every candidate line is handed to jq together over stdin (one per
+# line), never as an argument — the assistant line in particular can be
+# huge (a turn's `usage` sits next to its full response text).
 write_meta_json() {
     local file="$1" out="$2"
-    local title_line prompt_line
-    title_line=$(tac -- "$file" 2>/dev/null | grep -m1 -F '"type":"ai-title"' || true)
+    local title_line="" assistant_line="" prompt_line=""
+    while IFS= read -r line; do
+        case "$line" in
+            *'"type":"ai-title"'*) [ -z "$title_line" ] && title_line="$line" ;;
+            *'"type":"assistant"'*) [ -z "$assistant_line" ] && assistant_line="$line" ;;
+        esac
+        [ -n "$title_line" ] && [ -n "$assistant_line" ] && break
+    done < <(tac -- "$file" 2>/dev/null || true)
     prompt_line=$(grep -m1 -F '"type":"last-prompt"' -- "$file" 2>/dev/null || true)
-    printf '%s\n%s\n' "$title_line" "$prompt_line" | jq -R -s -c '
+
+    printf '%s\n%s\n%s\n' "$title_line" "$prompt_line" "$assistant_line" | jq -R -s -c '
         (split("\n")) as $l
         | ($l[0] // "") as $t
         | ($l[1] // "") as $p
+        | ($l[2] // "") as $a
+        | ($a | if . == "" then {} else (try fromjson catch {}) end) as $aObj
+        | ($aObj.message.usage // {}) as $u
         | {
             title: ($t | if . == "" then "" else ((try fromjson catch {}).aiTitle // "") end),
-            firstPrompt: ($p | if . == "" then "" else ((try fromjson catch {}).lastPrompt // "") end)
+            firstPrompt: ($p | if . == "" then "" else ((try fromjson catch {}).lastPrompt // "") end),
+            model: ($aObj.message.model // ""),
+            contextTokens: (
+                ($u.input_tokens // 0) + ($u.cache_read_input_tokens // 0) + ($u.cache_creation_input_tokens // 0)
+            )
           }
     ' > "$out"
 }

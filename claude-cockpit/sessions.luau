@@ -61,6 +61,11 @@ local function shapeSession(raw, cwd)
         size = tonumber(raw.size) or 0,
         label = label,
         firstPrompt = firstPrompt,
+        -- From the session's LAST assistant turn: which model answered, and
+        -- how much context that turn actually sent (input + cache tokens).
+        -- 0/"" for a session with no assistant turn yet.
+        model = (type(raw.model) == "string") and raw.model or "",
+        contextTokens = tonumber(raw.contextTokens) or 0,
         jsonlPath = PROJECTS_DIR .. "/" .. dir .. "/" .. id .. ".jsonl",
         sidecarDir = PROJECTS_DIR .. "/" .. dir .. "/" .. id,
     }
