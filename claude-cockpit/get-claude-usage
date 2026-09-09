@@ -93,7 +93,7 @@ refresh_pricing() {
     }' 2>/dev/null) || return 1
     # Fetch USD→EUR exchange rate from ECB via Frankfurter
     local eur_rate
-    eur_rate=$(curl -s --max-time 5 "https://api.frankfurter.app/latest?from=USD&to=EUR" 2>/dev/null \
+    eur_rate=$(curl -s --max-time 5 "https://api.frankfurter.dev/v1/latest?from=USD&to=EUR" 2>/dev/null \
         | jq -r '.rates.EUR // empty' 2>/dev/null) || eur_rate=""
     if [ -n "$eur_rate" ] && [[ "$eur_rate" =~ ^[0-9]+\.?[0-9]*$ ]]; then
         result=$(echo "$result" | jq -c '. + {usd_eur_rate: '"$eur_rate"'}' 2>/dev/null)

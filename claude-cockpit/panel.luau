@@ -235,26 +235,27 @@ local function rateCard(w)
     return card(rows)
 end
 
-local function metricCol(label, tokens, cost)
+local function metricCol(label, tokens, cost, rate)
     return ui.column({ gap = 2, align = "center", flexGrow = 1 }, {
         muted(label, 12),
         ui.label({ text = shared.formatTokens(tokens), fontSize = 16, fontWeight = "bold", color = "primary" }),
-        ui.label({ text = shared.formatCost(cost), fontSize = 11, color = "on_surface_variant" }),
+        ui.label({ text = shared.formatCost(cost, rate), fontSize = 11, color = "on_surface_variant" }),
     })
 end
 
 local function tokensCard(u, todayTokens)
+    local rate = u.usd_eur_rate
     return card({
         heading(tr("token_consumption")),
         ui.row({ gap = 8, align = "start" }, {
-            metricCol(tr("today"), todayTokens, u.today_cost),
-            metricCol(tr("week"), u.week_tokens, u.week_cost),
-            metricCol(tr("month"), u.month_tokens, u.month_cost),
+            metricCol(tr("today"), todayTokens, u.today_cost, rate),
+            metricCol(tr("week"), u.week_tokens, u.week_cost, rate),
+            metricCol(tr("month"), u.month_tokens, u.month_cost, rate),
         }),
     })
 end
 
-local function dailyChart(daily, dailyCosts)
+local function dailyChart(daily, dailyCosts, rate)
     if type(daily) ~= "table" then
         daily = {}
     end
@@ -312,7 +313,7 @@ local function dailyChart(daily, dailyCosts)
         detail = tr("day_detail", {
             day = labels[hoveredDay] or tostring(hoveredDay),
             tokens = shared.formatTokens(daily[hoveredDay]),
-            cost = shared.formatCost(dailyCosts[hoveredDay]),
+            cost = shared.formatCost(dailyCosts[hoveredDay], rate),
         })
     end
 
@@ -396,7 +397,7 @@ local function renderUsageTab()
         table.insert(cards, rateCard(w))
     end
     table.insert(cards, tokensCard(usage, todayTokens))
-    table.insert(cards, dailyChart(usage.daily, usage.daily_costs))
+    table.insert(cards, dailyChart(usage.daily, usage.daily_costs, usage.usd_eur_rate))
     local models = modelsCard(usage.week_models, usage.week_tokens)
     if models then
         table.insert(cards, models)

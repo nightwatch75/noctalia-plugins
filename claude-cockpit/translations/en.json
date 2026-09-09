@@ -1,5 +1,8 @@
 {
   "close": "Close",
+  "currency": {
+    "auto_default": "usd"
+  },
   "daily_activity": "Daily Activity",
   "day_detail": "{day} · {tokens} tokens · {cost}",
   "days": "Mo,Tu,We,Th,Fr,Sa,Su",
@@ -35,6 +38,15 @@
   "session_untitled": "Session {id}",
   "sessions": "sessions",
   "settings": {
+    "currency": {
+      "description": "Currency for displayed costs. Auto follows the interface language.",
+      "label": "Currency",
+      "options": {
+        "auto": "Auto",
+        "eur": "EUR (€)",
+        "usd": "USD ($)"
+      }
+    },
     "editor_command": {
       "description": "Command to open a CLAUDE.md file. Empty tries \"code\", then \"zed\".",
       "label": "Editor command"

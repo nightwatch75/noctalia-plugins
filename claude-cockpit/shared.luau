@@ -99,18 +99,31 @@ function M.formatTokens(n)
     return tostring(math.floor(n + 0.5))
 end
 
-function M.formatCost(usd)
+function M.currencyMode()
+    local c = noctalia.getConfig("currency")
+    if c == "usd" or c == "eur" then
+        return c
+    end
+    return M.tr("currency.auto_default")
+end
+
+function M.formatCost(usd, rate)
     usd = tonumber(usd) or 0
-    if usd >= 1000 then
-        return string.format("$%.1fK", usd / 1000)
+    rate = tonumber(rate) or 0
+    local useEur = M.currencyMode() == "eur" and rate > 0
+    local n = useEur and usd * rate or usd
+    local sym = useEur and "" or "$"
+    local suffix = useEur and " €" or ""
+    if n >= 1000 then
+        return `{sym}{string.format("%.1f", n / 1000)}K{suffix}`
     end
-    if usd >= 100 then
-        return string.format("$%d", math.floor(usd + 0.5))
+    if n >= 100 then
+        return `{sym}{math.floor(n + 0.5)}{suffix}`
     end
-    if usd >= 10 then
-        return string.format("$%.1f", usd)
+    if n >= 10 then
+        return `{sym}{string.format("%.1f", n)}{suffix}`
     end
-    return string.format("$%.2f", usd)
+    return `{sym}{string.format("%.2f", n)}{suffix}`
 end
 
 function M.shortModelName(name)

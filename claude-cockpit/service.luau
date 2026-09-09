@@ -1,8 +1,8 @@
 --!nonstrict
 -- Claude Cockpit — headless service (usage data owner).
 --
--- Runs get-claude-usage (with --json, copied verbatim from
--- jrohland/claudecode — MIT, see README Notes) on the configured interval,
+-- Runs get-claude-usage (with --json, copied from jrohland/claudecode —
+-- MIT, see README Notes) on the configured interval,
 -- decodes the result, and publishes it so the panel's Usage tab can read it
 -- without shelling out itself. Sessions and CLAUDE.md are deliberately NOT
 -- handled here: they are read on-demand by the panel (open + refresh

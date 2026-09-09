@@ -1,8 +1,8 @@
 # Claude Cockpit — Claude Code usage and session manager on the bar.
 #
 # One panel, three tabs: Usage (rate-limit windows, token/cost consumption,
-# daily activity — get-claude-usage, copied verbatim from
-# jrohland/claudecode, MIT, does the actual data collection), Sessions
+# daily activity — get-claude-usage, copied from jrohland/claudecode, MIT,
+# does the actual data collection), Sessions
 # (every local Claude Code session, grouped by project, click to resume in a
 # terminal, delete with an inline confirm, expand for a cheap preview) and
 # CLAUDE.md (global + per-project files, opened in an external editor).
@@ -14,7 +14,7 @@
 
 id = "nightwatch75/claude-cockpit"
 name = "Claude Cockpit"
-version = "0.4.2"
+version = "0.5.0"
 # 24 for direct argv process execution: session delete (rm -rf on two fixed
 # paths) and opening a CLAUDE.md in an editor both exec directly, with no
 # shell parsing the path. 22 for the relative luau imports (shared.luau,
@@ -43,6 +43,18 @@ description_key = "settings.usage_refresh_interval.description"
 default = 2
 min = 2
 max = 15
+
+[[setting]]
+key = "currency"
+type = "select"
+label_key = "settings.currency.label"
+description_key = "settings.currency.description"
+default = "auto"
+options = [
+  { value = "auto", label_key = "settings.currency.options.auto" },
+  { value = "usd", label_key = "settings.currency.options.usd" },
+  { value = "eur", label_key = "settings.currency.options.eur" },
+]
 
 # Empty = Noctalia's own terminal discovery ($TERMINAL, then the usual
 # emulators). Set a command to force one, e.g. "kitty" or "ghostty".

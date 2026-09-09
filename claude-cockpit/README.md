@@ -71,6 +71,7 @@ AI-generated title, or its last prompt cut short when no title exists yet.
 | Setting | Type | Default | Description |
 | --- | --- | --- | --- |
 | `usage_refresh_interval` | `int` | `2` | Minutes between background usage fetches (2–15). |
+| `currency` | `select` | `auto` | Cost display: `auto` follows the locale, or force `usd` / `eur`. |
 | `terminal` | `string` | `""` | Command to open a terminal for resuming a session. Empty uses the system's own terminal discovery ($TERMINAL, then the usual emulators). |
 | `editor_command` | `string` | `""` | Command to open a CLAUDE.md file. Empty tries `code`, then `zed`. |
 | `glyph` | `glyph` | `robot` | Bar widget glyph. |
@@ -100,9 +101,11 @@ What this plugin touches, so nothing is a surprise:
   `<uuid>.jsonl` transcript and, if present, its `<uuid>/` subagent sidecar
   directory — after an inline confirm, never without one.
 
-The Usage tab's data engine, `get-claude-usage`, is copied verbatim (MIT)
-from [jrohland/claudecode](https://github.com/jrohland/noctalia-v5-claudecode);
-see its own header comment and this plugin's `LICENSE` for attribution. This
+The Usage tab's data engine, `get-claude-usage`, is copied (MIT) from
+[jrohland/claudecode](https://github.com/jrohland/noctalia-v5-claudecode)
+with one line updated (the Frankfurter exchange-rate API moved from
+`frankfurter.app` to `frankfurter.dev`); see its own header comment and
+this plugin's `LICENSE` for attribution. This
 plugin's own `shared.luau` is a trimmed port of its formatters (multi-profile
 CCS support removed — this plugin only ever reads the default `~/.claude`
 account).
