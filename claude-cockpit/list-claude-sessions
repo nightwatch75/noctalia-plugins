@@ -1,0 +1,124 @@
+#!/usr/bin/env bash
+set -eu
+shopt -s nullglob
+
+# claude-cockpit: list-claude-sessions
+#
+# Enumerates every local Claude Code session and prints one JSON object with
+# a flat "sessions" array. A session is a "<uuid>.jsonl" file living directly
+# inside a project directory under ~/.claude/projects/<encoded-cwd>/ — a
+# sibling "<uuid>/subagents/*.jsonl" dir holds Task/subagent sub-transcripts,
+# not sessions a person would resume, and is excluded by construction
+# (-mindepth 2 -maxdepth 2 never reaches it). Grouping sessions by project is
+# left to sessions.luau: it already has to filter/sort the same data, so
+# doing it once in Lua is simpler than building nested JSON here.
+#
+# A session file can exceed 10 MB and any single line in it can too (a
+# "file-history-snapshot" line can embed a whole file's contents, hundreds of
+# KB on its own). Two things that fell out of that in testing, both fixed
+# below:
+#   - a byte-bounded `head`/`tail` cut a huge early line in half instead of
+#     ever reaching the small "user" line just past it, and every cwd came
+#     back empty — replaced with `grep -m1` (line-based: a giant line in the
+#     way is skipped whole, and it still stops at the first match).
+#   - passing a matched line to `jq --arg` hit the kernel's single-argument
+#     size limit on the session whose "cwd" line happened to be huge —
+#     everything below is piped to jq over stdin instead, and every
+#     intermediate result is written to a file, never handed back through a
+#     command-line argument.
+#
+# Output:
+#   { "generatedAt": <epoch>, "sessions": [
+#       { "id", "cwd", "projectDir", "gitBranch", "version",
+#         "mtime", "size", "title", "lastPrompt" }, ... ] }
+# "cwd" is the real path Claude Code recorded for the session; "projectDir"
+# is the basename of the project dir the file was found in (the encoded
+# path), kept as a fallback for the rare session that never states a cwd at
+# all (a "bridge-session"-only stub with no real turn in it).
+
+CLAUDE_DIR="${HOME}/.claude"
+PROJECTS_DIR="${CLAUDE_DIR}/projects"
+
+WORKDIR=$(mktemp -d)
+trap 'rm -rf "$WORKDIR"' EXIT
+
+# The first line carrying cwd/gitBranch/version — usually "user", sometimes
+# "assistant" or "system" — is rarely line 1: queue-operation/mode/
+# bridge-session/atis-latch events come first. grep -m1 finds it wherever it
+# sits without a byte budget to get wrong, and the match is piped into jq
+# over stdin so its length never touches an argv limit.
+write_head_json() {
+    local file="$1" out="$2"
+    # grep with no match exits 1 and prints nothing, which would feed jq -R
+    # zero lines — and zero lines means the filter never runs at all, not
+    # even on the "" branch, so the file ends up empty instead of holding
+    # the {cwd:"",...} default. The fallback printf keeps it at one line.
+    { grep -m1 -F '"cwd":"' -- "$file" 2>/dev/null || printf '\n'; } | jq -R -c '
+        if . == "" then { cwd: "", gitBranch: "", version: "" } else
+            (try fromjson catch {}) as $o
+            | { cwd: ($o.cwd // ""), gitBranch: ($o.gitBranch // ""), version: ($o.version // "") }
+        end
+    ' > "$out"
+}
+
+# "ai-title" and "last-prompt" lines are appended repeatedly as a session
+# grows, each rewriting the last one — so the LAST occurrence of each is the
+# only one that matters. `tac` (reverse line order) + a single awk pass that
+# exits as soon as both are found reads only as far back as the more distant
+# of the two, not the whole file. The two candidate lines are then handed to
+# jq together over stdin (one per line), never as an argument.
+write_meta_json() {
+    local file="$1" out="$2"
+    { tac -- "$file" 2>/dev/null || true; } | awk '
+        /"type":"ai-title"/ && !t { title = $0; t = 1 }
+        /"type":"last-prompt"/ && !p { prompt = $0; p = 1 }
+        t && p { exit }
+        END { print title; print prompt }
+    ' | jq -R -s -c '
+        (split("\n")) as $l
+        | ($l[0] // "") as $t
+        | ($l[1] // "") as $p
+        | {
+            title: ($t | if . == "" then "" else ((try fromjson catch {}).aiTitle // "") end),
+            lastPrompt: ($p | if . == "" then "" else ((try fromjson catch {}).lastPrompt // "") end)
+          }
+    ' > "$out"
+}
+
+if [ -d "$PROJECTS_DIR" ]; then
+    while IFS= read -r -d '' file; do
+        id=$(basename "$file" .jsonl)
+        # A session id is always a UUID; anything else is not a file this
+        # script understands (and never one worth building a path out of).
+        [[ "$id" =~ ^[0-9a-fA-F-]+$ ]] || continue
+
+        stat_out=$(stat -c '%Y %s' -- "$file" 2>/dev/null) || continue
+        mtime="${stat_out%% *}"
+        size="${stat_out##* }"
+        project_dir=$(basename "$(dirname "$file")")
+
+        sess_dir="$WORKDIR/work-$id"
+        mkdir -p "$sess_dir"
+
+        # Base fields are always short: safe as --arg regardless of file size.
+        jq -n \
+            --arg id "$id" --arg projectDir "$project_dir" \
+            --arg mtime "$mtime" --arg size "$size" \
+            '{ id: $id, projectDir: $projectDir,
+               mtime: ($mtime | tonumber? // 0), size: ($size | tonumber? // 0) }' \
+            > "$sess_dir/base.json"
+        write_head_json "$file" "$sess_dir/head.json"
+        write_meta_json "$file" "$sess_dir/meta.json"
+
+        jq -s 'add' "$sess_dir/base.json" "$sess_dir/head.json" "$sess_dir/meta.json" \
+            > "$WORKDIR/$id.json" 2>/dev/null || true
+        rm -rf "$sess_dir"
+    done < <(find "$PROJECTS_DIR" -mindepth 2 -maxdepth 2 -name '*.jsonl' -print0 2>/dev/null)
+fi
+
+SESSION_FILES=("$WORKDIR"/*.json)
+if [ ${#SESSION_FILES[@]} -eq 0 ]; then
+    jq -n '{ generatedAt: (now | floor), sessions: [] }'
+else
+    jq -s '{ generatedAt: (now | floor), sessions: . }' "${SESSION_FILES[@]}"
+fi

@@ -22,6 +22,7 @@ location = "https://github.com/nightwatch75/noctalia-plugins.git"
 | [file-search](file-search/) | `nightwatch75/file-search` | Fuzzy search files and folders as you type (fzf-powered), across your search folder and/or the mounted USB disks; a right-click row menu to open, reveal or copy, and a disk usage donut showing what fills the folder |
 | [todo](todo/) | `nightwatch75/todo` | Prioritised to-do list on the bar: editable tasks with low/medium/important colour chips, drag reorder, bulk priority set, a right-click row menu for edit/priority/delete |
 | [topgrade-wrapper](topgrade-wrapper/) | `nightwatch75/topgrade-wrapper` | Drive topgrade from the bar: a pending-update count per package manager, and the upgrade run in a terminal window |
+| [claude-cockpit](claude-cockpit/) | `nightwatch75/claude-cockpit` | Claude Code usage (rate limits, tokens, cost) and a session manager: browse every local session grouped by project, resume one in a terminal, delete it, preview it, and open its project's CLAUDE.md in your editor |
 
 ## License
 
