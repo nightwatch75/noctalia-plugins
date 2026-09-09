@@ -14,7 +14,7 @@
 
 id = "nightwatch75/claude-cockpit"
 name = "Claude Cockpit"
-version = "0.0.1"
+version = "0.1.0"
 # 24 for direct argv process execution: session delete (rm -rf on two fixed
 # paths) and opening a CLAUDE.md in an editor both exec directly, with no
 # shell parsing the path. 22 for the relative luau imports (shared.luau,
@@ -86,3 +86,13 @@ entry = "claude-cockpit.luau"
   label_key = "settings.glyph.label"
   description_key = "settings.glyph.description"
   default = "robot"
+
+  # "sNN% wMM%" beside the glyph: the 5-hour session window and the 7-day
+  # weekly one, the same two numbers jrohland/claudecode's pill shows — read
+  # straight off the state the service already publishes, no extra fetch.
+  [[widget.setting]]
+  key = "show_usage_percent"
+  type = "bool"
+  label_key = "settings.show_usage_percent.label"
+  description_key = "settings.show_usage_percent.description"
+  default = true

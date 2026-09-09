@@ -41,6 +41,10 @@
       "description": "The glyph shown for the Claude Cockpit widget on the bar.",
       "label": "Bar glyph"
     },
+    "show_usage_percent": {
+      "description": "Show \"sNN% wMM%\" beside the glyph: the 5-hour session window and the 7-day weekly one.",
+      "label": "Show usage percentage"
+    },
     "terminal": {
       "description": "Command to open a terminal for resuming a session. Empty uses the system's own terminal discovery.",
       "label": "Terminal command"
