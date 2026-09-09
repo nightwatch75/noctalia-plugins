@@ -8,7 +8,9 @@
 -- windows every plan reports. No ring — that would mean porting
 -- jrohland/claudecode's ring.luau (which needs plugin_api 26 for
 -- noctalia.getSetting) for numbers the panel's Usage tab already shows one
--- click away; a plain text badge needs neither. The tooltip mirrors that
+-- click away; a plain text badge needs neither. The badge still borrows two
+-- of the pill's cues: it tints (setColor) by pace status and gets an "↑"
+-- when a shown window runs ahead of the clock. The tooltip mirrors that
 -- plugin's own pill tooltip content (plan, rate windows, today/week tokens).
 --
 -- Left click is NOT wired here: plugin.toml declares it as a
@@ -44,6 +46,30 @@ local function usageText()
         return `w{weekly}%`
     end
     return `s{session}% w{weekly}%`
+end
+
+-- Worst pace status among the window(s) usage_percent_display shows — same
+-- cue jrohland/claudecode's pill uses to color itself and add an off-track
+-- arrow. shared.pace/paceColor/SEVERITY are the exact functions the panel's
+-- Usage tab rate cards use, so the bar never disagrees with the panel.
+local function worstPaceStatus()
+    if type(usage) ~= "table" then
+        return "unknown"
+    end
+    local mode = noctalia.getConfig("usage_percent_display") or "both"
+    if mode == "none" then
+        return "unknown"
+    end
+    local pFive = shared.pace(usage.five_hour_util, usage.five_hour_reset, shared.FIVE_HOUR_SECS)
+    local pSeven = shared.pace(usage.seven_day_util, usage.seven_day_reset, shared.SEVEN_DAY_SECS)
+    local shown = (mode == "session") and { pFive } or (mode == "weekly") and { pSeven } or { pFive, pSeven }
+    local worst = "unknown"
+    for _, p in shown do
+        if shared.SEVERITY[p.status] > shared.SEVERITY[worst] then
+            worst = p.status
+        end
+    end
+    return worst
 end
 
 -- Same tooltip content as jrohland/claudecode's pill (see its widget.luau):
@@ -85,7 +111,17 @@ end
 local function render()
     barWidget.setGlyph(noctalia.getConfig("glyph"))
     barWidget.setGlyphColor(open and "primary" or "on_surface")
-    barWidget.setText(usageText())
+
+    local text = usageText()
+    local worst = worstPaceStatus()
+    -- Same off-track cue as the pill: an "↑" when a shown window is running
+    -- ahead of the clock, on top of (not instead of) the open/closed glyph
+    -- tint above.
+    if text ~= "" and (worst == "over" or worst == "over_quota") then
+        text = `{text} ↑`
+    end
+    barWidget.setText(text)
+    barWidget.setColor(shared.paceColor(worst, "on_surface"))
     barWidget.setTooltip(usageTooltip())
 end
 

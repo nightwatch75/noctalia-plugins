@@ -96,12 +96,12 @@ local function loadSessions(force)
         else
             sessionsState.error = nil
             sessionsState.projects = projects
-            -- Seed a default open/closed state for a project seen for the
-            -- first time; a project the user has already toggled keeps its
-            -- choice across refreshes.
+            -- Seed a default closed state for a project seen for the first
+            -- time; a project the user has already toggled keeps its choice
+            -- across refreshes.
             for _, group in ipairs(projects) do
                 if expandedGroups[group.cwd] == nil then
-                    expandedGroups[group.cwd] = (#group.sessions <= 3)
+                    expandedGroups[group.cwd] = false
                 end
             end
         end
@@ -578,7 +578,14 @@ local function groupHeader(group, count)
     }, {
         ui.glyph({ name = expanded and "chevron-down" or "chevron-right", size = 14, color = "on_surface_variant" }),
         ui.glyph({ name = "folder", size = 14, color = "on_surface_variant" }),
-        ui.label({ text = basename, fontSize = 13, fontWeight = "medium", flexGrow = 1, tooltip = group.cwd }),
+        -- A ui.label has no `tooltip` prop (the host silently ignores it —
+        -- only interactive controls carry a tooltip), so the full path was
+        -- never showing. A ghost button reads the same and does support one.
+        ui.button({
+            text = basename, variant = "ghost", contentAlign = "start", flexGrow = 1,
+            fontSize = 13, tooltip = group.cwd,
+            onClick = function() toggleGroup(group.cwd) end,
+        }),
         muted(tostring(count), 11),
     })
 end
