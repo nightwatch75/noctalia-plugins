@@ -54,7 +54,7 @@ The panel has three tabs:
   (offering to create it if missing); the eye glyph expands a preview (the
   session's opening prompt); the trash glyph deletes the session's transcript
   after an inline confirm. The
-  search box filters by title, last prompt or project path. Fetched when the
+  search box filters by title, opening prompt or project path. Fetched when the
   tab is first opened and on the header refresh button — never polled in the
   background.
 - **CLAUDE.md** — the global file, every CLAUDE.md `find-claude-md` finds
@@ -73,7 +73,8 @@ AI-generated title, or its last prompt cut short when no title exists yet.
 | Setting | Type | Default | Description |
 | --- | --- | --- | --- |
 | `usage_refresh_interval` | `int` | `2` | Minutes between background usage fetches (2–15). |
-| `currency` | `select` | `auto` | Cost display: `auto` follows the locale, or force `usd` / `eur`. |
+| `currency` | `select` | `auto` | Cost display: `auto` follows the locale, or force one of `usd`, `eur`, `gbp`, `jpy`, `cny`, `chf`, `aud`, `cad`, `inr`. |
+| `currency_api_url` | `string` | `https://api.frankfurter.dev/v1/latest` | Exchange-rate API `get-claude-usage` fetches non-USD rates from (ECB rates via Frankfurter by default). |
 | `terminal` | `string` | `""` | Command to open a terminal for resuming a session. Empty uses the system's own terminal discovery ($TERMINAL, then the usual emulators). |
 | `editor_command` | `string` | `""` | Command to open a CLAUDE.md file. Empty tries `code`, then `zed`. |
 | `glyph` | `glyph` | `robot` | Bar widget glyph. |
@@ -89,9 +90,10 @@ What this plugin touches, so nothing is a surprise:
   only small `grep`/`tac`+`awk` slices, since a single line in one of these
   files can itself be hundreds of KB.
 - **Network**: the Anthropic usage API for your account's rate windows;
-  LiteLLM's public model-price table to cost the tokens; Frankfurter (ECB
-  rates) for USD to EUR. All over HTTPS, on the usage refresh interval —
-  the Sessions and CLAUDE.md tabs make no network calls.
+  LiteLLM's public model-price table to cost the tokens; the `currency_api_url`
+  exchange-rate API (Frankfurter/ECB by default) for USD to the configured
+  currency. All over HTTPS, on the usage refresh interval — the Sessions and
+  CLAUDE.md tabs make no network calls.
 - **Spawns** `get-claude-usage`, `list-claude-sessions` and `find-claude-md`
   through `bash`; a configured or auto-discovered terminal to resume a
   session; `code`/`zed` (or `editor_command`) to open a CLAUDE.md.
