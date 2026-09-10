@@ -537,25 +537,40 @@ local function sessionRow(session)
         table.insert(infoChildren, ctxRow)
     end
 
+    local rowButtons = {
+        ui.button({
+            text = session.label, variant = "ghost", contentAlign = "start", flexGrow = 1,
+            controlSize = "sm", tooltip = tr("tip_resume"),
+            onClick = function() resumeSession(session) end,
+        }),
+    }
+
+    -- Only a real cwd has a CLAUDE.md path worth opening — "unknown project"
+    -- sessions (no recorded cwd) skip this button entirely.
+    if session.cwd:sub(1, 1) == "/" then
+        local claudeMdPath = session.cwd .. "/CLAUDE.md"
+        local exists = noctalia.fileExists(claudeMdPath)
+        table.insert(rowButtons, ui.button({
+            glyph = "brain", variant = "ghost", controlSize = "sm",
+            tooltip = tr(exists and "tip_open_editor" or "tip_create_editor"),
+            onClick = function() shared.openInEditor(claudeMdPath) end,
+        }))
+    end
+
+    table.insert(rowButtons, ui.button({
+        -- Glyph flips eye/eye-off with the toggle state.
+        glyph = previewOpen and "eye-off" or "eye", variant = "ghost", controlSize = "sm",
+        tooltip = tr(previewOpen and "tip_hide_preview" or "tip_preview"),
+        onClick = function() togglePreview(id) end,
+    }))
+    table.insert(rowButtons, ui.button({
+        glyph = "trash", variant = "ghost", controlSize = "sm", tooltip = tr("tip_delete_session"),
+        onClick = function() requestDelete(id) end,
+    }))
+
     local blocks = {
         ui.column({ key = "sess-" .. id, gap = 2, align = "stretch" }, {
-            ui.row({ gap = 6, align = "center" }, {
-                ui.button({
-                    text = session.label, variant = "ghost", contentAlign = "start", flexGrow = 1,
-                    controlSize = "sm", tooltip = tr("tip_resume"),
-                    onClick = function() resumeSession(session) end,
-                }),
-                -- Glyph flips eye/eye-off with the toggle state.
-                ui.button({
-                    glyph = previewOpen and "eye-off" or "eye", variant = "ghost", controlSize = "sm",
-                    tooltip = tr(previewOpen and "tip_hide_preview" or "tip_preview"),
-                    onClick = function() togglePreview(id) end,
-                }),
-                ui.button({
-                    glyph = "trash", variant = "ghost", controlSize = "sm", tooltip = tr("tip_delete_session"),
-                    onClick = function() requestDelete(id) end,
-                }),
-            }),
+            ui.row({ gap = 6, align = "center" }, rowButtons),
             table.unpack(infoChildren),
         }),
     }

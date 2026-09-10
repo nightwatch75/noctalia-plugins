@@ -50,8 +50,10 @@ The panel has three tabs:
 - **Sessions** — every local Claude Code session, grouped by the project
   (working directory) it ran in, most recent first. Click a session to
   resume it (`claude --resume <id>`) in a terminal, opened in that project's
-  directory. The eye glyph expands a preview (the session's last prompt); the
-  trash glyph deletes the session's transcript after an inline confirm. The
+  directory. The brain glyph opens that project's `CLAUDE.md` in the editor
+  (offering to create it if missing); the eye glyph expands a preview (the
+  session's opening prompt); the trash glyph deletes the session's transcript
+  after an inline confirm. The
   search box filters by title, last prompt or project path. Fetched when the
   tab is first opened and on the header refresh button — never polled in the
   background.
