@@ -62,6 +62,22 @@ local function counts(raw)
     return pendingN, totalN, decoded.showCount ~= false
 end
 
+-- Renders the "· N todos" suffix per the count_mode widget setting: "total"
+-- (default, matches 1.2.1) shows the full list size, "pending" shows only
+-- not-done tasks, "both" shows "pending/total todos" (community-plugins#867).
+local function countSuffix()
+    local mode = noctalia.getConfig("count_mode") or "total"
+    if mode == "pending" then
+        local key = pending == 1 and "bar_count_singular" or "bar_count_plural"
+        return noctalia.tr(key, { count = pending })
+    elseif mode == "both" then
+        return noctalia.tr("bar_count_both", { pending = pending, total = total })
+    else
+        local key = total == 1 and "bar_count_singular" or "bar_count_plural"
+        return noctalia.tr(key, { count = total })
+    end
+end
+
 local function render()
     barWidget.setGlyph(noctalia.getConfig("glyph"))
     barWidget.setGlyphColor(open and "primary" or "on_surface")
@@ -70,8 +86,7 @@ local function render()
     else
         local label = noctalia.getConfig("label") or "To Do"
         if showCount then
-            local key = total == 1 and "bar_count_singular" or "bar_count_plural"
-            local count = noctalia.tr(key, { count = total })
+            local count = countSuffix()
             label = label ~= "" and label .. " · " .. count or count
         end
         barWidget.setText(label)

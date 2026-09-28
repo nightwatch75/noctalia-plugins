@@ -125,6 +125,7 @@ automatically.
 | Bar glyph           | The glyph shown for the widget on the bar.                   |
 | Show label          | Show or hide all bar text beside the glyph (on by default). |
 | Label               | Text shown beside the glyph when Show label is on (`To Do` by default). |
+| Bar count           | Which count the bar label shows: Total, Pending only, or Pending/total (`Total` by default). |
 
 The panel header's count toggle still controls whether the task count follows
 the label. With Show label off, the bar shows only the glyph; the pending count
