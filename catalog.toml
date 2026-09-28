@@ -128,8 +128,8 @@ rev = "34b05dfa074239f4a410de8303be81995bca0b78"
 [[plugin]]
 id = "nightwatch75/todo"
 name = "To Do"
-version = "1.2.1"
-updated_at = 1790493967
+version = "1.2.2"
+updated_at = 1790597291
 added_at = 1783932697
 author = "nightwatch75"
 license = "MIT"
