@@ -214,12 +214,12 @@ rev = "2dc2ebdc9ff5642368204b1f9c76e72233c0fe9e"
 [[plugin]]
 id = "nightwatch75/claude-cockpit"
 name = "Claude Cockpit"
-version = "0.6.5"
-updated_at = 1789109754
+version = "0.7.0"
+updated_at = 1791549485
 added_at = 1788949531
 author = "nightwatch75"
 license = "MIT"
 icon = "robot"
-description = "Monitor Claude Code usage, browse and manage local sessions, edit CLAUDE.md files."
+description = "Monitor Claude Code usage, manage local sessions, skills and mods, edit CLAUDE.md files."
 plugin_api = 24
 tags = ["ai", "development", "bar", "panel", "service", "productivity"]
