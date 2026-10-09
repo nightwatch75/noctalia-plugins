@@ -1,7 +1,8 @@
 # Claude Cockpit
 
-Keep an eye on your Claude Code subscription and manage every local session
-from the bar: rate-limit windows and token cost, every session on the
+Keep an eye on your Claude Code sessions and subscription from the bar:
+every running session and whether it needs you, rate-limit windows and
+token cost, every session on the
 machine grouped by project with one click to resume it in a terminal, and
 quick access to edit CLAUDE.md files (global and per project) in your own
 editor, plus install, update and uninstall for Claude Code skills and mods.
@@ -13,9 +14,10 @@ editor, plus install, update and uninstall for Claude Code skills and mods.
 | ID | `nightwatch75/claude-cockpit` |
 | Entries | Bar widget: `widget`; panel: `panel`; service: `service` |
 
-The `service` entry is headless and owns the usage fetch loop; `panel` is a
-thin client of its published state for the Usage tab, and fetches the data
-for its other three tabs itself, on demand.
+The `service` entry is headless and owns the usage fetch loop and the live
+session poll; `widget` and the panel's Live and Usage tabs are thin clients
+of its published state, and the panel fetches the data for its other three
+tabs itself, on demand.
 
 ## Requirements
 
@@ -30,19 +32,44 @@ for its other three tabs itself, on demand.
   regardless.
 - `claude` on `PATH` for the Skills/Mods tab, and `xdg-open` to open a
   plugin's repository from it.
+- `mkdir` and `mv` for the Live tab's transcript-stats cache.
+- Optional: `niri` or `umbriel` to focus a live session's terminal window
+  from the Live tab. On other compositors everything else still works.
 - `code` or `zed` on `PATH` to open a CLAUDE.md from the panel (or set
   `editor_command` to something else).
 
 ## Usage
 
-Add the **Claude Cockpit** widget to a bar from the Add-widget picker. Click
-it to open the panel:
+Add the **Claude Cockpit** widget to a bar from the Add-widget picker. Its
+`display_mode` setting picks what it shows:
+
+- **Activity** (default) — the glyph, one dot per running Claude Code
+  session (red: needs you, accent: working, grey: idle; up to 8, then
+  `+N`), and two fill rings for the 5-hour session and 7-day weekly
+  windows, each followed by `sNN%` / `wNN%`. Ring and text turn amber or
+  red when usage runs ahead of the clock. The tooltip lists the live
+  sessions, then the usage figures.
+- **Classic** — the glyph plus the `usage_percent_display` percentages.
+
+Click it to open the panel:
 
 ```sh
 noctalia msg panel-toggle nightwatch75/claude-cockpit:panel
 ```
 
-The panel has four tabs:
+The panel has five tabs, each with a glyph; it opens on Live:
+
+- **Live** — every running Claude Code session, grouped into *Needs you*,
+  *Working* and *Idle*, with a total cost and per-group counters on top.
+  Each card shows the session title, how long it has been in its state,
+  project path and git branch, what it is waiting for (e.g.
+  `permission: Bash`), the last prompt, and chips for model, permission
+  mode, context size (with a gauge) and estimated cost in the configured
+  currency. Click a card (or the terminal glyph) to focus the session's
+  terminal window (niri and Umbriel); the globe glyph opens the session on
+  claude.ai while Remote Control is on. Cost is estimated from the
+  transcript's token usage and the Usage tab's price table, so it can
+  differ slightly from `/cost`.
 
 - **Usage** — rate-limit windows (5-hour session, 7-day plan-wide week, and a
   model-scoped week when the plan has one), token consumption for today,
@@ -96,13 +123,21 @@ AI-generated title, or its last prompt cut short when no title exists yet.
 | `currency_api_url` | `string` | `https://api.frankfurter.dev/v1/latest` | Exchange-rate API `get-claude-usage` fetches non-USD rates from (ECB rates via Frankfurter by default). |
 | `terminal` | `string` | `""` | Command to open a terminal for resuming a session. Empty uses the system's own terminal discovery ($TERMINAL, then the usual emulators). |
 | `editor_command` | `string` | `""` | Command to open a CLAUDE.md file. Empty tries `code`, then `zed`. |
+| `display_mode` | `select` | `activity` | Bar widget mode: `activity` (live-session dots + session/weekly rings with percentages) or `classic` (glyph + usage percentages). |
 | `glyph` | `glyph` | `robot` | Bar widget glyph. |
-| `usage_percent_display` | `select` | `both` | What rides beside the glyph: `session` (`sNN%`, the 5-hour window), `weekly` (`wMM%`, the 7-day window), `both`, or `none`. |
+| `usage_percent_display` | `select` | `both` | Classic mode only — what rides beside the glyph: `session` (`sNN%`, the 5-hour window), `weekly` (`wMM%`, the 7-day window), `both`, or `none`. |
 
 ## Notes
 
 What this plugin touches, so nothing is a surprise:
 
+- **Reads** `~/.claude/sessions/*.json` (the per-process state files Claude
+  Code keeps for every running session; a file whose process is gone or
+  whose pid was reused is ignored), and the transcript of each running
+  session for its model, context size, cost, title, branch and last prompt
+  — re-parsed only when the transcript changes. Every 2 seconds, but only
+  while the widget is in activity mode or the panel is open on the Live
+  tab; with neither, nothing is polled.
 - **Reads** `~/.claude/.credentials.json` for the OAuth token that
   authorizes the usage query, `~/.claude/stats-cache.json` for all-time
   session/message stats (Usage tab only), and every
@@ -112,14 +147,18 @@ What this plugin touches, so nothing is a surprise:
 - **Writes** `~/.claude/pricing-cache.json` (LiteLLM model prices + currency
   rates, refreshed daily) and `~/.claude/usage-cache.json` (the rate-window
   API response, cached 120s) — both Usage tab only, both disposable caches
-  safe to delete.
+  safe to delete. In the plugin's data dir: `live/` (per-session transcript
+  stats, deleted when the session ends) and `rings/` (the widget's small
+  ring SVGs, one per percentage and theme color).
 - **Network**: the Anthropic usage API for your account's rate windows;
   LiteLLM's public model-price table to cost the tokens; the `currency_api_url`
   exchange-rate API (Frankfurter/ECB by default) for USD to the configured
   currency. All over HTTPS, on the usage refresh interval — the Sessions and
   CLAUDE.md tabs make no network calls.
-- **Spawns** `get-claude-usage`, `list-claude-sessions` and `find-claude-md`
-  through `bash`; `claude --version` (Usage tab, to set the API's
+- **Spawns** `get-claude-usage`, `list-claude-sessions`, `find-claude-md`,
+  `live-claude-sessions` and `focus-claude-session` through `bash`
+  (`focus-claude-session` calls `niri msg` or `umbriel msg` to focus a
+  window, reading only window ids and pids, never titles); `claude --version` (Usage tab, to set the API's
   `User-Agent`); a configured or auto-discovered terminal to resume a
   session; `code`/`zed` (or `editor_command`) to open a CLAUDE.md;
   `claude plugin` (list, install, update, enable, disable, uninstall, marketplace
