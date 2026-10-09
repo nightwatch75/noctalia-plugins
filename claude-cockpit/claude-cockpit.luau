@@ -165,8 +165,14 @@ local DOT_COLOR = { waiting = "error", busy = "primary", idle = "on_surface_vari
 
 local function renderActivity()
     local vertical = barWidget.isVertical()
+    -- A session waiting for the user swaps the glyph for a red bell.
+    local waiting = type(liveGroups) == "table" and #(liveGroups.waiting or {}) > 0
     local children = {
-        ui.glyph({ name = noctalia.getConfig("glyph") or "robot", size = 16, color = open and "primary" or "on_surface" }),
+        ui.glyph({
+            name = waiting and "bell-ringing" or noctalia.getConfig("glyph") or "robot",
+            size = 16,
+            color = waiting and "error" or open and "primary" or "on_surface",
+        }),
     }
     local shown = 0
     local total = 0

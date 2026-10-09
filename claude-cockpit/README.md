@@ -43,7 +43,8 @@ tabs itself, on demand.
 Add the **Claude Cockpit** widget to a bar from the Add-widget picker. Its
 `display_mode` setting picks what it shows:
 
-- **Activity** (default) — the glyph, one dot per running Claude Code
+- **Activity** (default) — the glyph (a red bell while a session waits
+  for you), one dot per running Claude Code
   session (red: needs you, accent: working, grey: idle; up to 8, then
   `+N`), and fill rings for the 5-hour session and 7-day weekly windows,
   each followed by `sNN%` / `wNN%` (which ones: `usage_percent_display`). Ring and text turn amber or
