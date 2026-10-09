@@ -94,8 +94,8 @@
       "label": "Terminal command"
     },
     "usage_percent_display": {
-      "description": "What rides beside the bar glyph: the 5-hour session window, the 7-day weekly one, both, or neither.",
-      "label": "Usage percentage",
+      "description": "Which usage windows the bar widget shows, in both modes: the 5-hour session window, the 7-day weekly one, both, or neither. Activity mode draws a ring before each percentage.",
+      "label": "Usage limits shown",
       "options": {
         "both": "Both (sNN% wMM%)",
         "none": "Nothing",

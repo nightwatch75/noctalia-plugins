@@ -45,11 +45,11 @@ Add the **Claude Cockpit** widget to a bar from the Add-widget picker. Its
 
 - **Activity** (default) — the glyph, one dot per running Claude Code
   session (red: needs you, accent: working, grey: idle; up to 8, then
-  `+N`), and two fill rings for the 5-hour session and 7-day weekly
-  windows, each followed by `sNN%` / `wNN%`. Ring and text turn amber or
+  `+N`), and fill rings for the 5-hour session and 7-day weekly windows,
+  each followed by `sNN%` / `wNN%` (which ones: `usage_percent_display`). Ring and text turn amber or
   red when usage runs ahead of the clock. The tooltip lists the live
   sessions, then the usage figures.
-- **Classic** — the glyph plus the `usage_percent_display` percentages.
+- **Classic** — the glyph plus the same percentages, without rings.
 
 Click it to open the panel:
 
@@ -125,7 +125,7 @@ AI-generated title, or its last prompt cut short when no title exists yet.
 | `editor_command` | `string` | `""` | Command to open a CLAUDE.md file. Empty tries `code`, then `zed`. |
 | `display_mode` | `select` | `activity` | Bar widget mode: `activity` (live-session dots + session/weekly rings with percentages) or `classic` (glyph + usage percentages). |
 | `glyph` | `glyph` | `robot` | Bar widget glyph. |
-| `usage_percent_display` | `select` | `both` | Classic mode only — what rides beside the glyph: `session` (`sNN%`, the 5-hour window), `weekly` (`wMM%`, the 7-day window), `both`, or `none`. |
+| `usage_percent_display` | `select` | `both` | Usage windows the widget shows, in both modes: `session` (`sNN%`, the 5-hour window), `weekly` (`wMM%`, the 7-day window), `both`, or `none`. Activity mode draws a ring before each percentage. |
 
 ## Notes
 

@@ -139,10 +139,11 @@ entry = "claude-cockpit.luau"
   description_key = "settings.glyph.description"
   default = "robot"
 
-  # What rides beside the glyph: the 5-hour session window, the 7-day weekly
-  # one (the same two numbers jrohland/claudecode's pill shows), both, or
-  # neither — read straight off the state the service already publishes, no
-  # extra fetch either way.
+  # Which usage windows the widget shows, in both modes (activity draws a
+  # ring before each): the 5-hour session window, the 7-day weekly one (the
+  # same two numbers jrohland/claudecode's pill shows), both, or neither —
+  # read straight off the state the service already publishes, no extra
+  # fetch either way.
   [[widget.setting]]
   key = "usage_percent_display"
   type = "select"

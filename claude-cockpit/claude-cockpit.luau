@@ -7,7 +7,8 @@
 --             jrohland/claudecode's pill is.
 --   activity  glyph + one dot per live Claude Code session (red = needs
 --             you, accent = working, grey = idle) + two fill rings for the
---             5-hour and 7-day windows, each followed by its "sNN%"/"wNN%". Stamps "live_wanted_at" every tick
+--             5-hour and 7-day windows, each followed by its "sNN%"/"wNN%"
+--             (which of the two: usage_percent_display, as in classic). Stamps "live_wanted_at" every tick
 --             so the service keeps polling live sessions (see service.luau).
 --
 -- Noctalia's ui.* has no arc, so a ring is a tiny SVG written once per
@@ -184,6 +185,13 @@ local function renderActivity()
     end
     if type(status) ~= "table" or status.available ~= false then
         local session, week = sessionAndWeek()
+        local shownMode = noctalia.getConfig("usage_percent_display") or "both"
+        if shownMode ~= "session" and shownMode ~= "both" then
+            session = nil
+        end
+        if shownMode ~= "weekly" and shownMode ~= "both" then
+            week = nil
+        end
         -- Same "sNN%" / "wNN%" text and pace tint as classic mode, after each ring.
         for _, pair in ipairs({ { w = session, prefix = "s" }, { w = week, prefix = "w" } }) do
             local w = pair.w
