@@ -109,7 +109,8 @@ done
 
 # Drop the cache of every session that is no longer running.
 for cache in "$CACHE_DIR"/*.json; do
-    sid=$(basename "$cache" .json)
+    sid=${cache##*/}
+    sid=${sid%.json}
     [ -n "${LIVE[$sid]:-}" ] || rm -f -- "$cache" "$cache.key"
 done
 
