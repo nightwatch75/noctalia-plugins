@@ -88,7 +88,7 @@ project directory. The search box filters by title, prompt or path.
 | Key      | Action                                                      |
 | ---      | ---                                                         |
 | ↑ / ↓    | Move the selection through projects and sessions. Hold to repeat. |
-| `Return` | Resume the selected session, or open or close the selected project. |
+| `Return` or keypad `Enter` | Resume the selected session, or open or close the selected project. |
 
 The list scrolls to keep the selection in view. The keys work on this tab
 only.

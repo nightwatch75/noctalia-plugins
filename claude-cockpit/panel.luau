@@ -1547,13 +1547,13 @@ end
 
 -- The chords listed under capture_keys in plugin.toml. They arrive here even
 -- while the filter input has focus; typing still goes to the input. Return is
--- captured too (not the input's onSubmit): the input is rarely the focused
+-- captured too, with the keypad Enter (not the input's onSubmit): the input is rarely the focused
 -- control after a click on a row. Sessions tab only.
 function onKey(chord, pressed)
     if activeTab ~= "sessions" then
         return
     end
-    if chord == "Return" then
+    if chord == "Return" or chord == "KP_Enter" then
         if pressed then
             activateSelected()
         end

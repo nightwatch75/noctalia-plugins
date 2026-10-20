@@ -110,10 +110,10 @@ id = "panel"
 entry = "panel.luau"
 width = 700
 height = 720
-# Up/Down move the Sessions tab selection and Return runs it (onKey in
+# Up/Down move the Sessions tab selection and Return (or keypad Enter) runs it (onKey in
 # panel.luau). Return is captured here rather than read from the filter input's
 # onSubmit, which only fires while that input holds the focus.
-capture_keys = ["up", "down", "Return"]
+capture_keys = ["up", "down", "Return", "KP_Enter"]
 placement = "attached"
 open_near_click = true
 dismiss_on_outside_click = true
