@@ -20,6 +20,8 @@ widget and the Live and Usage tabs only show what it publishes.
 
 ## Requirements
 
+- noctalia with `plugin_api = 33` (`revealKey` on `ui.scroll`, which keeps the
+  keyboard selection in view).
 - `bash`, `jq` and `curl`.
 - The base tools the scripts call: `find`, `stat`, `grep`, `tac`, `awk`,
   `head`, `tail`, `rm`, `mkdir`, `mv`. Every distribution ships them.
@@ -81,6 +83,16 @@ this screenshot.*
 
 Click a session to resume it (`claude --resume <id>`) in a terminal, in its
 project directory. The search box filters by title, prompt or path.
+
+| Key     | Action                                                   |
+|---------|----------------------------------------------------------|
+| ↑ / ↓   | Move the selection through projects and sessions (hold to repeat) |
+| `Enter` | Resume the selected session, or open or close the selected project |
+
+The **Date** and **Name** buttons sort the projects and their sessions. Click
+the active one again to reverse the order. The **Empty** button shows only
+the sessions with no prompt, which Claude Code leaves behind when you open it
+and close it at once. These sessions carry an *empty* tag.
 
 ### CLAUDE.md
 

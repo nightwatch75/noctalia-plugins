@@ -16,14 +16,15 @@
 
 id = "nightwatch75/claude-cockpit"
 name = "Claude Cockpit"
-version = "1.0.0"
-# 31 for noctalia.getColor: the bar widget's activity-mode rings are SVGs
-# that need the theme's real hex colors.
+version = "1.1.0"
+# 33 for `revealKey` on ui.scroll: the Sessions tab follows the keyboard
+# selection. 31 for noctalia.getColor: the bar widget's activity-mode rings
+# are SVGs that need the theme's real hex colors.
 # 24 for direct argv process execution: session delete (rm -rf on two fixed
 # paths) and opening a CLAUDE.md in an editor both exec directly, with no
 # shell parsing the path. 22 for the relative luau imports (shared.luau,
 # sessions.luau).
-plugin_api = 31
+plugin_api = 33
 author = "nightwatch75"
 license = "MIT"
 # jq/curl/bash/find/stat/tail/head/grep/tac/awk are what get-claude-usage,
@@ -107,6 +108,9 @@ id = "panel"
 entry = "panel.luau"
 width = 700
 height = 720
+# Up/Down move the Sessions tab selection (onKey in panel.luau). Enter is not
+# listed: the filter input's onSubmit already delivers it.
+capture_keys = ["up", "down"]
 placement = "attached"
 open_near_click = true
 dismiss_on_outside_click = true
