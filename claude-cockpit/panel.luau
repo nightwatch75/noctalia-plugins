@@ -904,10 +904,6 @@ local function renderSessionsTab()
                     sel = 1
                     render()
                 end,
-                onSubmit = function(value)
-                    searchText = value
-                    activateSelected()
-                end,
             }),
             ui.button({
                 glyph = "chevrons-down", variant = "ghost", controlSize = "sm",
@@ -1550,10 +1546,21 @@ function update()
 end
 
 -- The chords listed under capture_keys in plugin.toml. They arrive here even
--- while an input has focus; typing still goes to the input. Sessions tab only.
+-- while the filter input has focus; typing still goes to the input. Return is
+-- captured too (not the input's onSubmit): the input is rarely the focused
+-- control after a click on a row. Sessions tab only.
 function onKey(chord, pressed)
+    if activeTab ~= "sessions" then
+        return
+    end
+    if chord == "Return" then
+        if pressed then
+            activateSelected()
+        end
+        return
+    end
     local step = KEY_STEPS[chord]
-    if step == nil or activeTab ~= "sessions" then
+    if step == nil then
         return
     end
     if not pressed then

@@ -4,8 +4,10 @@
 # context, cost; click to focus the terminal), Usage (rate-limit windows, token/cost consumption,
 # daily activity — get-claude-usage, copied from jrohland/claudecode, MIT,
 # does the actual data collection), Sessions
-# (every local Claude Code session, grouped by project, click to resume in a
-# terminal, delete with an inline confirm, expand for a cheap preview) and
+# (every local Claude Code session, grouped by project, sorted by date or
+# name, keyboard navigation, empty ones filtered and cleaned up, running ones
+# marked; click to resume in a terminal, delete with an inline confirm,
+# expand for a cheap preview) and
 # CLAUDE.md (global + per-project files, opened in an external editor) and
 # Skills/Mods (installed Claude Code plugins and local skills, managed
 # through `claude plugin`).
@@ -108,9 +110,10 @@ id = "panel"
 entry = "panel.luau"
 width = 700
 height = 720
-# Up/Down move the Sessions tab selection (onKey in panel.luau). Enter is not
-# listed: the filter input's onSubmit already delivers it.
-capture_keys = ["up", "down"]
+# Up/Down move the Sessions tab selection and Return runs it (onKey in
+# panel.luau). Return is captured here rather than read from the filter input's
+# onSubmit, which only fires while that input holds the focus.
+capture_keys = ["up", "down", "Return"]
 placement = "attached"
 open_near_click = true
 dismiss_on_outside_click = true
