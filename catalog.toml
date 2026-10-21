@@ -241,3 +241,16 @@ plugin_api = 24
 version = "0.7.0"
 updated_at = 1791549485
 rev = "a104a94cfe4ff158ba40e12100a28e8c690ab7f6"
+
+[[plugin]]
+id = "nightwatch75/noctapass"
+name = "noctapass"
+version = "0.1.0"
+updated_at = 1792590096
+added_at = 1792590096
+author = "nightwatch75"
+license = "MIT"
+icon = "key"
+description = "Password, key, htpasswd and JWT tools: a bar glyph opens a tabbed generator and decoder panel."
+plugin_api = 24
+tags = ["bar", "panel", "utility"]
