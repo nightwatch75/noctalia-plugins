@@ -18,6 +18,7 @@ location = "https://github.com/nightwatch75/noctalia-plugins.git"
 | Plugin | Id | Description |
 |--------|----|-------------|
 | [nnotes](nnotes/) | `nightwatch75/nnotes` | One-click scratchpad: a bar glyph toggles a floating editor panel on a single notes file, with autosave |
+| [noctapass](noctapass/) | `nightwatch75/noctapass` | Password, key, htpasswd and JWT tools: a bar glyph opens a tabbed panel with Passgen (random or memorable), Keygen (`openssl rand`), a JWT decoder and htpasswd (with `$$` escape) |
 | [dns-switcher](dns-switcher/) | `nightwatch75/dns-switcher` | Switch the system DNS resolver from the bar, with a right-click row menu to copy a provider's addresses or test a lookup through it without switching |
 | [file-search](file-search/) | `nightwatch75/file-search` | Fuzzy search files and folders as you type (fzf-powered), across your search folder (or the whole system, remote mounts excluded) and/or the mounted USB disks; a right-click row menu to open, reveal or copy, and a disk usage donut showing what fills the folder |
 | [todo](todo/) | `nightwatch75/todo` | Prioritised to-do list on the bar: editable tasks with low/medium/important colour chips, drag reorder, bulk priority set, a right-click row menu for edit/priority/delete |
