@@ -1,8 +1,9 @@
 # noctapass
 
-Generate passwords, keys and htpasswd lines from the bar. Click the glyph to
-open a panel with four tabs. Secrets are never written to disk: results stay
-in memory and are wiped when the panel closes.
+Generate passwords, keys and htpasswd lines, and decode JWTs, from the bar.
+Click the glyph to open a panel with four tabs. Secrets are never written to
+disk: results and pasted tokens stay in memory and are wiped when the panel
+closes. Only the special characters list and the last tab are saved.
 
 ## Plugin
 
@@ -15,7 +16,7 @@ in memory and are wiped when the panel closes.
 
 - noctalia v5.0.1 or newer (`plugin_api = 24`). The plugin needs direct
   argument lists for commands, which arrived with API 24.
-- `openssl` for the Keygen tab.
+- `openssl` for the `hex`, `base64` and `base64url` formats of the Keygen tab.
 - `htpasswd` (Apache utils: `apache2-utils`, `httpd-tools`) for the htpasswd tab.
 - `od` (coreutils) to read random bytes from `/dev/urandom`.
 - A monospace font: the results use the system `monospace` alias.
@@ -75,9 +76,10 @@ two-digit number at the end.
 6. Generate and Copy.
 7. Reset.
 
-Runs `openssl rand`. Formats: `hex`, `base64`, `base64url` (no padding) and
-`alphanumeric`. The length is in bytes, or in characters for `alphanumeric`.
-The panel shows the equivalent command, for example `openssl rand -hex 32`.
+Runs `openssl rand` for `hex`, `base64` and `base64url` (no padding). The
+panel shows the equivalent command, for example `openssl rand -hex 32`.
+`alphanumeric` does not use `openssl`: it takes the same `/dev/urandom` bytes
+as Passgen. The length is in bytes, or in characters for `alphanumeric`.
 
 ### JWT
 
@@ -134,8 +136,6 @@ tab back to their defaults and clears its result. On Passgen it also restores
 the default special characters. On htpasswd it clears the user and password
 fields. On JWT it clears the token field.
 
-The screenshots show sample data.
-
 ## Settings
 
 | Key | Type | Default | Description |
@@ -151,3 +151,4 @@ The screenshots show sample data.
 - `htpasswd` receives the password as an argument. It is visible in the
   process list for a few milliseconds.
 - A clipboard manager can store a copied secret in its history.
+- The screenshots show sample data.
