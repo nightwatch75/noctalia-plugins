@@ -169,7 +169,8 @@ count_profile_tokens() {
         day_dates="${day_dates:+${day_dates},}${d}"
     done
 
-    find "$proj_dir" -name "*.jsonl" -mtime -31 -exec cat {} + 2>/dev/null \
+    # grep drops the non-assistant lines (most of the bytes) before jq parses them.
+    find "$proj_dir" -name "*.jsonl" -mtime -31 -exec grep -h -F '"type":"assistant"' {} + 2>/dev/null \
         | jq -r -R 'fromjson? | select(.type == "assistant") | "\(.timestamp[:10]) \(.message.model // "unknown") \(.message.usage.input_tokens // 0) \(.message.usage.output_tokens // 0) \(.message.usage.cache_read_input_tokens // 0) \(.message.usage.cache_creation_input_tokens // 0) \(.sessionId // "unknown")"' \
         | awk -v week_start="$WEEK_START" -v month_start="$MONTH_START" -v today="$TODAY" -v day_dates="$day_dates" -v pricing="$PRICING_AWK" '
         BEGIN {
