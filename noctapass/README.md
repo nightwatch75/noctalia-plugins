@@ -19,6 +19,7 @@ closes. Only the special characters list and the last tab are saved.
 - `openssl` for the `hex`, `base64` and `base64url` formats of the Keygen tab.
 - `htpasswd` (Apache utils: `apache2-utils`, `httpd-tools`) for the htpasswd tab.
 - `od` (coreutils) to read random bytes from `/dev/urandom`.
+- `mkfifo` (coreutils) to pass the htpasswd password to `htpasswd` without putting it in the command arguments.
 - A monospace font: the results use the system `monospace` alias.
 
 ## Usage
@@ -122,7 +123,7 @@ Decodes a JSON Web Token. It does not check the signature.
 7. Generate and Copy.
 8. Reset.
 
-Builds the `user:hash` line with `htpasswd -nb`. Algorithms: `bcrypt`
+Builds the `user:hash` line with `htpasswd -n`. Algorithms: `bcrypt`
 (cost 10) and `apr1` (MD5). The dice button fills the password field with 24
 random characters.
 
@@ -148,7 +149,10 @@ fields. On JWT it clears the token field.
 
 - Random data comes from `/dev/urandom` through `od`. Characters and words
   are picked with rejection sampling, so none is more likely than another.
-- `htpasswd` receives the password as an argument. It is visible in the
-  process list for a few milliseconds.
+- `htpasswd` reads the password from stdin. The plugin creates a named pipe
+  (`htpasswd.fifo`, mode 600) in its data folder, starts `htpasswd` with the
+  pipe as input and writes the password into it. The password is never in the
+  command arguments and never stored in a file. The pipe is removed when the
+  command ends and when the panel closes.
 - A clipboard manager can store a copied secret in its history.
 - The screenshots show sample data.

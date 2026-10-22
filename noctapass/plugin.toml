@@ -1,10 +1,12 @@
 # noctapass — secret generators on the bar. Click the glyph to open a panel
 # with four tabs: Passgen (random or memorable passphrase), Keygen
 # (`openssl rand` keys in the common formats), JWT (decode only) and htpasswd
-# (`htpasswd -nb` lines, optionally with every `$` doubled for YAML/compose
+# (`htpasswd` lines, optionally with every `$` doubled for YAML/compose
 # files).
 # Secrets are never written to disk; results live in memory until the panel
-# closes. Only the special-characters list is saved (plugin data dir).
+# closes. Only the special-characters list and the last tab are saved (plugin
+# data dir). The htpasswd password goes to htpasswd on stdin through a named
+# pipe in that dir, so it never shows up in the process arguments.
 
 id = "nightwatch75/noctapass"
 name = "noctapass"
@@ -14,7 +16,7 @@ version = "0.1.0"
 plugin_api = 24
 author = "nightwatch75"
 license = "MIT"
-dependencies = ["openssl", "htpasswd", "od"]
+dependencies = ["openssl", "htpasswd", "od", "mkfifo"]
 tags = ["bar", "panel", "utility"]
 icon = "key"
 description = "Password, key, htpasswd and JWT tools: a bar glyph opens a tabbed generator and decoder panel."

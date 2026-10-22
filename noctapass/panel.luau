@@ -6,8 +6,9 @@
 --   Keygen    `openssl rand` keys: hex, base64, base64url; plus an
 --             alphanumeric key drawn like a Passgen password.
 --   JWT       decoder (decode only, the signature is never checked).
---   htpasswd  `htpasswd -nb` line, optionally with every `$` doubled so it
---             can sit in a YAML/compose file.
+--   htpasswd  `htpasswd -n` line (password fed on stdin through a named pipe,
+--             never in argv), optionally with every `$` doubled so it can sit
+--             in a YAML/compose file.
 --
 -- Randomness: Luau has no CSPRNG, so every random choice comes from
 -- /dev/urandom through `od` (one u32 pool per generation). Picks use rejection
@@ -15,7 +16,7 @@
 -- State key: "noctapass_open" (published for the bar glyph).
 -- Secrets live in file-locals only and are wiped in onClose. The only things
 -- written to disk are the special-characters list and the last tab, both in
--- the plugin data dir.
+-- the plugin data dir, plus the short-lived htpasswd.fifo pipe node (no data).
 
 local LOWER = "abcdefghijklmnopqrstuvwxyz"
 local UPPER = LOWER:upper()
@@ -336,32 +337,59 @@ local function generateHtpasswd()
         fail(tr("err_htpasswd_user"))
         return
     end
-    if not noctalia.commandExists("htpasswd") then
-        fail(tr("err_missing", { command = "htpasswd" }))
+    for _, cmd in ipairs({ "htpasswd", "mkfifo" }) do
+        if not noctalia.commandExists(cmd) then
+            fail(tr("err_missing", { command = cmd }))
+            return
+        end
+    end
+    local fifo = dataFile("htpasswd.fifo")
+    if fifo == nil then
+        fail()
         return
     end
-    local argv
-    if htp.algo == "bcrypt" then
-        argv = { "htpasswd", "-nbB", "-C", "10", htp.user, htp.pass }
-    else
-        argv = { "htpasswd", "-nbm", htp.user, htp.pass }
-    end
+    local user, pass = htp.user, htp.pass
+    local flags = htp.algo == "bcrypt" and "-inB -C 10" or "-inm"
     local token = begin()
-    local started = noctalia.runAsync(argv, function(r)
-        if token ~= nonce then
+    -- The password reaches htpasswd on stdin through a named pipe: argv and
+    -- /proc/<pid>/cmdline never hold it, and nothing but the pipe node is
+    -- created on disk. Only the user name and the pipe path are passed as
+    -- positional arguments of the fixed script.
+    noctalia.removeFile(fifo)
+    local made = noctalia.runAsync({ "mkfifo", "-m", "600", fifo }, function(m)
+        if m.exitCode ~= 0 then
+            if token == nonce then
+                fail(m.stderr ~= "" and m.stderr or nil)
+            end
             return
         end
-        local line = r.stdout:gsub("%s+$", "")
-        if r.exitCode ~= 0 or line == "" then
-            fail(r.stderr ~= "" and r.stderr or nil)
+        local started = noctalia.runAsync(
+            { "sh", "-c", 'exec htpasswd ' .. flags .. ' "$0" < "$1"', user, fifo },
+            function(r)
+                noctalia.removeFile(fifo)
+                if token ~= nonce then
+                    return
+                end
+                local line = r.stdout:gsub("%s+$", "")
+                if r.exitCode ~= 0 or line == "" then
+                    fail(r.stderr ~= "" and r.stderr or nil)
+                    return
+                end
+                if htp.escape then
+                    line = line:gsub("%$", "$$")
+                end
+                publish(htp, line)
+            end
+        )
+        if not started then
+            noctalia.removeFile(fifo)
+            fail()
             return
         end
-        if htp.escape then
-            line = line:gsub("%$", "$$")
-        end
-        publish(htp, line)
+        -- Blocks until the shell opens the pipe for reading (a few ms).
+        noctalia.writeFile(fifo, pass)
     end)
-    if not started then
+    if not made then
         fail()
     end
 end
@@ -1193,5 +1221,9 @@ function onClose()
     htp.user, htp.pass, htp.result = "", "", ""
     clearJwt()
     htp.rev += 1
+    local fifo = dataFile("htpasswd.fifo")
+    if fifo ~= nil then
+        noctalia.removeFile(fifo)
+    end
     noctalia.state.set("noctapass_open", false)
 end
