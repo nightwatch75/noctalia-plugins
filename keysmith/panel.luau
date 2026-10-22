@@ -178,6 +178,25 @@ local function dataFile(name)
     return dir ~= nil and dir .. "/" .. name or nil
 end
 
+-- Removes a request's pipe and forgets it as the one in flight.
+local function dropFifo(path)
+    noctalia.removeFile(path)
+    if htpFifo == path then
+        htpFifo = nil
+    end
+end
+
+-- Pipes left behind by a crash are empty nodes; clear them when the panel opens.
+local function sweepFifos()
+    local dir = noctalia.pluginDataDir()
+    local names = dir ~= nil and noctalia.listDir(dir) or nil
+    for _, name in ipairs(names or {}) do
+        if name:match("^htpasswd%-%d+%.fifo$") then
+            noctalia.removeFile(dir .. "/" .. name)
+        end
+    end
+end
+
 local function saveSpecials()
     local path = dataFile("special_chars.txt")
     if path ~= nil then
@@ -362,7 +381,7 @@ local function generateHtpasswd()
         -- A newer request or a close came first: writing now would create a
         -- regular file holding the password.
         if token ~= nonce then
-            noctalia.removeFile(fifo)
+            dropFifo(fifo)
             return
         end
         if m.exitCode ~= 0 then
@@ -372,10 +391,7 @@ local function generateHtpasswd()
         local started = noctalia.runAsync(
             { "sh", "-c", 'exec htpasswd ' .. flags .. ' "$0" < "$1"', user, fifo },
             function(r)
-                noctalia.removeFile(fifo)
-                if htpFifo == fifo then
-                    htpFifo = nil
-                end
+                dropFifo(fifo)
                 if token ~= nonce then
                     return
                 end
@@ -391,7 +407,7 @@ local function generateHtpasswd()
             end
         )
         if not started or not noctalia.fileExists(fifo) then
-            noctalia.removeFile(fifo)
+            dropFifo(fifo)
             fail()
             return
         end
@@ -1176,7 +1192,7 @@ render = function()
     panel.render(ui.column({ flexGrow = 1, gap = 12, align = "stretch" }, children))
 end
 
--- Loads the EFF wordlist once; only the Passphrase mode needs it.
+-- Loads the EFF wordlist once; only the Memorable mode needs it.
 local function loadWordlist()
     if words ~= nil then
         return
@@ -1212,6 +1228,7 @@ end
 function onOpen(_context)
     tab = startTab()
     loadWordlist()
+    sweepFifos()
     local path = dataFile("special_chars.txt")
     local saved = path ~= nil and noctalia.readFile(path) or nil
     if saved ~= nil then
@@ -1231,8 +1248,7 @@ function onClose()
     clearJwt()
     htp.rev += 1
     if htpFifo ~= nil then
-        noctalia.removeFile(htpFifo)
-        htpFifo = nil
+        dropFifo(htpFifo)
     end
     noctalia.state.set("keysmith_open", false)
 end

@@ -49,8 +49,8 @@ noctalia msg panel-toggle nightwatch75/keysmith:panel
 - **Random**: length (8–128), letters with lower / upper / mixed case,
   numbers, special characters. Each enabled set is always present.
   With special characters on, a field lists the characters Passgen may use
-  (default `!@#%^&*()-_=+[]{}:;,.?`). Remove `$` or any other character you
-  do not want. The field is saved in the plugin data folder; the restore
+  (default `!@#%^&*()-_=+[]{}:;,.?`). Remove the characters you do not want
+  or add others, for example `$`. The field is saved in the plugin data folder; the restore
   button brings back the default.
 - **Memorable**: a passphrase of 3–10 words from the
   [EFF large wordlist](https://www.eff.org/deeplinks/2016/07/new-wordlists-random-passphrases)
@@ -100,8 +100,7 @@ Decodes a JSON Web Token. It does not check the signature.
   fragments, `Bearer `. The decoder also ignores that text, so Trim only
   cleans the field.
 - The header and the payload show as indented JSON in separate boxes, with
-  the key order of the token. Values longer than about 70 characters continue
-  on the next line. A highlighted box above the JSON tells you if the token is
+  the key order of the token. Long values continue on the next line. A highlighted box above the JSON tells you if the token is
   expired or how long it stays valid, and lists `iat`, `nbf` and `exp` as
   dates.
 - Keys, strings, numbers and punctuation have different colors.
@@ -150,7 +149,7 @@ fields. On JWT it clears the token field.
 - Random data comes from `/dev/urandom` through `od`. Characters and words
   are picked with rejection sampling, so none is more likely than another.
 - `htpasswd` reads the password from stdin. The plugin creates a named pipe
-  (`htpasswd.fifo`, mode 600) in its data folder, starts `htpasswd` with the
+  (`htpasswd-<n>.fifo`, mode 600, one per request) in its data folder, starts `htpasswd` with the
   pipe as input and writes the password into it. The password is never in the
   command arguments and never stored in a file. The pipe is removed when the
   command ends and when the panel closes.
