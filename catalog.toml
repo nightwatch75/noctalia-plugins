@@ -243,11 +243,11 @@ updated_at = 1791549485
 rev = "a104a94cfe4ff158ba40e12100a28e8c690ab7f6"
 
 [[plugin]]
-id = "nightwatch75/noctapass"
-name = "noctapass"
+id = "nightwatch75/keysmith"
+name = "keysmith"
 version = "0.1.0"
-updated_at = 1792590096
-added_at = 1792590096
+updated_at = 1792683084
+added_at = 1792683084
 author = "nightwatch75"
 license = "MIT"
 icon = "key"
