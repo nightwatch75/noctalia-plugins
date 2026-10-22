@@ -1,5 +1,5 @@
 --!nonstrict
--- noctapass — panel with four tabs.
+-- keysmith — panel with four tabs.
 --
 --   Passgen   random characters (length, letters/case, digits, symbols) or a
 --             memorable passphrase (EFF large wordlist, wordlist.txt).
@@ -13,10 +13,10 @@
 -- Randomness: Luau has no CSPRNG, so every random choice comes from
 -- /dev/urandom through `od` (one u32 pool per generation). Picks use rejection
 -- sampling, so no character or word is more likely than another.
--- State key: "noctapass_open" (published for the bar glyph).
+-- State key: "keysmith_open" (published for the bar glyph).
 -- Secrets live in file-locals only and are wiped in onClose. The only things
 -- written to disk are the special-characters list and the last tab, both in
--- the plugin data dir, plus the short-lived htpasswd.fifo pipe node (no data).
+-- the plugin data dir, plus a short-lived htpasswd-<n>.fifo pipe node (no data).
 
 local LOWER = "abcdefghijklmnopqrstuvwxyz"
 local UPPER = LOWER:upper()
@@ -27,6 +27,7 @@ local SEPARATORS = { "-", ".", "_", "" }
 
 local tab = "passgen"
 local nonce = 0 -- bumped per request and on close; stale callbacks see a mismatch
+local htpFifo = nil -- pipe of the htpasswd request in flight, removed on close
 -- EFF wordlist as one string of fixed 10-byte records ("word" padded to 9
 -- chars + "\n"), so a word is a substring and loading needs no parsing.
 local WORD_RECORD = 10
@@ -343,30 +344,38 @@ local function generateHtpasswd()
             return
         end
     end
-    local fifo = dataFile("htpasswd.fifo")
+    local token = begin()
+    local fifo = dataFile("htpasswd-" .. token .. ".fifo")
     if fifo == nil then
         fail()
         return
     end
+    htpFifo = fifo
     local user, pass = htp.user, htp.pass
     local flags = htp.algo == "bcrypt" and "-inB -C 10" or "-inm"
-    local token = begin()
     -- The password reaches htpasswd on stdin through a named pipe: argv and
     -- /proc/<pid>/cmdline never hold it, and nothing but the pipe node is
     -- created on disk. Only the user name and the pipe path are passed as
     -- positional arguments of the fixed script.
     noctalia.removeFile(fifo)
     local made = noctalia.runAsync({ "mkfifo", "-m", "600", fifo }, function(m)
+        -- A newer request or a close came first: writing now would create a
+        -- regular file holding the password.
+        if token ~= nonce then
+            noctalia.removeFile(fifo)
+            return
+        end
         if m.exitCode ~= 0 then
-            if token == nonce then
-                fail(m.stderr ~= "" and m.stderr or nil)
-            end
+            fail(m.stderr ~= "" and m.stderr or nil)
             return
         end
         local started = noctalia.runAsync(
             { "sh", "-c", 'exec htpasswd ' .. flags .. ' "$0" < "$1"', user, fifo },
             function(r)
                 noctalia.removeFile(fifo)
+                if htpFifo == fifo then
+                    htpFifo = nil
+                end
                 if token ~= nonce then
                     return
                 end
@@ -381,7 +390,7 @@ local function generateHtpasswd()
                 publish(htp, line)
             end
         )
-        if not started then
+        if not started or not noctalia.fileExists(fifo) then
             noctalia.removeFile(fifo)
             fail()
             return
@@ -1209,7 +1218,7 @@ function onOpen(_context)
         gen.specials = saved
         gen.specialsRev += 1
     end
-    noctalia.state.set("noctapass_open", true)
+    noctalia.state.set("keysmith_open", true)
     render()
 end
 
@@ -1221,9 +1230,9 @@ function onClose()
     htp.user, htp.pass, htp.result = "", "", ""
     clearJwt()
     htp.rev += 1
-    local fifo = dataFile("htpasswd.fifo")
-    if fifo ~= nil then
-        noctalia.removeFile(fifo)
+    if htpFifo ~= nil then
+        noctalia.removeFile(htpFifo)
+        htpFifo = nil
     end
-    noctalia.state.set("noctapass_open", false)
+    noctalia.state.set("keysmith_open", false)
 end

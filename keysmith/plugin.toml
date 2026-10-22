@@ -1,4 +1,4 @@
-# noctapass — secret generators on the bar. Click the glyph to open a panel
+# keysmith — secret generators on the bar. Click the glyph to open a panel
 # with four tabs: Passgen (random or memorable passphrase), Keygen
 # (`openssl rand` keys in the common formats), JWT (decode only) and htpasswd
 # (`htpasswd` lines, optionally with every `$` doubled for YAML/compose
@@ -8,8 +8,8 @@
 # data dir). The htpasswd password goes to htpasswd on stdin through a named
 # pipe in that dir, so it never shows up in the process arguments.
 
-id = "nightwatch75/noctapass"
-name = "noctapass"
+id = "nightwatch75/keysmith"
+name = "keysmith"
 version = "0.1.0"
 # 24 for argv runAsync: user names and passwords reach htpasswd as plain
 # arguments, with no shell to break out of.
@@ -52,8 +52,8 @@ position = "auto"
 open_near_click = true
 
 [[widget]]
-id = "noctapass"
-entry = "noctapass.luau"
+id = "keysmith"
+entry = "keysmith.luau"
 
   [[widget.setting]]
   key = "glyph"

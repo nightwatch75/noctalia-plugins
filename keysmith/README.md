@@ -1,4 +1,4 @@
-# noctapass
+# keysmith
 
 Generate passwords, keys and htpasswd lines, and decode JWTs, from the bar.
 Click the glyph to open a panel with four tabs. Secrets are never written to
@@ -9,8 +9,8 @@ closes. Only the special characters list and the last tab are saved.
 
 | Field | Value |
 | --- | --- |
-| ID | `nightwatch75/noctapass` |
-| Entries | Bar widget: `noctapass`; panel: `panel` |
+| ID | `nightwatch75/keysmith` |
+| Entries | Bar widget: `keysmith`; panel: `panel` |
 
 ## Requirements
 
@@ -24,10 +24,10 @@ closes. Only the special characters list and the last tab are saved.
 
 ## Usage
 
-Add **noctapass** to a bar from the Add-widget picker and click it, or:
+Add **keysmith** to a bar from the Add-widget picker and click it, or:
 
 ```sh
-noctalia msg panel-toggle nightwatch75/noctapass:panel
+noctalia msg panel-toggle nightwatch75/keysmith:panel
 ```
 
 ### Passgen
