@@ -6,7 +6,7 @@
 --             branch, last prompt. A reader of the service's "live" state:
 --             while the panel is open on this tab it stamps
 --             "live_wanted_at" every tick, which keeps the service polling.
---             Click a card to focus its terminal (niri/Umbriel).
+--             Click a card to focus its terminal (niri/Hyprland/Umbriel).
 --   Usage     jrohland/claudecode's panel.luau, trimmed port (MIT, see
 --             README Notes) — a thin client of service.luau's "usage"/
 --             "status" state.
