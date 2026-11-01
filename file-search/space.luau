@@ -13,7 +13,7 @@
 -- current folder; re-walked by name when a new index lands), sortKey
 -- ("size" | "name"), sortDesc, mode ("folders" | "types"), typeFilter (a
 -- category number in Types mode, nil = none; cleared by entering a folder, going
--- up or switching mode).
+-- up or switching mode). space.typeFilter is a test-only mirror of it.
 --
 -- State (module fields, read by the panel):
 --   space.state     "idle" | "scanning" | "ready" | "error". A stale index
@@ -574,6 +574,7 @@ local function noop() end
 
 function space.toggleRoot()
     path = {}
+    typeFilter, space.typeFilter = nil, nil
     space.scan(space.root == "/" and noctalia.expandPath("~") or "/", false, noop)
     changed()
 end
@@ -773,6 +774,9 @@ function space.render()
                 controlSize = "sm", selected = mode == "types", onClick = function() space.setMode("types") end }),
         }),
         ui.spacer({ key = "gap", flexGrow = 1 }),
+        ui.button({ key = "space-search-here", glyph = "search", variant = "ghost",
+            tooltip = shared.tr("space_tip_search_here"),
+            onClick = function() if space.onSearchHere then space.onSearchHere(absolute()) end end }),
         ui.button({ key = "space-refresh", glyph = "refresh", variant = "ghost", enabled = not space.scanning,
             tooltip = shared.tr("space_tip_refresh"), onClick = space.refresh }),
     })

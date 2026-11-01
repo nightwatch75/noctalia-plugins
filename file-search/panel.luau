@@ -53,6 +53,7 @@ local usage = require("./usage.luau")
 
 -- The Space tab's body. Same require() route as above.
 local space = require("./space.luau")
+space.onSearchHere = function(path) onSearchHere(path) end
 
 -- Which tab is showing: "search" | "space". Reset to search on every open.
 local activeTab = "search"
@@ -1342,6 +1343,31 @@ function onRefreshIndex()
     requestReload(true, true)
     -- TTL ignored: "refresh" has to mean everything the panel shows.
     requestUsage(true)
+end
+
+-- The Space tab's "search here" button. Records are relative to the single
+-- search root, so a folder below it is just a longer prefix for folderToken
+-- ("^a/b/"); the root itself means no restriction. Anything else (another
+-- root, the home when the search folder is elsewhere, several roots) cannot
+-- be expressed, so it is a notice and the tab stays.
+function onSearchHere(path)
+    local root = shared.roots[1]
+    local rel = nil
+    if #shared.roots == 1 and root ~= nil then
+        if path == root then
+            rel = ""
+        elseif shared.startsWith(path, root == "/" and "/" or root .. "/") then
+            rel = path:sub(#root == 1 and 2 or #root + 2)
+        end
+    end
+    if rel == nil then
+        noctalia.notify(shared.tr("title"), shared.tr("space_search_outside"))
+        return
+    end
+    usageFilter = rel ~= "" and rel or nil
+    setActiveTab("search")
+    render()
+    runSearch()
 end
 
 -- The strip's ✕. Same effect as re-clicking the highlighted legend row, offered

@@ -65,6 +65,10 @@
       "description": "Index files and folders whose name starts with a dot.",
       "label": "Include hidden entries"
     },
+    "space_exclude_external": {
+      "description": "Leave external, network and FUSE mounts out of the Space tab scan.",
+      "label": "Space tab: skip external mounts"
+    },
     "usage_exclude_dirs": {
       "description": "Folders left out of the disk usage chart, separated by ',' or ';'. A bare name matches anywhere below the search folder; a path (absolute, or starting with ~) matches that one folder. Folders on another filesystem are already skipped.",
       "label": "Usage chart: excluded folders"
@@ -91,7 +95,9 @@
   "space_sort_name": "Name",
   "space_sort_size": "Size",
   "space_tip_home": "Show your home folder",
+  "space_search_outside": "That folder is outside the search folder",
   "space_tip_refresh": "Scan again now",
+  "space_tip_search_here": "Search inside this folder",
   "space_tip_root": "Show the whole system (/)",
   "space_tip_up": "Up one folder",
   "status_indexing": "Indexing {path}…",

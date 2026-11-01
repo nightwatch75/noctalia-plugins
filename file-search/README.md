@@ -7,7 +7,8 @@ panel; picking a result opens it with the system MIME association
 (`xdg-open`) — directories open in the file manager. A `/fs` launcher entry
 gives the same search with native keyboard navigation. The panel can widen
 the search to mounted USB/removable disks, and show a disk-usage donut for
-the search folder.
+the search folder. A second panel tab, **Space**, browses disk usage with
+`ncdu`: a donut, a sortable folder list and a file-type view.
 
 ## Plugin
 
@@ -156,6 +157,17 @@ walked — a mount point under the search folder is skipped and named in the
 legend as *not counted: … (other filesystem)*. The `usage_exclude_dirs`
 setting keeps `du` out of specific, slow-but-same-filesystem folders instead.
 
+### Space tab
+
+The *Space* tab shows what fills the disk. It starts at `/`; the `~` button
+switches to your home folder. A donut and a clickable legend show the biggest
+items of the current folder; click a folder to go in, use the up arrow to go
+back. The list below sorts by size or name. *Folders | Types* switches to a
+view by file type (video, images, audio…) and lists the biggest files of a
+type. The search button in the path row goes back to the Search tab and
+restricts the search to the current folder, if it is inside the search folder;
+for any other folder it shows a notice.
+
 ### Launcher
 
 ```
@@ -193,6 +205,7 @@ results whenever the index is out of date.
 | `exclude_dirs` | `string` | `.git, node_modules, .cache, .venv` | Folder names skipped while indexing, separated by `,` or `;`, matched anywhere in the tree. |
 | `show_hidden` | `bool` | `false` | Index files and folders whose name starts with a dot. |
 | `usage_exclude_dirs` | `string` | *(empty)* | Folders left out of the disk usage chart, separated by `,` or `;`. A bare name matches anywhere below the search folder; a path (absolute, or starting with `~`) matches that one folder. Folders on another filesystem are already skipped. |
+| `space_exclude_external` | `bool` | `true` | Space tab: leave external, network and FUSE mounts out of the scan. |
 | `max_results` | `int` | `50` | How many matches the panel lists at most (10–200). |
 | `glyph` (widget) | `glyph` | `search` | Icon shown on the bar. |
 
@@ -211,6 +224,10 @@ results whenever the index is out of date.
 - `mktemp`, `mv`, `wc`, `head`, `rm`, `date`, `du` — GNU coreutils, standard
   on any Linux desktop. Missing `du`, the usage chart says so; everything
   else still works
+- [`ncdu`](https://dev.yorhel.nl/ncdu) 2.0 or newer — scans the disk for the
+  Space tab
+- [`jq`](https://jqlang.github.io/jq/) — reduces the scan to the Space index
+- `nice` (GNU coreutils) — runs the scan at low priority
 - `lsblk` (util-linux) — lists mounted USB/removable volumes, only run when
   the scope includes them. Missing, it falls back to `/proc/mounts` and the
   udisks2 layout (`/run/media/<user>/…`, `/media/…`)
@@ -241,6 +258,14 @@ folders are skipped.
 
 ## Notes
 
+- The Space tab scans `/` with `ncdu` on its first use: about 45 s on a fast
+  PC. `jq` can use up to about 1.5 GB RAM for a moment. Both run at low
+  priority. The index is cached for one day; refresh forces a rescan.
+- External, network and FUSE mounts are skipped by default
+  (`space_exclude_external`).
+- Hard-linked files have their size split between the links, so a folder total
+  can differ from the `ncdu` screen. The root total stays exact.
+- `ncdu` 2.0 or newer and `jq` are required.
 - The index lives in the plugin's private data directory
   (`noctalia.pluginDataDir()`, by default
   `~/.local/state/noctalia/plugins/data/nightwatch75/file-search/`):

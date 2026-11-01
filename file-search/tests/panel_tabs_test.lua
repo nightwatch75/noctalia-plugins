@@ -58,6 +58,7 @@ local shared = {
     probeMounts = function(_, callback) callback() end,
     probeFzfScheme = function() end,
     formatBytes = function() return "0 B" end,
+    startsWith = function(v, pre) return v:sub(1, #pre) == pre end,
     absolutePath = function(rel) return "/home/" .. rel end,
     openPath = function(path) opened = path end,
 }
@@ -139,5 +140,32 @@ assert(frameTick == true, "tick on: the scan still needs polling")
 space.onStep = function() space.busy = false end
 onFrameTick(16)
 assert(frameTick == false, "tick off on the Search tab after the last step")
+
+-- Search here: inside the search root restricts the search, outside only notifies.
+do
+    local function eq(a, b, m) assert(a == b, m .. ": got " .. tostring(a)) end
+    local notes = {}
+    noctalia.notify = function(_, body) table.insert(notes, body) end
+    local function hasFilter()
+        local function walk(n)
+            if n.props and n.props.text == "usage_filter" then return true end
+            for _, c in ipairs(n.children or {}) do if walk(c) then return true end end
+        end
+        return walk(rendered)
+    end
+    find(rendered, "tab-space").props.onClick()
+    onSearchHere("/elsewhere/x")
+    assert(find(rendered, "tab-space").props.selected == true, "outside the root: stay on Space")
+    eq(#notes, 1, "outside the root: one notice")
+    assert(not hasFilter(), "outside the root: no restriction")
+    onSearchHere("/homework")
+    eq(#notes, 2, "sibling with the same prefix is outside")
+    onSearchHere("/home/a b/c")
+    assert(find(rendered, "tab-search").props.selected == true, "inside: Search tab")
+    assert(hasFilter(), "inside: restriction strip")
+    eq(#notes, 2, "inside: no notice")
+    onSearchHere("/home")
+    assert(not hasFilter(), "the root itself lifts the restriction")
+end
 
 print("file-search panel tab tests: ok")

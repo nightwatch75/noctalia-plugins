@@ -322,6 +322,17 @@ do
     end
     assert(rowOf(tree, "space-legend-", "cat_video"), "category names from translations")
     assert(not find(tree, "space-legend-9"), "8 rows")
+    -- legend sizes add up to the folder total (1000 B in the fixture)
+    local realTr = noctalia.tr
+    noctalia.tr = function(k, v) if k == "usage_amount" then return v.size end return k end
+    local sum = 0
+    for i = 1, 8 do
+        local n = tonumber(find(find(space.render(), "space-legend-" .. i), "size").props.text:match("^(%d+) B$"))
+        assert(n, "legend size is plain bytes")
+        sum += n
+    end
+    noctalia.tr = realTr
+    eq(sum, 1000, "legend sizes sum to the folder total")
     -- no filter: same list as Folders mode, every row has a type bar
     local names = rowNames(tree)
     eq(table.concat(names, "|"), "usr|home|space_loose", "unfiltered list = folders list")
@@ -401,3 +412,23 @@ do
 end
 
 print("space_ui_test OK")
+
+-- ── toggleRoot clears the type filter ────────────────────────────────────────
+do
+    local space = typesReady()
+    space.setTypeFilter(1)
+    space.toggleRoot()
+    eq(space.typeFilter, nil, "toggleRoot clears typeFilter")
+end
+
+-- ── search here: the button hands the current absolute path to the panel ────
+do
+    local space = ready()
+    local got = {}
+    space.onSearchHere = function(p) table.insert(got, p) end
+    find(space.render(), "space-search-here").props.onClick()
+    eq(got[1], "/", "root path")
+    space.enter("usr")
+    find(space.render(), "space-search-here").props.onClick()
+    eq(got[2], "/usr", "current folder path")
+end
