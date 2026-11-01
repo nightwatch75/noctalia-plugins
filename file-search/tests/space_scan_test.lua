@@ -51,6 +51,7 @@ local function boot(home)
         nowMs = function() return ms end,
         pluginDataDir = function() return DIR end,
         log = function() end,
+        tr = function(k, v) return v and (k .. ":" .. tostring(v.percent or v.time)) or k end,
         json = { decode = function(t)
             ms += decodeCost
             local v = decoded[t]
@@ -253,6 +254,93 @@ do
     HOME = ""
     eq(boot(true).root, "/", "empty home: /")
     HOME = realHome
+end
+
+-- ── progress estimate: the last complete scan's duration ─────────────────────
+local function timeFile(root)
+    return (indexFile(root):gsub("%.json$", ".time"))
+end
+do
+    eq(boot().formatElapsed(0), "0:00", "m:ss zero")
+    eq(boot().formatElapsed(45999), "0:45", "m:ss seconds")
+    eq(boot().formatElapsed(125000), "2:05", "m:ss minutes")
+
+    -- no history: elapsed time only; the duration is stored on "ok"
+    local space = boot()
+    space.scan("/", false, function() end)
+    local run = passVersion()
+    eq(space.phase, "scan", "scan phase"); eq(space.progress, nil, "no history: no estimate")
+    eq(space.elapsedMs, 0, "elapsed from the launch")
+    ms += 20000
+    space.step()
+    eq(space.elapsedMs, 20000, "elapsed counts"); eq(space.progress, nil, "still no estimate")
+    files[scriptArgs(run).marker .. ".phase"] = { text = "reduce\n", mtime = 0 }
+    ms += 1000
+    space.step()
+    eq(space.phase, "reduce", "phase file read")
+    ms += 1000
+    playScript(run, "ok", smallIndex("/"))
+    space.step()
+    eq(files[timeFile("/")].text, "22000", "duration stored on ok")
+    drain(space)
+    eq(space.progress, nil, "no progress after the scan"); eq(space.phase, nil, "no phase after the scan")
+    eq(space.elapsedMs, nil, "no elapsed after the scan")
+
+    -- with history: fraction of the last duration, capped at 0.95
+    space = boot()
+    files[timeFile("/")] = { text = "30000", mtime = 0 }
+    space.scan("/", false, function() end)
+    passVersion()
+    eq(space.progress, 0, "estimate starts at 0")
+    ms += 15000
+    space.step()
+    eq(space.progress, 0.5, "15 s of 30 s")
+    ms += 60000
+    space.step()
+    eq(space.progress, 0.95, "capped")
+
+    -- invalid history, or another settings tag: no estimate
+    space = boot()
+    files[timeFile("/")] = { text = "soon", mtime = 0 }
+    space.scan("/", false, function() end)
+    passVersion()
+    eq(space.progress, nil, "invalid time file ignored")
+    space = boot()
+    files[timeFile("/")] = { text = "30000", mtime = 0 }
+    config.space_skip_network = false
+    space.scan("/", false, function() end)
+    passVersion()
+    eq(space.progress, nil, "another settings tag ignores the old duration")
+    config.space_skip_network = nil
+
+    -- not stored on a failure or a timeout
+    for _, code in ipairs({ "empty", "reduce" }) do
+        space = boot()
+        space.scan("/", false, function() end)
+        playScript(passVersion(), code, nil)
+        drain(space)
+        eq(files[timeFile("/")], nil, code .. ": no duration stored")
+        eq(space.progress, nil, code .. ": no progress"); eq(space.phase, nil, code .. ": no phase")
+    end
+    space = boot()
+    space.scan("/", false, function() end)
+    passVersion()
+    ms += space.SCAN_DEADLINE_MS + 2000
+    space.step()
+    eq(files[timeFile("/")], nil, "timeout: no duration stored")
+
+    -- redraws follow the visible text: a slow estimate moves 0.1 % a second
+    space = boot()
+    files[timeFile("/")] = { text = "1000000", mtime = 0 }
+    local redraws = 0
+    space.onOpen(function() redraws += 1 end)
+    space.refresh()
+    passVersion()
+    redraws = 0
+    for _ = 1, 5 do ms += 1000; space.step() end
+    eq(redraws, 0, "under 1 %: no redraw")
+    for _ = 1, 6 do ms += 1000; space.step() end
+    eq(redraws, 1, "one redraw per whole percent")
 end
 
 -- ── full pipeline: one detached run, polled marker, sliced load ──────────────
@@ -537,11 +625,14 @@ end
 do
     local space = boot()
     putIndex("/", smallIndex("/"), 60)
-    for _, ext in ipairs({ "scan", "tmp", "done" }) do
+    local timeFile = indexFile("/"):gsub("%.json$", ".time")
+    files[timeFile] = { text = "30000", mtime = 0 }
+    for _, ext in ipairs({ "scan", "tmp", "done", "done.phase" }) do
         files[DIR .. "/space-root-1-1." .. ext] = { text = "x", mtime = 0 }
     end
     space.onOpen(function() end)
-    for _, ext in ipairs({ "scan", "tmp", "done" }) do
+    assert(files[timeFile], "duration of the last scan kept")
+    for _, ext in ipairs({ "scan", "tmp", "done", "done.phase" }) do
         eq(files[DIR .. "/space-root-1-1." .. ext], nil, "leftover ." .. ext .. " swept")
     end
     assert(files[indexFile("/")], "index kept")
@@ -588,12 +679,17 @@ do
     assert(files[oldFile], "old tag file still there before the scan ends")
     files[DIR .. "/space-root.json"] = { text = "x", mtime = 0 }
     files[DIR .. "/space-home-0badc0de.json"] = { text = "x", mtime = 0 }
+    local oldTime = oldFile:gsub("%.json$", ".time")
+    files[oldTime] = { text = "30000", mtime = 0 }
+    files[DIR .. "/space-home-0badc0de.time"] = { text = "30000", mtime = 0 }
     playScript(run, "ok", smallIndex("/"))
     ms += 1000
     drain(space)
     eq(space.state, "ready", "new index loaded")
     eq(files[oldFile], nil, "old tag file removed")
     eq(files[DIR .. "/space-root.json"], nil, "legacy untagged file removed")
+    eq(files[oldTime], nil, "old tag duration removed")
+    assert(files[DIR .. "/space-home-0badc0de.time"], "other root duration kept")
     assert(files[DIR .. "/space-home-0badc0de.json"], "other root kept")
     assert(files[indexFile("/")], "new index kept")
 

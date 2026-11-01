@@ -36,6 +36,12 @@
 --   space.root      the home path (the start) or "/"
 --   space.index     decoded index tree (see space_index.luau), nil = none
 --   space.scannedAt unix seconds of the index file (its mtime)
+--   space.phase     "scan" (ncdu) | "reduce" (jq) while the run is in flight
+--   space.elapsedMs time since the run started, nil without a run
+--   space.progress  ESTIMATE 0..0.95: elapsedMs over the duration of the last
+--                   complete scan of this root and settings tag (the .time
+--                   file, written on "ok"); nil without one. ncdu prints no
+--                   progress without a terminal and the total is unknown.
 --
 -- Pipeline:
 --   1. `ncdu --version` with a callback, once per load (ncdu >= 2.0). Only a
@@ -53,7 +59,8 @@
 --      constant; every path, exclude and the jq program are positional
 --      parameters. A detached run has no login PATH, so binaries are absolute
 --      (TOOL_DIRS).
---   4. step() polls the marker about once a second, then loads the index.
+--   4. step() polls the marker and the phase file about once a second, then
+--      loads the index.
 --   jq writes the index file itself; there is no Lua-side save.
 --
 -- The index is JSON Lines (see idx.jqProgram) and decoded a few lines per
@@ -67,7 +74,7 @@
 --
 -- A scan is a job table; setRoot() or a newer scan replaces it, and anything
 -- belonging to an older job (probe answer, marker) is ignored. Each run has
--- its own scan/temp/marker names; leftovers of dropped or orphaned runs are
+-- its own scan/temp/marker/phase names; leftovers of dropped or orphaned runs are
 -- swept when the next run starts, and on open when no job is active. The root
 -- cannot be switched while a scan runs (see toggleRoot).
 
@@ -92,19 +99,21 @@ space.TOP_N = TOP_N -- read by tests/space_ui_test.lua
 local TOOL_DIRS = { "/usr/bin", "/usr/local/bin", "/bin", "~/.local/bin" }
 
 -- $1 ncdu  $2 jq  $3 jq program  $4 scan file  $5 temp  $6 index  $7 marker
--- $8 nice ("" = none), then the ncdu arguments. The first line makes ncdu and
--- jq (~1.5 GB on "/") the OOM killer's first choice, not the user's session;
--- raising one's own score needs no privilege.
+-- $8 nice ("" = none), then the ncdu arguments. "$d.phase" says "reduce" while
+-- jq runs. The first line makes ncdu and jq (~1.5 GB on "/") the OOM killer's
+-- first choice, not the user's session; raising one's own score needs no
+-- privilege.
 local SCAN_SCRIPT = table.concat({
     'echo 1000 2>/dev/null > /proc/self/oom_score_adj',
     'n=$1 j=$2 p=$3 s=$4 t=$5 i=$6 d=$7 c=$8',
     'shift 8',
     'run() { if [ -n "$c" ]; then "$c" -n 19 "$@"; else "$@"; fi; }',
     'run "$n" -0 -o "$s" "$@" >/dev/null 2>&1',
+    'echo reduce > "$d.phase"',
     'if [ ! -s "$s" ]; then r=empty',
     'elif run "$j" -c "$p" "$s" > "$t" 2>/dev/null && mv -f "$t" "$i"; then r=ok',
     'else r=reduce; fi',
-    'rm -f "$s" "$t"',
+    'rm -f "$s" "$t" "$d.phase"',
     'echo "$r" > "$d"',
 }, "\n")
 space.SCAN_SCRIPT = SCAN_SCRIPT -- read by tests/space_script_test.sh
@@ -122,6 +131,9 @@ end
 space.root = homeRoot()
 space.index = nil
 space.scannedAt = 0
+space.progress = nil
+space.phase = nil
+space.elapsedMs = nil
 
 local scanCount = 0
 local ncduOld = nil -- nil = not probed yet
@@ -147,28 +159,31 @@ local function rootTag(root)
     return root == "/" and "root" or "home"
 end
 
--- One index file per root and settings tag (see space.settingsTag).
-local function indexPath(dir, root, tag)
-    return dir .. "/space-" .. rootTag(root) .. "-" .. tag .. ".json"
+-- One index file per root and settings tag (see space.settingsTag), and the
+-- duration of the scan that wrote it (`ext` "time").
+local function indexPath(dir, root, tag, ext)
+    return dir .. "/space-" .. rootTag(root) .. "-" .. tag .. "." .. (ext or "json")
 end
 
 -- Unlinking a file an older run still writes is harmless: it keeps its inode,
 -- and that run's result is ignored anyway.
 local function sweep(dir)
     for _, name in ipairs(noctalia.listDir(dir) or {}) do
-        if name:match("^space%-.+%.scan$") or name:match("^space%-.+%.tmp$") or name:match("^space%-.+%.done$") then
+        if name:match("^space%-.+%.scan$") or name:match("^space%-.+%.tmp$") or name:match("^space%-.+%.done$")
+            or name:match("^space%-.+%.phase$") then
             noctalia.removeFile(dir .. "/" .. name)
         end
     end
 end
 
--- After a scan of `tag` completed: the index files of the same root built with
--- other settings, and the untagged name an older version wrote.
+-- After a scan of `tag` completed: the index and duration files of the same
+-- root built with other settings, and the untagged name an older version wrote.
 local function dropOldIndexes(dir, root, tag)
     local rt = rootTag(root)
-    local keep = "space-" .. rt .. "-" .. tag .. ".json"
+    local stem = "space-" .. rt .. "-" .. tag
     for _, name in ipairs(noctalia.listDir(dir) or {}) do
-        if name ~= keep and (name == "space-" .. rt .. ".json" or name:match("^space%-" .. rt .. "%-%x+%.json$")) then
+        if name ~= stem .. ".json" and name ~= stem .. ".time" and (name == "space-" .. rt .. ".json"
+            or name:match("^space%-" .. rt .. "%-%x+%.json$") or name:match("^space%-" .. rt .. "%-%x+%.time$")) then
             noctalia.removeFile(dir .. "/" .. name)
         end
     end
@@ -241,6 +256,7 @@ local function endScan(errText)
     local done = job and job.done
     job = nil
     space.scanning = false
+    space.progress, space.phase, space.elapsedMs = nil, nil, nil
     if errText ~= nil then
         space.errText = errText
         if space.index == nil then
@@ -371,6 +387,7 @@ local function reset()
     space.scannedAt = 0
     space.scanning = false
     space.loading = false
+    space.progress, space.phase, space.elapsedMs = nil, nil, nil
     space.state = "idle"
     space.errText = nil
 end
@@ -420,6 +437,32 @@ local function start(current)
     current.marker = stem .. ".done"
     current.deadline = now + space.SCAN_DEADLINE_MS
     current.nextPoll = now + space.POLL_MS
+    current.started = now
+    current.timeFile = indexPath(dir, root, current.tag, "time")
+    local last = tonumber((noctalia.readFile(current.timeFile) or ""):match("^%d+$"))
+    current.lastMs = last ~= nil and last > 0 and last or nil
+    space.phase, space.elapsedMs = "scan", 0
+    space.progress = current.lastMs and 0 or nil
+    current.shown = space.progressText()
+    changed() -- the bar appears at once when there is an estimate
+end
+
+-- Progress of the run in hand; a redraw only when its label changes (a whole
+-- percent, the phase, or an elapsed second without an estimate).
+local function track(now)
+    if space.phase == "scan" then
+        local text = noctalia.readFile(job.marker .. ".phase")
+        if type(text) == "string" and text:match("^reduce") then
+            space.phase = "reduce"
+        end
+    end
+    space.elapsedMs = now - job.started
+    space.progress = job.lastMs and math.min(0.95, space.elapsedMs / job.lastMs) or nil
+    local shown = space.progressText()
+    if shown ~= job.shown then
+        job.shown = shown
+        changed()
+    end
 end
 
 -- shared.mounts is filled by the Search side, which may not have run yet in
@@ -445,6 +488,7 @@ local function poll(now)
         return
     end
     job.nextPoll = now + space.POLL_MS
+    track(now)
     local text = noctalia.readFile(job.marker)
     local code = type(text) == "string" and text:match("^(%a+)") or nil
     if code == nil then
@@ -460,6 +504,7 @@ local function poll(now)
         endScan(code == "empty" and "empty" or "reduce")
         return
     end
+    noctalia.writeFile(job.timeFile, tostring(now - job.started))
     job.loading = true
     if not space.startLoad(job.dir, job.tag) then
         endScan("index")
@@ -779,6 +824,21 @@ function space.onClose()
     isOpen = false
 end
 
+function space.formatElapsed(ms)
+    local s = ms // 1000
+    return string.format("%d:%02d", s // 60, s % 60)
+end
+
+-- "Scanning… 42% (estimate)", or the elapsed time without an estimate. Before
+-- the run starts (version and mount probes) it reads as a scan at 0:00.
+function space.progressText()
+    local phase = space.phase == "reduce" and "reduce" or "scan"
+    if space.progress ~= nil then
+        return shared.tr("space_progress_" .. phase, { percent = math.floor(space.progress * 100) })
+    end
+    return shared.tr("space_elapsed_" .. phase, { time = space.formatElapsed(space.elapsedMs or 0) })
+end
+
 local function label(key, text, color)
     return ui.label({ key = key, text = text, fontSize = 12, color = color or "on_surface_variant" })
 end
@@ -875,15 +935,13 @@ local function sortButton(key)
 end
 
 -- The text in place of the chart and list, or nil when an index is shown.
+-- Not used while a scan runs: render shows its progress instead.
 local function statusText()
     if space.index ~= nil then
         return nil
     end
     if space.state == "error" then
         return shared.tr("space_err." .. (space.errText or "spawn")), "error"
-    end
-    if space.state == "scanning" then
-        return shared.tr("space_scanning")
     end
     return shared.tr("space_loading")
 end
@@ -918,14 +976,23 @@ function space.render()
         controls,
     }
     local left = {}
-    local text, color = statusText()
-    if text == nil and space.scanning then
-        text = shared.tr("space_rescanning")
-    elseif text == nil and space.errText ~= nil then
-        text, color = shared.tr("space_err." .. space.errText), "error"
-    end
-    if text ~= nil then
-        table.insert(left, label("space-msg", text, color))
+    if space.scanning then
+        if space.progress ~= nil then
+            table.insert(left, ui.progress({ key = "space-progress", progress = space.progress,
+                fill = "primary", track = "on_surface/0.14", radius = 4, height = 8 }))
+        end
+        table.insert(left, label("space-progress-text", space.progressText()))
+        if space.index ~= nil then
+            table.insert(left, label("space-msg", shared.tr("space_rescanning")))
+        end
+    else
+        local text, color = statusText()
+        if text == nil and space.errText ~= nil then
+            text, color = shared.tr("space_err." .. space.errText), "error"
+        end
+        if text ~= nil then
+            table.insert(left, label("space-msg", text, color))
+        end
     end
     if node ~= nil then
         local slices = paint(idx.slices(node, mode, usage.MAX_SLICES))

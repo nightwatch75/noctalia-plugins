@@ -264,6 +264,8 @@ folders are skipped.
 - The Space tab scans your home folder with `ncdu` on its first use; a scan
   of `/` takes about 45 s on a fast PC. `jq` can use up to about 1.5 GB RAM for a moment. Both run at low
   priority. The index is cached for one day; refresh forces a rescan.
+- The Space progress bar is an estimate from the duration of the last scan of
+  the same folder and settings. The first scan shows only the elapsed time.
 - Network, FUSE and external mounts are skipped by default
   (`space_skip_network`, `space_skip_external`). Pseudo filesystems (`/proc`,
   overlay, squashfs…) are always skipped.

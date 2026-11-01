@@ -5,7 +5,8 @@
 # stubbed). Every path sits under a folder with a hostile name, passed as
 # positional arguments like space.luau does: nothing in it may run.
 # Cases: ok (with nice), ncdu fails with no output (marker "empty"), ok with
-# nice "" (none).
+# nice "" (none). A jq wrapper checks that the phase file says "reduce" before
+# the marker exists; no case leaves the phase file.
 set -e
 cd "$(dirname "$0")/.."
 if [ -z "$LUAU" ]; then
@@ -65,20 +66,33 @@ chmod +x "$hostile/ncdu"
 jq=$(command -v jq)
 nice=$(command -v nice)
 
+# jq wrapper: records the phase file, and whether the marker exists, when the
+# reduce starts; then runs the real jq.
+cat > "$hostile/jq" <<EOF
+#!/bin/sh
+cat "\$PHASE_FILE" > "\$PHASE_SEEN" 2>/dev/null || echo none > "\$PHASE_SEEN"
+[ -e "\$MARKER_FILE" ] && echo marker >> "\$PHASE_SEEN"
+exec "$jq" "\$@"
+EOF
+chmod +x "$hostile/jq"
+
 # $1 nice, $2 non-empty = ncdu fails. Files in $hostile, cwd $tmp.
 run() {
-    rm -f "$hostile"/space-* "$tmp/oom"
-    (cd "$tmp" && OOM_FILE="$tmp/oom" FAIL="$2" /bin/sh -c "$(cat "$tmp/script.sh")" sh \
-        "$hostile/ncdu" "$jq" "$(cat "$tmp/prog.jq")" \
+    rm -f "$hostile"/space-* "$tmp/oom" "$tmp/phase"
+    (cd "$tmp" && OOM_FILE="$tmp/oom" FAIL="$2" PHASE_FILE="$hostile/space-1.done.phase" PHASE_SEEN="$tmp/phase" \
+        MARKER_FILE="$hostile/space-1.done" /bin/sh -c "$(cat "$tmp/script.sh")" sh \
+        "$hostile/ncdu" "$hostile/jq" "$(cat "$tmp/prog.jq")" \
         "$hostile/space-1.scan" "$hostile/space-1.tmp" "$hostile/space-root.json" "$hostile/space-1.done" \
         "$1" --exclude-kernfs --exclude "$hostile/a*b" -- "$hostile/root")
     [ -z "$(find "$tmp" -name pwned)" ] || fail "an argument was run as code"
     [ ! -e "$hostile/space-1.scan" ] && [ ! -e "$hostile/space-1.tmp" ] || fail "scan or temp file left"
+    [ ! -e "$hostile/space-1.done.phase" ] || fail "phase file left"
 }
 
 for n in "$nice" ""; do
     run "$n"
     [ "$(cat "$hostile/space-1.done")" = ok ] || fail "marker (nice '$n'): $(cat "$hostile/space-1.done")"
+    [ "$(cat "$tmp/phase")" = reduce ] || fail "phase at reduce (nice '$n'): $(cat "$tmp/phase")"
     [ "$(cat "$tmp/oom")" = 1000 ] || fail "oom_score_adj not raised: $(cat "$tmp/oom")"
     head -n 1 "$hostile/space-root.json" | jq -e '.v == 2' >/dev/null || fail "index header"
     jq -c . "$hostile/space-root.json" >/dev/null || fail "index is not JSON Lines"

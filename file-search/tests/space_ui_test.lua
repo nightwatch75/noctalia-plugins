@@ -236,7 +236,7 @@ do
     local space = boot()
     space.onOpen(function() redraws += 1 end) -- no index file: the scan starts by itself
     eq(space.state, "scanning", "no index: scanning")
-    assert(findText(space.render(), "space_scanning"), "scanning label")
+    assert(find(find(space.render(), "space-left"), "space-progress-text"), "scanning label, left column")
 
     space = boot()
     tools.ncdu = false
@@ -256,6 +256,61 @@ do
     find(space.render(), "space-refresh").props.onClick()
     eq(#runs, 1, "refresh ignores the cache")
     eq(runs[1].argv[2], "--version", "refresh starts a scan")
+end
+
+-- ── scan progress: an estimate from the last duration, else elapsed time ────
+do
+    -- boot() builds a new host table: the labelling tr goes in after it
+    local function withTr(space)
+        noctalia.tr = function(k, v) local x = v and (v.percent or v.time); return x and (k .. ":" .. x) or k end
+        return space
+    end
+    local function text(tree, key) local n = find(tree, key); return n and n.props.text end
+
+    -- first scan of this root: no bar, elapsed time
+    local space = withTr(boot())
+    space.scan("/", false, function() end)
+    runs[1].cb({ exitCode = 0, stdout = "ncdu 2.9.2", stderr = "", timedOut = false })
+    ms += 45000
+    space.step()
+    local tree = space.render()
+    eq(find(tree, "space-progress"), nil, "no estimate: no bar")
+    eq(text(tree, "space-progress-text"), "space_elapsed_scan:0:45", "elapsed label")
+    eq(find(tree, "space-msg"), nil, "no other line without an index")
+    local marker = runs[2].argv[11]
+    files[marker .. ".phase"] = { text = "reduce", mtime = 0 }
+    ms += 1000
+    space.step()
+    eq(text(space.render(), "space-progress-text"), "space_elapsed_reduce:0:46", "elapsed label, reduce")
+
+    -- a rescan with history over a shown index: bar, percent, the old-numbers hint
+    space = withTr(ready())
+    local timeFile = DIR .. "/space-root-" .. space.settingsTag() .. ".time"
+    files[timeFile] = { text = "30000", mtime = 0 }
+    space.refresh()
+    runs[1].cb({ exitCode = 0, stdout = "ncdu 2.9.2", stderr = "", timedOut = false })
+    ms += 15000
+    space.step()
+    tree = space.render()
+    local left = find(tree, "space-left")
+    eq(find(left, "space-progress").kind, "progress", "a ui.progress bar")
+    eq(find(left, "space-progress").props.progress, 0.5, "bar fraction")
+    eq(text(left, "space-progress-text"), "space_progress_scan:50", "estimate label")
+    eq(text(left, "space-msg"), "space_rescanning", "old numbers hint")
+    files[runs[2].argv[11] .. ".phase"] = { text = "reduce", mtime = 0 }
+    ms += 6000
+    space.step()
+    eq(text(space.render(), "space-progress-text"), "space_progress_reduce:70", "estimate label, reduce")
+
+    -- the scan ends: the bar and its label go
+    files[runs[2].argv[10]] = { text = fixture("/"), mtime = ms // 1000 }
+    files[runs[2].argv[11]] = { text = "ok\n", mtime = 0 }
+    ms += 1000
+    drain(space)
+    tree = space.render()
+    eq(find(tree, "space-progress"), nil, "no bar after the scan")
+    eq(find(tree, "space-progress-text"), nil, "no progress label after the scan")
+    eq(find(tree, "space-msg"), nil, "no hint after the scan")
 end
 
 -- ── no root switch while a scan runs (a detached run cannot be stopped) ──────
