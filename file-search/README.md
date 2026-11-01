@@ -165,7 +165,8 @@ items of the current folder; click a folder to go in, use the up arrow to go
 back. The list below sorts by size or name. In the file list of a type,
 *Name* sorts by the file name and *Path* by the full path. *Folders | Types* switches to a
 view by file type (video, images, audio…) and lists the 10 biggest files of a
-type; a line above the list says when it shows only those 10. The search button in the path row goes back to the Search tab and
+type; a line above the list says when it shows only those 10. When all the
+files listed are in one folder, that folder is shown once above the list. The search button in the path row goes back to the Search tab and
 restricts the search to the current folder, if it is inside the search folder;
 for any other folder it shows a notice.
 

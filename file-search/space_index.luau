@@ -93,6 +93,20 @@ function idx.entries(node, mode, category)
     return idx.sort(out, "size", true)
 end
 
+-- The folder part ("a/b/", up to the last "/") shared by the names of
+-- entries[1..count]; "" when they share none.
+function idx.commonDir(entries, count)
+    if count < 1 then return "" end
+    local prefix = entries[1].name:match("^(.*/)") or ""
+    for i = 2, count do
+        local name = entries[i].name
+        while prefix ~= "" and name:sub(1, #prefix) ~= prefix do
+            prefix = prefix:sub(1, -2):match("^(.*/)") or ""
+        end
+    end
+    return prefix
+end
+
 -- key: "size" (bytes), "name" (last path segment) or "path" (the whole
 -- relative name); name and path ignore case. Ties: full name, then the
 -- original position.

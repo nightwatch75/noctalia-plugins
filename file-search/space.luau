@@ -14,6 +14,8 @@
 -- ("size" | "name" | "path"; path in Types mode only, see idx.sort), sortDesc,
 -- mode ("folders" | "types"), typeFilter (a category number in Types mode,
 -- nil = none; cleared by entering a folder, going up or switching mode). space.typeFilter is a test-only mirror of it.
+-- With a category, the folder all listed files share (idx.commonDir) is shown
+-- once above the list and cut from each row; sorting still uses the full name.
 --
 -- State (module fields, read by the panel):
 --   space.state     "idle" | "scanning" | "ready" | "error". A stale index
@@ -775,11 +777,12 @@ local function label(key, text, color)
     return ui.label({ key = key, text = text, fontSize = 12, color = color or "on_surface_variant" })
 end
 
-local function entryLabel(entry)
+-- `name` is entry.name without the folder shown above the list (Types mode).
+local function entryLabel(entry, name)
     if entry.kind == "loose" then
         return shared.tr("space_loose")
     end
-    return display(entry.name, ROW_LABEL_MAX, entry.kind == "file")
+    return display(name, ROW_LABEL_MAX, entry.kind == "file")
 end
 
 -- The category with most bytes in a folder; nil for an empty one.
@@ -792,19 +795,22 @@ local function categoryOfNode(node)
 end
 
 -- One list row: swatch, name (a button only when a click does something),
--- size and share of the current folder.
-local function listRow(entry, i, node, colors, palette)
+-- size and share of the current folder. `strip` leading bytes of the name
+-- (the common folder) are not shown.
+local function listRow(entry, i, node, colors, palette, strip)
     local onClick = nil
     if entry.kind == "dir" and not entry.node.leaf then
         onClick = function() space.enter(entry.name) end
     elseif entry.kind == "file" then
         onClick = function() revealFile(entry.name) end
     end
-    local text = entryLabel(entry)
+    local shown = entry.name:sub(strip + 1)
+    local text = entryLabel(entry, shown)
     local full = entry.name:gsub("%c", " ")
+    local cut = text ~= shown:gsub("%c", " ")
     local name = onClick
         and ui.button({ key = "name-btn", text = text, fontSize = 12, variant = "ghost", contentAlign = "start",
-            flexGrow = 1, height = ROW_HEIGHT, tooltip = text ~= full and full or nil, onClick = onClick })
+            flexGrow = 1, height = ROW_HEIGHT, tooltip = cut and full or nil, onClick = onClick })
         or ui.label({ key = "name-plain", text = text, fontSize = 12, color = "on_surface", flexGrow = 1 })
     local share = node.s > 0 and entry.bytes / node.s * 100 or 0
     local bar
@@ -850,10 +856,11 @@ local function legendRow(slice, i, node)
     })
 end
 
+-- The state is part of the key: each state change builds a new button.
 local function sortButton(key)
     local active = sortKey == key
     return ui.button({
-        key = "space-sort-" .. key,
+        key = "space-sort-" .. key .. (active and (sortDesc and "-d" or "-a") or ""),
         text = shared.tr("space_sort_" .. key),
         glyph = active and (sortDesc and "arrow-down" or "arrow-up") or nil,
         variant = "ghost", controlSize = "sm", selected = active,
@@ -936,8 +943,12 @@ function space.render()
         end
         local rows = {}
         local entries = idx.sort(idx.entries(node, mode, typeFilter), sortKey, sortDesc)
-        for i = 1, math.min(#entries, MAX_ROWS) do
-            table.insert(rows, listRow(entries[i], i, node, colors, mode == "types" and (dark and idx.COLORS_DARK or idx.COLORS_LIGHT) or nil))
+        local count = math.min(#entries, MAX_ROWS)
+        -- Files of a type: the folder all rows share is shown once, above the list.
+        local common = mode == "types" and typeFilter and idx.commonDir(entries, count) or ""
+        for i = 1, count do
+            table.insert(rows, listRow(entries[i], i, node, colors,
+                mode == "types" and (dark and idx.COLORS_DARK or idx.COLORS_LIGHT) or nil, #common))
         end
         if #entries > MAX_ROWS then
             table.insert(rows, label("space-more", shared.tr("space_more_rows", { count = #entries - MAX_ROWS })))
@@ -951,6 +962,11 @@ function space.render()
         -- The index keeps only the TOP_N biggest files per type and folder.
         if mode == "types" and typeFilter and #entries >= TOP_N then
             table.insert(right, label("space-capped", shared.tr("space_capped", { count = #entries })))
+        end
+        if common ~= "" then
+            table.insert(right, label("space-common", shared.tr("space_common_path", {
+                path = display(absolute(common:sub(1, -2)), ROW_LABEL_MAX + 6, true),
+            })))
         end
         table.insert(right, ui.scroll({ key = "space-list", flexGrow = 1, gap = 2 }, rows))
     end

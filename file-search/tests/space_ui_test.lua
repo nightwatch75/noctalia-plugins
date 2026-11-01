@@ -133,6 +133,10 @@ local function rowOf(tree, prefix, text)
         if row and findText(row, text) then return row end
     end
 end
+-- A sort button whatever its state (the key ends in -a / -d when active).
+local function sortBtn(tree, key)
+    return find(tree, "space-sort-" .. key) or find(tree, "space-sort-" .. key .. "-a") or find(tree, "space-sort-" .. key .. "-d")
+end
 local function svgText()
     local a, b = files[DIR .. "/space-a.svg"], files[DIR .. "/space-b.svg"]
     assert((a == nil) ~= (b == nil), "exactly one of the two svg names on disk")
@@ -155,7 +159,7 @@ do
     assert(redraws > 0, "load end redraws")
     local tree = space.render()
     for _, key in ipairs({ "space-up", "space-root", "space-mode", "space-path", "space-img", "space-refresh",
-        "space-sort-size", "space-sort-name" }) do
+        "space-sort-size-d", "space-sort-name" }) do
         assert(find(tree, key), "key " .. key)
     end
     eq(find(tree, "space-path").props.text, "/", "path at root")
@@ -203,13 +207,13 @@ do
     local space = ready()
     local function first() return find(space.render(), "space-row-1") end
     assert(findText(first(), "usr"), "biggest first by default")
-    find(space.render(), "space-sort-size").props.onClick()
+    sortBtn(space.render(), "size").props.onClick()
     assert(findText(first(), "space_loose"), "second press on size flips to ascending")
-    find(space.render(), "space-sort-name").props.onClick()
+    sortBtn(space.render(), "name").props.onClick()
     assert(findText(first(), "space_loose"), "name ascending: the loose row (empty name) first")
-    find(space.render(), "space-sort-name").props.onClick()
+    sortBtn(space.render(), "name").props.onClick()
     assert(findText(first(), (WEIRD:gsub("%c", " "))), "second press on name flips to descending")
-    eq(find(space.render(), "space-sort-path"), nil, "no Path button in Folders mode")
+    eq(sortBtn(space.render(), "path"), nil, "no Path button in Folders mode")
 end
 
 -- ── untrusted names: escaped in the SVG, one line in the list ────────────────
@@ -423,21 +427,21 @@ do
     local tree = space.render()
     local order = {}
     for _, child in ipairs(find(tree, "space-sort").children) do table.insert(order, child.props.key) end
-    eq(table.concat(order, " "), "space-sort-size space-sort-name space-sort-path", "Size | Name | Path in Types mode")
+    eq(table.concat(order, " "), "space-sort-size-d space-sort-name space-sort-path", "Size | Name | Path in Types mode")
     local hostile = ("z/" .. WEIRD .. ".mkv"):gsub("%c", " ")
     eq(table.concat(rowNames(tree), "|"), hostile .. "|b/a.mkv|a/c.mkv", "size desc")
-    find(tree, "space-sort-name").props.onClick()
+    sortBtn(tree, "name").props.onClick()
     eq(table.concat(rowNames(space.render()), "|"), "b/a.mkv|a/c.mkv|" .. hostile, "name: basename asc")
-    find(space.render(), "space-sort-path").props.onClick()
+    sortBtn(space.render(), "path").props.onClick()
     eq(table.concat(rowNames(space.render()), "|"), "a/c.mkv|b/a.mkv|" .. hostile, "path: full path asc")
-    eq(find(space.render(), "space-sort-path").props.glyph, "arrow-up", "path starts ascending")
-    find(space.render(), "space-sort-path").props.onClick()
+    eq(sortBtn(space.render(), "path").props.glyph, "arrow-up", "path starts ascending")
+    sortBtn(space.render(), "path").props.onClick()
     eq(table.concat(rowNames(space.render()), "|"), hostile .. "|b/a.mkv|a/c.mkv", "second press flips path")
     -- Folders mode: no Path button, the path key falls back to name
     space.setMode("folders")
     tree = space.render()
-    eq(find(tree, "space-sort-path"), nil, "no Path button in Folders mode")
-    eq(find(tree, "space-sort-name").props.selected, true, "path falls back to name")
+    eq(sortBtn(tree, "path"), nil, "no Path button in Folders mode")
+    eq(sortBtn(tree, "name").props.selected, true, "path falls back to name")
 end
 
 -- ── file reveal (Types rows) ─────────────────────────────────────────────────
@@ -518,7 +522,7 @@ end
 do
     local LONG_FILE = "Videos/Recordings/2026/ottobre/05-chiusura-impastato-finale.mkv" -- 63 chars
     local LONG_DIR = string.rep("d", 60) .. "-end"
-    local SHORT_FILE = "Videos/Recordings/clip-within-the-limit.mkv"
+    local SHORT_FILE = "Music/clip-within-the-limit.mkv" -- another folder: nothing shared to strip
     local space = boot()
     putIndex("/", jsonl("/", {
         { id = "0", n = "/", s = 100, c = { 30, 0, 0, 0, 0, 0, 0, 70 },
@@ -582,6 +586,110 @@ do
     eq(find(capped(n - 1).render(), "space-capped"), nil, "fewer than TOP_N: no line")
     space.setTypeFilter(nil)
     eq(find(space.render(), "space-capped"), nil, "no category: no line")
+end
+
+-- ── Types rows: the folder they share is shown once above the list ──────────
+do
+    local function load(t)
+        local space = boot()
+        putIndex("/", jsonl("/", { { id = "0", n = "/", s = 10000, c = { 5000, 0, 0, 0, 0, 0, 0, 5000 }, t = t } }), 60)
+        space.onOpen(function() end)
+        drain(space)
+        space.setMode("types")
+        space.setTypeFilter(1)
+        noctalia.tr = function(k, v) return k == "space_common_path" and k .. ":" .. v.path or k end
+        return space
+    end
+    -- all in one folder: prefix gone from every row, shown once in the label
+    local space = load({
+        { n = "home/u/Videos/Recordings/08-pasta.mp4", s = 30, k = 1 },
+        { n = "home/u/Videos/Recordings/02-vantaggi.mp4", s = 20, k = 1 },
+        { n = "home/u/Videos/Recordings/sub/x.mp4", s = 10, k = 1 },
+    })
+    local tree = space.render()
+    eq(find(tree, "space-common").props.text, "space_common_path:/home/u/Videos/Recordings", "common folder label")
+    eq(find(tree, "space-common").props.color, "on_surface_variant", "muted")
+    eq(table.concat(rowNames(tree), "|"), "08-pasta.mp4|02-vantaggi.mp4|sub/x.mp4", "prefix stripped")
+    for _, name in ipairs(rowNames(tree)) do
+        assert(not name:find("Recordings", 1, true), "label prefix not repeated in a row: " .. name)
+    end
+    eq(find(find(tree, "space-row-1"), "name-btn").props.tooltip, nil, "short stripped row: no tooltip")
+    local order = {}
+    for _, child in ipairs(find(tree, "space-right").children) do table.insert(order, child.props.key) end
+    eq(table.concat(order, " "), "space-path space-buttons space-sort space-common space-list", "label above the list")
+    -- Path sort still uses the full relative path
+    sortBtn(tree, "path").props.onClick()
+    eq(table.concat(rowNames(space.render()), "|"), "02-vantaggi.mp4|08-pasta.mp4|sub/x.mp4", "path sort")
+    -- the reveal still uses the full path
+    files["/home/u/Videos/Recordings/02-vantaggi.mp4"] = { text = "x", mtime = 1 }
+    click(find(space.render(), "space-row-1"), "stripped row")
+    assert(runs[#runs].argv[10]:find("file:///home/u/Videos/Recordings/02-vantaggi.mp4", 1, true), "reveal full path")
+
+    -- mixed folders: no shared folder, nothing stripped, no label
+    tree = load({ { n = "a/c.mkv", s = 10, k = 1 }, { n = "b/a.mkv", s = 20, k = 1 } }).render()
+    eq(find(tree, "space-common"), nil, "mixed folders: no label")
+    eq(table.concat(rowNames(tree), "|"), "b/a.mkv|a/c.mkv", "mixed folders: full relative paths")
+    -- a shared part of a name is not a folder: "ab/" and "ac/" share nothing
+    tree = load({ { n = "ab/x.mkv", s = 10, k = 1 }, { n = "ac/y.mkv", s = 20, k = 1 } }).render()
+    eq(find(tree, "space-common"), nil, "common letters are not a folder")
+
+    -- one entry: its folder
+    tree = load({ { n = "v/w/only.mkv", s = 10, k = 1 } }).render()
+    eq(find(tree, "space-common").props.text, "space_common_path:/v/w", "one entry: its folder")
+    eq(table.concat(rowNames(tree), "|"), "only.mkv", "one entry stripped")
+    -- a file directly in the folder: no prefix
+    eq(find(load({ { n = "top.mkv", s = 10, k = 1 } }).render(), "space-common"), nil, "no folder part: no label")
+
+    -- hostile names stay plain text
+    tree = load({ { n = "d/" .. WEIRD .. ".mkv", s = 20, k = 1 }, { n = "d/b.mkv", s = 10, k = 1 } }).render()
+    eq(rowNames(tree)[1], ((WEIRD .. ".mkv"):gsub("%c", " ")), "hostile row: quote, < and & as text, newline as space")
+    eq(find(tree, "space-common").props.text, "space_common_path:/d", "hostile: label")
+    tree = load({ { n = WEIRD .. "/a.mkv", s = 20, k = 1 }, { n = WEIRD .. "/b.mkv", s = 10, k = 1 } }).render()
+    eq(find(tree, "space-common").props.text, "space_common_path:/" .. WEIRD:gsub("%c", " "), "hostile folder: one line")
+
+    -- still too long after stripping: keepEnd at 52, tooltip with the full name
+    local LONG = "p/" .. string.rep("x", 60) .. ".mkv"
+    tree = load({ { n = LONG, s = 20, k = 1 } }).render()
+    local props = find(find(tree, "space-row-1"), "name-btn").props
+    eq(utf8.len(props.text), 52, "long stripped row cut to 52")
+    eq(props.tooltip, LONG, "tooltip with the full name")
+
+    -- Folders mode and Types without a category: unchanged
+    space = load({ { n = "v/w/only.mkv", s = 10, k = 1 } })
+    space.setTypeFilter(nil)
+    eq(find(space.render(), "space-common"), nil, "no category: no label")
+    space.setMode("folders")
+    eq(find(space.render(), "space-common"), nil, "folders mode: no label")
+end
+
+-- ── sort buttons: the state is in the key, so a stale glyph cannot survive ──
+do
+    local space = typesReady()
+    space.setTypeFilter(1)
+    local function buttons()
+        local out = {}
+        for _, b in ipairs(find(space.render(), "space-sort").children) do out[b.props.key] = b.props end
+        return out
+    end
+    local b = buttons()
+    eq(b["space-sort-size-d"].glyph, "arrow-down", "size active descending")
+    b["space-sort-path"].onClick()
+    b = buttons()
+    assert(b["space-sort-path-a"], "path active ascending")
+    buttons()["space-sort-name"].onClick()
+    b = buttons()
+    eq(b["space-sort-name-a"].glyph, "arrow-up", "name active ascending")
+    eq(b["space-sort-size"].glyph, nil, "size inactive: no glyph")
+    eq(b["space-sort-path"].glyph, nil, "path inactive: no glyph")
+    b["space-sort-name-a"].onClick()
+    b = buttons()
+    eq(b["space-sort-name-d"].glyph, "arrow-down", "second press flips the glyph")
+    local glyphs = 0
+    for key, props in pairs(b) do
+        if props.glyph then glyphs += 1 end
+        if not key:match("%-[ad]$") then eq(props.glyph, nil, "inactive " .. key .. ": no glyph") end
+    end
+    eq(glyphs, 1, "one glyph only")
 end
 
 print("space_ui_test OK")

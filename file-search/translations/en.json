@@ -79,6 +79,7 @@
     }
   },
   "space_capped": "Showing the {count} biggest files of this type",
+  "space_common_path": "In {path}",
   "space_err": {
     "datadir": "No plugin data folder — cannot store the scan",
     "empty": "ncdu wrote no scan — the folder may be unreadable",
