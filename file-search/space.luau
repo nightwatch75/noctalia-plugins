@@ -2,11 +2,16 @@
 -- file-search — the Space tab of the panel: a disk-usage browser.
 --
 -- Role: a module required by panel.luau (never an entry of its own). The panel
--- calls onOpen()/onClose() with its own lifecycle and embeds whatever
--- render() returns under the tab bar. The treemap UI arrives in later steps;
--- this file owns the scan engine and its state. The panel calls space.step()
--- on its frame tick while space.needsTick() is true: scans and index loads
--- only advance there.
+-- calls onOpen(redraw) when the Space tab is shown, onClose() with the panel,
+-- and embeds whatever render() returns under the tab bar. This file owns the
+-- scan engine, its state and the tab UI (path line, donut, legend, sorted
+-- list). The panel calls space.step() on its frame tick while
+-- space.needsTick() is true: scans and index loads only advance there. Any
+-- visible change calls redraw, never while the panel is closed.
+--
+-- UI state (file-locals): path (node stack from space.index down to the
+-- current folder; re-walked by name when a new index lands), sortKey
+-- ("size" | "name"), sortDesc, mode ("folders"; Types arrives later).
 --
 -- State (module fields, read by the panel):
 --   space.state     "idle" | "scanning" | "ready" | "error". A stale index
@@ -98,6 +103,17 @@ local scanCount = 0
 local ncduOld = nil -- nil = not probed yet
 local job = nil     -- { dir, done, marker?, deadline, nextPoll, loading? }
 local loader = nil  -- { text, pos, nodes, tree, at }
+local deferred = nil -- done() of a scan waiting for the current load to end
+
+-- Panel side (see the panel hooks below).
+local isOpen = false
+local redraw = nil
+
+local function changed()
+    if isOpen and redraw ~= nil then
+        redraw()
+    end
+end
 
 -- ── files and tools ──────────────────────────────────────────────────────────
 
@@ -177,6 +193,7 @@ local function endScan(errText)
     if done then
         done()
     end
+    changed()
 end
 
 -- ── index load ───────────────────────────────────────────────────────────────
@@ -248,6 +265,8 @@ local function endLoad(tree, at)
     space.errText = nil
     if scanLoad then
         endScan(nil)
+    else
+        changed()
     end
 end
 
@@ -288,6 +307,7 @@ function space.setRoot(root)
     end
     job = nil
     loader = nil
+    deferred = nil
     space.root = root
     space.index = nil
     space.scannedAt = 0
@@ -360,10 +380,15 @@ end
 
 -- Scan `root` (switching to it first), then call done() unless the scan was
 -- dropped by setRoot. `force` skips the TTL; a scan of the current root
--- already in flight is never doubled.
+-- already in flight is never doubled. While an index loads (setRoot starts
+-- one) the TTL check waits for it, so a fresh cached index is not rescanned.
 function space.scan(root, force, done)
     space.setRoot(root)
     if space.scanning then
+        return
+    end
+    if space.loading and not force then
+        deferred = done
         return
     end
     if not force and space.fresh() then
@@ -423,6 +448,11 @@ function space.step()
     if loader ~= nil then
         sliceLoad(now)
     end
+    if deferred ~= nil and not space.loading and job == nil then
+        local done = deferred
+        deferred = nil
+        space.scan(space.root, false, done)
+    end
     return space.needsTick()
 end
 
@@ -430,18 +460,336 @@ function space.needsTick()
     return space.scanning or space.loading
 end
 
+
+-- ── navigation ───────────────────────────────────────────────────────────────
+
+local LEFT_WIDTH = 340
+local DONUT_SIZE = 200
+local DONUT_THICKNESS = 28
+local LABEL_MAX = 34
+local ROW_HEIGHT = 22
+local SVG_NAMES = { "space-a.svg", "space-b.svg" }
+local GREY = { dark = { other = "#5b6180", loose = "#3d4256" }, light = { other = "#9aa2b8", loose = "#c3c8d6" } }
+
+local path = {}       -- nodes from space.index down to the current folder
+local sortKey = "size"
+local sortDesc = true
+local mode = "folders"
+local svg = { slot = 0, path = nil, key = nil } -- written image and what it shows
+
+-- The current folder. A new index (rescan, root switch) is walked again by
+-- name, so the view stays where it was as far as the folders still exist.
+local function current()
+    local tree = space.index
+    if tree == nil then
+        path = {}
+        return nil
+    end
+    if path[1] ~= tree then
+        local fresh = { tree }
+        for i = 2, #path do
+            local child = idx.child(fresh[#fresh], path[i].n)
+            if child == nil then
+                break
+            end
+            table.insert(fresh, child)
+        end
+        path = fresh
+    end
+    return path[#path]
+end
+
+-- Absolute path of the current folder (+ `rel`). Built from space.root, not
+-- the index's root name: ncdu writes a symlinked home resolved.
+local function absolute(rel)
+    local parts = { space.root == "/" and "" or space.root }
+    for i = 2, #path do
+        table.insert(parts, path[i].n)
+    end
+    if rel ~= nil then
+        table.insert(parts, rel)
+    end
+    local out = table.concat(parts, "/")
+    return out == "" and "/" or out
+end
+
+-- Names come from the disk: control characters (a newline would break the
+-- row) become spaces, and long ones are cut, unless the UTF-8 is invalid.
+local function display(name, max)
+    local text = name:gsub("%c", " ")
+    local len = utf8.len(text)
+    if len ~= nil and len > max then
+        text = text:sub(1, utf8.offset(text, max)) .. "…"
+    end
+    return text
+end
+
+function space.up()
+    if #path > 1 then
+        table.remove(path)
+        changed()
+    end
+end
+
+function space.enter(name)
+    local node = current()
+    local child = node and idx.child(node, name)
+    if child ~= nil and not child.leaf then
+        table.insert(path, child)
+        changed()
+    end
+end
+
+function space.setSort(key)
+    if key == sortKey then
+        sortDesc = not sortDesc
+    else
+        sortKey = key
+        sortDesc = key == "size"
+    end
+    changed()
+end
+
+function space.setMode(value)
+    mode = value
+    changed()
+end
+
+local function noop() end
+
+function space.toggleRoot()
+    path = {}
+    space.scan(space.root == "/" and noctalia.expandPath("~") or "/", false, noop)
+    changed()
+end
+
+function space.refresh()
+    space.scan(space.root, true, noop)
+    changed()
+end
+
+-- A top file of the current folder (Types mode). The index may be a day
+-- old, so a missing file is a notice, not an error.
+local function revealFile(rel)
+    local full = absolute(rel)
+    if not noctalia.fileExists(full) then
+        noctalia.notify(shared.tr("title"), shared.tr("space_gone", { path = full }))
+        return
+    end
+    shared.revealPath(full)
+end
+
+-- ── donut ────────────────────────────────────────────────────────────────────
+
+local function paint(slices)
+    local dark = noctalia.isDarkMode()
+    local palette = dark and idx.COLORS_DARK or idx.COLORS_LIGHT
+    local grey = dark and GREY.dark or GREY.light
+    for _, slice in ipairs(slices) do
+        slice.color = slice.index and palette[(slice.index - 1) % #palette + 1] or grey[slice.kind] or grey.other
+    end
+    return slices
+end
+
+-- Rewritten only when what it shows changes; two alternating names, since the
+-- host caches an image by path (same pattern as usage.writeSvg).
+local function writeSvg(node, slices)
+    local dir = shared.dataDir()
+    if dir == nil then
+        return nil
+    end
+    local key = tostring(node) .. mode .. tostring(noctalia.isDarkMode())
+    if key == svg.key and svg.path ~= nil then
+        return svg.path
+    end
+    local name = #path > 1 and node.n or space.root
+    local text = usage.svg(slices, node.s, DONUT_SIZE, DONUT_THICKNESS,
+        shared.formatBytes(node.s), display(name, 14))
+    svg.slot = svg.slot % #SVG_NAMES + 1
+    local previous = svg.path or (dir .. "/" .. SVG_NAMES[svg.slot % #SVG_NAMES + 1])
+    local file = dir .. "/" .. SVG_NAMES[svg.slot]
+    local ok, err = noctalia.writeFile(file, text)
+    if not ok then
+        noctalia.log("file-search: could not write the space chart: " .. tostring(err))
+        return svg.path
+    end
+    if previous ~= file then
+        noctalia.removeFile(previous)
+    end
+    svg.path, svg.key = file, key
+    return file
+end
+
 -- ── panel hooks ──────────────────────────────────────────────────────────────
 
-function space.onOpen() end
+-- `onChange` re-renders the panel. Loads the current root's index first; the
+-- scan's TTL check waits for that load (see space.scan), then rescans a
+-- missing or stale index by itself. Safe to call again on every tab switch.
+function space.onOpen(onChange)
+    isOpen = true
+    redraw = onChange
+    if space.index == nil and not space.loading and not space.scanning then
+        space.startLoad(shared.dataDir())
+    end
+    space.scan(space.root, false, noop)
+end
 
-function space.onClose() end
+-- Scans and loads keep going; their late results only stop redrawing.
+function space.onClose()
+    isOpen = false
+end
+
+local function label(key, text, color)
+    return ui.label({ key = key, text = text, fontSize = 12, color = color or "on_surface_variant" })
+end
+
+local function entryLabel(entry)
+    if entry.kind == "loose" then
+        return shared.tr("space_loose")
+    end
+    return display(entry.name, LABEL_MAX)
+end
+
+-- One list row: swatch, name (a button only when a click does something),
+-- size and share of the current folder.
+local function listRow(entry, i, node, colors)
+    local onClick = nil
+    if entry.kind == "dir" and not entry.node.leaf then
+        onClick = function() space.enter(entry.name) end
+    elseif entry.kind == "file" then
+        onClick = function() revealFile(entry.name) end
+    end
+    local text = entryLabel(entry)
+    local name = onClick
+        and ui.button({ key = "name-btn", text = text, fontSize = 12, variant = "ghost", contentAlign = "start",
+            flexGrow = 1, height = ROW_HEIGHT, onClick = onClick })
+        or ui.label({ key = "name-plain", text = text, fontSize = 12, color = "on_surface", flexGrow = 1 })
+    local share = node.s > 0 and entry.bytes / node.s * 100 or 0
+    return ui.row({ key = "space-row-" .. i, gap = 6, align = "center", height = ROW_HEIGHT }, {
+        ui.box({ key = "swatch", fill = colors[entry.node or entry.kind] or colors.other, radius = 2, width = 9, height = 9 }),
+        name,
+        label("size", shared.tr("usage_amount", {
+            size = shared.formatBytes(entry.bytes), share = string.format("%.0f", share),
+        })),
+    })
+end
+
+local function legendRow(slice, i, node)
+    local text = slice.kind == "loose" and shared.tr("space_loose")
+        or slice.kind == "other" and shared.tr("usage_other")
+        or display(slice.label, LABEL_MAX)
+    local child = slice.kind == "dir" and idx.child(node, slice.label)
+    local name
+    if child and not child.leaf then
+        name = ui.button({ key = "name-btn", text = text, fontSize = 11, variant = "ghost", contentAlign = "start",
+            flexGrow = 1, height = 20, onClick = function() space.enter(slice.label) end })
+    else
+        name = ui.label({ key = "name-plain", text = text, fontSize = 11, color = "on_surface_variant", flexGrow = 1 })
+    end
+    local share = node.s > 0 and slice.bytes / node.s * 100 or 0
+    return ui.row({ key = "space-legend-" .. i, gap = 6, align = "center", height = 20 }, {
+        ui.box({ key = "swatch", fill = slice.color, radius = 2, width = 9, height = 9 }),
+        name,
+        ui.label({ key = "size", fontSize = 11, color = "on_surface_variant", text = shared.tr("usage_amount", {
+            size = shared.formatBytes(slice.bytes), share = string.format("%.0f", share),
+        }) }),
+    })
+end
+
+local function sortButton(key)
+    local active = sortKey == key
+    return ui.button({
+        key = "space-sort-" .. key,
+        text = shared.tr("space_sort_" .. key),
+        glyph = active and (sortDesc and "arrow-down" or "arrow-up") or nil,
+        variant = "ghost", controlSize = "sm", selected = active,
+        onClick = function() space.setSort(key) end,
+    })
+end
+
+-- The text in place of the chart and list, or nil when an index is shown.
+local function statusText()
+    if space.index ~= nil then
+        return nil
+    end
+    if space.state == "error" then
+        return shared.tr("space_err." .. (space.errText or "spawn")), "error"
+    end
+    if space.state == "scanning" then
+        return shared.tr("space_scanning")
+    end
+    return shared.tr("space_loading")
+end
 
 function space.render()
-    return ui.label({
-        key = "space",
-        text = noctalia.tr("space_placeholder"),
-        color = "on_surface_variant",
-        flexGrow = 1,
+    local node = current()
+    local atHome = space.root ~= "/"
+    local controls = ui.row({ key = "space-buttons", gap = 4, align = "center" }, {
+        ui.button({ key = "space-up", glyph = "arrow-up", variant = "ghost", enabled = #path > 1,
+            tooltip = shared.tr("space_tip_up"), onClick = space.up }),
+        ui.button({ key = "space-root", glyph = atHome and "device-desktop" or "home", variant = "ghost",
+            text = atHome and "/" or "~", tooltip = shared.tr(atHome and "space_tip_root" or "space_tip_home"),
+            onClick = space.toggleRoot }),
+        ui.row({ key = "space-mode", gap = 2 }, {
+            ui.button({ key = "folders", text = shared.tr("space_mode_folders"), variant = "ghost",
+                controlSize = "sm", selected = mode == "folders", onClick = function() space.setMode("folders") end }),
+        }),
+        ui.spacer({ key = "gap", flexGrow = 1 }),
+        ui.button({ key = "space-refresh", glyph = "refresh", variant = "ghost", enabled = not space.scanning,
+            tooltip = shared.tr("space_tip_refresh"), onClick = space.refresh }),
+    })
+    -- The end of a long path is the part that says where you are.
+    local where = absolute():gsub("%c", " ")
+    local len = utf8.len(where)
+    if len ~= nil and len > LABEL_MAX + 6 then
+        where = "…" .. where:sub(utf8.offset(where, len - LABEL_MAX - 4))
+    end
+    local left = {
+        ui.label({ key = "space-path", text = where, fontSize = 13,
+            fontWeight = "bold", color = "on_surface" }),
+        controls,
+    }
+    local text, color = statusText()
+    if text == nil and space.scanning then
+        text = shared.tr("space_rescanning")
+    elseif text == nil and space.errText ~= nil then
+        text, color = shared.tr("space_err." .. space.errText), "error"
+    end
+    if text ~= nil then
+        table.insert(left, label("space-msg", text, color))
+    end
+    local right = {}
+    if node ~= nil then
+        local slices = paint(idx.slices(node, mode, usage.MAX_SLICES))
+        local image = writeSvg(node, slices)
+        if image ~= nil then
+            table.insert(left, ui.image({ key = "space-img", path = image, width = DONUT_SIZE, height = DONUT_SIZE }))
+        end
+        local legend = {}
+        for i, slice in ipairs(slices) do
+            table.insert(legend, legendRow(slice, i, node))
+        end
+        table.insert(left, ui.column({ key = "space-legend", gap = 1 }, legend))
+
+        -- Swatch colours: a folder by its position in node.d, like its slice.
+        local dark = noctalia.isDarkMode()
+        local palette = dark and idx.COLORS_DARK or idx.COLORS_LIGHT
+        local colors = table.clone(dark and GREY.dark or GREY.light)
+        for j, d in ipairs(node.d) do
+            colors[d] = palette[(j - 1) % #palette + 1]
+        end
+        local rows = {}
+        for i, entry in ipairs(idx.sort(idx.entries(node, mode, nil), sortKey, sortDesc)) do
+            table.insert(rows, listRow(entry, i, node, colors))
+        end
+        table.insert(right, ui.row({ key = "space-sort", gap = 4, align = "center" }, {
+            sortButton("size"), sortButton("name"),
+        }))
+        table.insert(right, ui.scroll({ key = "space-list", flexGrow = 1, gap = 2 }, rows))
+    end
+    return ui.row({ key = "space", flexGrow = 1, gap = 16 }, {
+        ui.column({ key = "space-left", width = LEFT_WIDTH, gap = 8 }, left),
+        ui.column({ key = "space-right", flexGrow = 1, gap = 4 }, right),
     })
 end
 

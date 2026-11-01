@@ -183,6 +183,58 @@ function shared.openPath(path)
     noctalia.runAsync({ "xdg-open", path })
 end
 
+-- file:// URI for a local path. Every byte outside the unreserved set is
+-- percent-encoded one byte at a time, which is also the correct encoding for
+-- the UTF-8 sequences of a non-ASCII name — and it leaves the result free of
+-- quotes and spaces, so it can be dropped into a GVariant literal as-is.
+local function fileUri(path)
+    return "file://" .. (path:gsub("[^%w%-%._~/]", function(byte)
+        return string.format("%%%02X", string.byte(byte))
+    end))
+end
+
+-- Show the entry in the system file manager: its containing folder opens with
+-- the entry itself selected, for a directory too (its parent opens, with the
+-- directory highlighted) — left click is what enters a directory.
+--
+-- ShowItems on the org.freedesktop.FileManager1 interface is the portable way
+-- to say "reveal this": Thunar, Nautilus, Dolphin, Nemo, Caja and PCManFM-Qt
+-- all implement it, and the session bus activates the handler on demand, so
+-- the file manager does not need to be running. When there is no such handler,
+-- or no gdbus at all (execvp failing is a 127 exit like any other), the
+-- fallback opens the containing folder through the MIME association, which is
+-- the same window minus the selection.
+--
+-- An argv (plugin_api >= 24) rather than a shell line: the GVariant literal
+-- carries a file name straight from the index and nothing parses it. That moves
+-- the `||` fallback out of the shell and into the callback.
+function shared.revealPath(path)
+    local parent = path:match("^(.*)/[^/]+$")
+    if parent == nil or parent == "" then
+        parent = "/"
+    end
+    local ok = noctalia.runAsync({
+        "gdbus",
+        "call",
+        "--session",
+        "--dest",
+        "org.freedesktop.FileManager1",
+        "--object-path",
+        "/org/freedesktop/FileManager1",
+        "--method",
+        "org.freedesktop.FileManager1.ShowItems",
+        '["' .. fileUri(path) .. '"]',
+        "",
+    }, function(result)
+        if result.exitCode ~= 0 or result.timedOut then
+            shared.openPath(parent)
+        end
+    end, 5000)
+    if not ok then
+        shared.openPath(parent)
+    end
+end
+
 -- ── fzf capability + scoring ─────────────────────────────────────────────────
 
 -- --scheme=path arrived in fzf 0.36; an older build exits with "unknown option"

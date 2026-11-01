@@ -67,7 +67,8 @@ local usage = {
     scan = function() end,
     writeSvg = function() end,
 }
-local space = { onOpen = function() end, onClose = function() end, render = function() end }
+local space = { onOpen = function() end, onClose = function() end, render = function() end,
+    needsTick = function() return false end, step = function() return false end }
 require = function(path)
     if path == "./shared.luau" then return shared end
     return path == "./space.luau" and space or usage

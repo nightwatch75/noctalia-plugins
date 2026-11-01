@@ -69,6 +69,7 @@ local usage = {
 }
 local space = {
     onOpen = function() end, onClose = function() end,
+    needsTick = function() return false end, step = function() return false end,
     render = function() return ui.label({ key = "space", text = "space" }) end,
 }
 require = function(path)
