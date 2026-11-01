@@ -14,7 +14,7 @@ ui = setmetatable({}, { __index = function(_, kind)
 end })
 
 local function boot()
-    files, decoded, runs, tools, notes = {}, {}, {}, {}, {}
+    files, decoded, runs, tools, notes = {}, {}, {}, { lsblk = false }, {}
     ms, redraws = 1e9, 0
     noctalia = {
         readFile = function(p) local f = files[p]; return f and f.text end,
@@ -232,6 +232,19 @@ do
     find(space.render(), "space-refresh").props.onClick()
     eq(#runs, 1, "refresh ignores the cache")
     eq(runs[1].argv[2], "--version", "refresh starts a scan")
+end
+
+-- ── no root switch while a scan runs (a detached run cannot be stopped) ──────
+do
+    local space = ready()
+    eq(find(space.render(), "space-root").props.enabled, true, "root button enabled when idle")
+    space.refresh()
+    eq(space.scanning, true, "refresh scans")
+    eq(find(space.render(), "space-root").props.enabled, false, "root button disabled while scanning")
+    space.toggleRoot()
+    eq(space.root, "/", "toggleRoot refused while scanning")
+    eq(#runs, 1, "no second scan")
+    assert(space.index ~= nil, "index kept")
 end
 
 -- ── late callbacks after close are ignored ───────────────────────────────────

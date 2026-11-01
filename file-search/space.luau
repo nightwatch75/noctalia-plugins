@@ -18,7 +18,7 @@
 -- State (module fields, read by the panel):
 --   space.state     "idle" | "scanning" | "ready" | "error". A stale index
 --                   stays "ready" while its rescan runs (see space.scanning).
---   space.scanning  a scan of space.root is in flight (probe, run or load)
+--   space.scanning  a scan of space.root is in flight (probes, run or load)
 --   space.loading   an index is being decoded, a slice per step()
 --   space.errText   last failure, one of:
 --                     "ncdu"      ncdu not found, or its --version unreadable
@@ -38,7 +38,8 @@
 -- Pipeline:
 --   1. `ncdu --version` with a callback, once per load (ncdu >= 2.0). Only a
 --      parsed version is remembered; a timeout is retried on the next scan.
---   2. One DETACHED `/bin/sh -c SCAN_SCRIPT` (runAsync without callback): the
+--   2. shared.probeMounts (see launch) so removable disks can be excluded.
+--   3. One DETACHED `/bin/sh -c SCAN_SCRIPT` (runAsync without callback): the
 --      host kills a captured run after 60 s and keeps only 1 MiB of its
 --      stdout, and ncdu + jq take ~45 s on "/" here, so neither limit can
 --      apply. The script runs ncdu (never -x: on "/" it skips /home and
@@ -49,7 +50,7 @@
 --      constant; every path, exclude and the jq program are positional
 --      parameters. A detached run has no login PATH, so binaries are absolute
 --      (TOOL_DIRS).
---   3. step() polls the marker about once a second, then loads the index.
+--   4. step() polls the marker about once a second, then loads the index.
 --   jq writes the index file itself; there is no Lua-side save.
 --
 -- The index is JSON Lines (see idx.jqProgram) and decoded a few lines per
@@ -60,7 +61,8 @@
 -- A scan is a job table; setRoot() or a newer scan replaces it, and anything
 -- belonging to an older job (probe answer, marker) is ignored. Each run has
 -- its own scan/temp/marker names; leftovers of dropped or orphaned runs are
--- swept when the next run starts.
+-- swept when the next run starts. The root cannot be switched while a scan
+-- runs (see toggleRoot).
 
 local shared = require("./shared.luau")
 local usage = require("./usage.luau")
@@ -73,6 +75,8 @@ space.POLL_MS = 1000
 space.SLICE_MS = 8
 -- No host timeout applies to a detached run; ~45 s on "/" here.
 space.SCAN_DEADLINE_MS = 1800000
+-- Longest wait for the mount probe (lsblk has 10 s) before launching anyway.
+space.PROBE_WAIT_MS = 15000
 
 -- Values recorded with their measurements in the header of space_index.luau.
 local DEPTH, TOP_N, MIN_BYTES = 6, 5, 1048576
@@ -80,8 +84,11 @@ local DEPTH, TOP_N, MIN_BYTES = 6, 5, 1048576
 local TOOL_DIRS = { "/usr/bin", "/usr/local/bin", "/bin", "~/.local/bin" }
 
 -- $1 ncdu  $2 jq  $3 jq program  $4 scan file  $5 temp  $6 index  $7 marker
--- $8 nice ("" = none), then the ncdu arguments.
+-- $8 nice ("" = none), then the ncdu arguments. The first line makes ncdu and
+-- jq (~1.5 GB on "/") the OOM killer's first choice, not the user's session;
+-- raising one's own score needs no privilege.
 local SCAN_SCRIPT = table.concat({
+    'echo 1000 2>/dev/null > /proc/self/oom_score_adj',
     'n=$1 j=$2 p=$3 s=$4 t=$5 i=$6 d=$7 c=$8',
     'shift 8',
     'run() { if [ -n "$c" ]; then "$c" -n 19 "$@"; else "$@"; fi; }',
@@ -92,6 +99,7 @@ local SCAN_SCRIPT = table.concat({
     'rm -f "$s" "$t"',
     'echo "$r" > "$d"',
 }, "\n")
+space.SCAN_SCRIPT = SCAN_SCRIPT -- read by tests/space_script_test.sh
 
 space.state = "idle"
 space.scanning = false
@@ -103,7 +111,7 @@ space.scannedAt = 0
 
 local scanCount = 0
 local ncduOld = nil -- nil = not probed yet
-local job = nil     -- { dir, done, marker?, deadline, nextPoll, loading? }
+local job = nil     -- { dir, done, probeUntil?, marker?, deadline, nextPoll, loading? }
 local loader = nil  -- { text, pos, nodes, tree, at }
 local deferred = nil -- done() of a scan waiting for the current load to end
 local generation = 0 -- bumped per loaded index, keys the chart cache
@@ -156,7 +164,8 @@ function space.excludeArgs()
     if noctalia.getConfig("space_exclude_external") ~= false then
         for _, path in ipairs(shared.wholePrunePaths()) do
             table.insert(args, "--exclude")
-            table.insert(args, path)
+            -- --exclude is an fnmatch pattern; ncdu honours the backslash escape
+            table.insert(args, (path:gsub("[%*%?%[%]\\]", "\\%0")))
         end
     end
     for _, pattern in ipairs(usage.excludes()) do
@@ -322,8 +331,9 @@ function space.setRoot(root)
     space.startLoad(shared.dataDir())
 end
 
-local function launch(current)
-    -- Again after the async probe: a nil in argv would shift every $N.
+local function start(current)
+    current.probeUntil = nil
+    -- Again after the async probes: a nil in argv would shift every $N.
     local missing = space.checkTools()
     if missing ~= nil then
         endScan(missing)
@@ -354,6 +364,23 @@ local function launch(current)
     current.marker = stem .. ".done"
     current.deadline = now + space.SCAN_DEADLINE_MS
     current.nextPoll = now + space.POLL_MS
+end
+
+-- shared.mounts is filled by the Search side, which may not have run yet in
+-- this session: removable disks (vfat, exfat, ntfs count as local) are only
+-- known from it. A probe that never answers is replaced by step() after
+-- PROBE_WAIT_MS; either way the run starts with what is known.
+local function launch(current)
+    if noctalia.getConfig("space_exclude_external") == false then
+        start(current)
+        return
+    end
+    current.probeUntil = noctalia.nowMs() + space.PROBE_WAIT_MS
+    shared.probeMounts(false, function()
+        if job == current and current.probeUntil ~= nil then
+            start(current)
+        end
+    end, true)
 end
 
 local function poll(now)
@@ -446,6 +473,9 @@ end
 -- True while anything is left to wait for.
 function space.step()
     local now = noctalia.nowMs()
+    if job ~= nil and job.probeUntil ~= nil and now > job.probeUntil then
+        start(job)
+    end
     if job ~= nil and job.marker ~= nil then
         poll(now)
     end
@@ -572,7 +602,12 @@ end
 
 local function noop() end
 
+-- Refused while a scan runs: the detached run cannot be stopped, and a scan
+-- per root would stack several ncdu + jq.
 function space.toggleRoot()
+    if space.scanning then
+        return
+    end
     path = {}
     typeFilter, space.typeFilter = nil, nil
     space.scan(space.root == "/" and noctalia.expandPath("~") or "/", false, noop)
@@ -766,7 +801,7 @@ function space.render()
             tooltip = shared.tr("space_tip_up"), onClick = space.up }),
         ui.button({ key = "space-root", glyph = atHome and "device-desktop" or "home", variant = "ghost",
             text = atHome and "/" or "~", tooltip = shared.tr(atHome and "space_tip_root" or "space_tip_home"),
-            onClick = space.toggleRoot }),
+            enabled = not space.scanning, onClick = space.toggleRoot }),
         ui.row({ key = "space-mode", gap = 2 }, {
             ui.button({ key = "folders", text = shared.tr("space_mode_folders"), variant = "ghost",
                 controlSize = "sm", selected = mode == "folders", onClick = function() space.setMode("folders") end }),

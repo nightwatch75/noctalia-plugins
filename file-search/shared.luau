@@ -520,11 +520,15 @@ end
 -- current now" and the later one knows more. In practice neither entry gets
 -- there — the panel serialises through requestReload and the launcher parks the
 -- query itself (probeBusy above).
-function shared.probeMounts(force, done)
+--
+-- `any` (the Space tab) probes whatever the scope: its scan of "/" needs the
+-- removable disks to exclude them.
+function shared.probeMounts(force, done, any)
     -- A whole-system walk needs the list too, to prune removable disks it would
     -- otherwise reach under /mnt or /media.
-    if shared.scope == "folder" and not shared.whole then
+    if shared.scope == "folder" and not shared.whole and not any then
         shared.mounts = {}
+        shared.mountsAt = 0 -- the list just emptied is not a fresh probe
         done()
         return
     end

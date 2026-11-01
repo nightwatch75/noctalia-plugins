@@ -12,7 +12,8 @@
 # dependencies; MODULE_SRC is still the first one.
 #
 # Then it runs tests/space_jq_test.sh (shell + jq, not a *_test.lua): the jq
-# index reducer of space_index.luau on a real ncdu fixture.
+# index reducer of space_index.luau on a real ncdu fixture, and
+# tests/space_script_test.sh: the real scan script under /bin/sh.
 #
 # Interpreter: `luau` from PATH if present, else `luau-test` (a ~40-line C++
 # runner over the luau VM in the noctalia sources: compile + load + pcall, plus
@@ -46,3 +47,4 @@ for test in tests/*_test.lua; do
     "$LUAU" "$out"
 done
 LUAU="$LUAU" sh tests/space_jq_test.sh
+LUAU="$LUAU" sh tests/space_script_test.sh

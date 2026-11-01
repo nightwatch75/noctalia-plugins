@@ -24,7 +24,8 @@ local DAY = 86400
 -- A fresh VM: new module instances (the ncdu version is cached per load).
 local function boot()
     files = { ["/proc/mounts"] = { text = MOUNTS, mtime = 0 } }
-    decoded, runs, config, tools = {}, {}, {}, {}
+    -- no lsblk: the mount probe falls back to /proc/mounts and answers at once
+    decoded, runs, config, tools = {}, {}, {}, { lsblk = false }
     ms, decodeCost, spawnOk = 1e9, 0, true
     noctalia = {
         readFile = function(p) local f = files[p]; return f and f.text end,
@@ -233,6 +234,7 @@ do
     assert(not s.script:find(DIR, 1, true) and not s.script:find("usr", 1, true), "no path in the script")
     assert(s.script:find('mv -f "$t" "$i"', 1, true), "temp moved onto the index")
     assert(s.script:find("-n 19", 1, true), "nice level")
+    eq(s.script:match("^[^\n]*"), "echo 1000 2>/dev/null > /proc/self/oom_score_adj", "oom score first")
 
     -- marker not there yet: still scanning
     ms += 1000
@@ -409,6 +411,61 @@ do
     assert(space.startLoad(DIR), "home index from its own file")
     drain(space)
     eq(space.state, "ready", "symlinked home loads")
+end
+
+-- ── mount probe before the run (removable disks excluded on a first use) ────
+do
+    local space = boot()
+    local shared = require("./shared.luau")
+    local pending, any
+    shared.probeMounts = function(_, done, all) pending, any = done, all end
+    space.scan("/", false, function() end)
+    passVersion()
+    eq(#runs, 1, "no run while the mount probe runs")
+    assert(pending ~= nil and any == true, "probe asked for every scope")
+    eq(space.scanning, true, "still scanning"); eq(space.needsTick(), true, "ticks while probing")
+    ms += 1000
+    eq(space.step(), true, "step keeps waiting")
+    space.scan("/", true, function() end)
+    eq(#runs, 1, "no second scan while probing")
+    shared.mounts = { "/mnt/usb*key" }
+    pending()
+    eq(#runs, 2, "run starts in the probe callback")
+    local a = runs[2].argv
+    local at = has(a, "/mnt/usb\\*key")
+    assert(at and a[at - 1] == "--exclude", "removable mount excluded, glob escaped")
+    pending()
+    eq(#runs, 2, "a second callback starts nothing")
+
+    -- the setting off: no mount exclude
+    space = boot()
+    shared = require("./shared.luau")
+    config.space_exclude_external = false
+    shared.probeMounts = function(_, done) shared.mounts = { "/mnt/usb" }; done() end
+    space.scan("/", false, function() end)
+    passVersion()
+    assert(not has(runs[2].argv, "/mnt/usb"), "setting off: mount scanned")
+
+    -- a late callback after a root switch starts nothing
+    space = boot()
+    shared = require("./shared.luau")
+    shared.probeMounts = function(_, done) pending = done end
+    space.scan("/", false, function() end)
+    passVersion()
+    space.setRoot(HOME)
+    pending()
+    eq(#runs, 1, "stale probe callback ignored")
+
+    -- a probe that never answers: the run starts anyway after PROBE_WAIT_MS
+    space = boot()
+    shared = require("./shared.luau")
+    shared.probeMounts = function() end
+    space.scan("/", false, function() end)
+    passVersion()
+    ms += space.PROBE_WAIT_MS + 1
+    space.step()
+    eq(#runs, 2, "lost probe: launched with what is known")
+    eq(runs[2].cb, nil, "the detached run")
 end
 
 print("space_scan_test OK")
