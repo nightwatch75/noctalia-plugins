@@ -274,8 +274,8 @@ folders are skipped.
 - The Space scan also leaves out the folders in "Disk usage: excluded
   folders". Each combination of these three settings has its own cached
   index: after a change, the Space tab starts a new scan when it opens.
-- Folders under 1 MiB are counted in "(files and small folders)". Drill-down stops at
-  depth 6.
+- Folders under 1 MiB, or under 0.2% of their parent folder, are counted in
+  "(files and small folders)". Drill-down stops at depth 6.
 - `ncdu`, `jq` and `nice` are searched in `/usr/bin`, `/usr/local/bin`, `/bin`
   and `~/.local/bin` only: a detached run has no login PATH. Tested with
   `jq` 1.8.

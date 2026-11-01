@@ -18,18 +18,20 @@
   On disk the index is JSON Lines (see jqProgram); space.luau rebuilds this
   nested shape from it.
 
-  Index build: jqProgram(6, 10, 1048576) = depth 6, top 10 files per category,
-  folders under 1 MiB folded. Measured on a real `/` scan (ncdu 2.9.2, 127 MB
-  scan file, jq 1.8.2, 4087 index lines), top N files per category:
-      N    jq time  jq peak RSS  index    biggest line
-      5    32.0 s   1476 MB      2.6 MB   5.2 KB
-      10   33.4 s   1490 MB      4.4 MB   9.7 KB
-      25   35.3 s   1526 MB      9.1 MB   24.5 KB
-      50   38.0 s   1575 MB      15.7 MB  48.6 KB
-      100  41.1 s   1649 MB      26.1 MB  98.5 KB
-  10 is the largest N under ~5 MB. A stock JSON decode of its whole index
-  takes ~50 ms and of its biggest line 0.03 ms, so the sliced load stays
-  within budget. Fewer than N files in a list means the list is complete.
+  Index build: jqProgram(6, 10, 1048576, 0.002) = depth 6, top 10 files per
+  category, a folder is folded when under 1 MiB or under 0.2% of its parent.
+  The user sees these folders in "(files and small folders)". Measured on a
+  real disk (ncdu 2.9.2, jq 1.8.2; `/` scan 128 MB, home scan 79 MB):
+      root  relMin  jq time  jq peak RSS  index    lines
+      /     0       33.3 s   1494 MB      4.4 MB   4087
+      /     0.002   33.6 s   1472 MB      3.7 MB   3303
+      home  0       21.1 s   1004 MB      4.8 MB   4737
+      home  0.002   21.3 s    992 MB      4.1 MB   3975
+  The relative fold costs no jq time; the index is 14-16% smaller. Top 10
+  files per category was chosen earlier as the largest N under ~5 MB. A
+  stock JSON decode of a whole index takes ~50 ms and of its biggest line
+  0.03 ms, so the sliced load stays within budget. Fewer than N files in a
+  list means the list is complete.
   Tested by tests/space_jq_test.sh on tests/fixtures/small.ncdu.json.
 
   Slice colour index: in folders mode it is the rank of the folder among the
@@ -133,7 +135,7 @@ function idx.sort(entries, key, descending)
 end
 
 -- jq program: `ncdu -o` JSON in, JSON Lines out (run with jq -c): a header
--- `{"v":2,"root":<name>}`, then one record per kept folder in pre-order,
+-- `{"v":3,"root":<name>}`, then one record per kept folder in pre-order,
 -- `{"id":"0/2/1",n,s,f,u,c,t,leaf?}`. id is the child-index path from the root
 -- ("0"), so a record's parent is its id minus the last segment and no d is
 -- written; children follow in node.d order. One record per line lets the
@@ -142,11 +144,12 @@ end
 -- an object; "excluded" entries carry no size and are skipped. c and t cover
 -- the whole subtree (t names are paths relative to the node, top topN per
 -- category, ties by name). A folder's own dsize counts as a loose "other" byte.
--- Folders deeper than depth, or under minBytes, go into the parent's f.
+-- Folders deeper than depth, under minBytes, or under relMin (a fraction) of
+-- their parent's s go into the parent's f; c, t and u still count them.
 -- u counts folders ncdu could not read ("read_error") in the whole subtree.
 -- shortcut: a hard link counts dsize/nlink per name (exact when every link is
 -- inside the scan); dedupe by dev+ino if links outside the scan matter.
-function idx.jqProgram(depth, topN, minBytes)
+function idx.jqProgram(depth, topN, minBytes, relMin)
     local ext = {}
     for cat, list in ipairs(idx.EXT) do
         for _, e in ipairs(list) do table.insert(ext, string.format('"%s":%d', e, cat)) end
@@ -161,8 +164,8 @@ function idx.jqProgram(depth, topN, minBytes)
     (.[0] | size) as $own
     | [.[1:][] | select(type == "array") | node($lvl + 1)] as $kids
     | [.[1:][] | select(type == "object" and (.excluded | not)) | {n: .name, s: size, k: (.name | cat)}] as $files
-    | (if $lvl < %d then [$kids[] | select(.s >= %d)] else [] end) as $keep
     | ($own + ([$files[].s, $kids[].s] | add // 0)) as $s
+    | (if $lvl < %d then [$kids[] | select(.s >= ([%d, %.6f * $s] | max))] else [] end) as $keep
     | {n: .[0].name, s: $s, f: ($s - ([$keep[].s] | add // 0)), d: $keep,
        u: ((if .[0].read_error == true then 1 else 0 end) + ([$kids[].u] | add // 0)),
        c: (reduce $kids[].c as $x (reduce $files[] as $x ([0, 0, 0, 0, 0, 0, 0, $own]; setpath([$x.k - 1]; .[$x.k - 1] + $x.s));
@@ -171,8 +174,8 @@ function idx.jqProgram(depth, topN, minBytes)
            | group_by(.k) | map(sort_by(-.s, .n) | .[:%d]) | add // [])}
     | if $lvl == %d then .leaf = true else . end;
   def flat($id): ({id: $id} + del(.d)), (.d | to_entries[] | .key as $k | .value | flat($id + "/" + ($k | tostring)));
-  .[3] | node(0) | ({v: 2, root: .n}, flat("0"))
-]=], table.concat(ext, ","), math.floor(depth), math.floor(minBytes), math.floor(topN), math.floor(depth))
+  .[3] | node(0) | ({v: 3, root: .n}, flat("0"))
+]=], table.concat(ext, ","), math.floor(depth), math.floor(minBytes), relMin, math.floor(topN), math.floor(depth))
 end
 
 -- Donut rows. folders: one per entry, biggest first; idx.slices gives a folder

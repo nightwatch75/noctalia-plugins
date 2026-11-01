@@ -105,4 +105,12 @@ do
     eq(dirs, 7, "7 dir slices + other")
     eq(shown[1].color, idx.COLORS_DARK[1], "biggest folder gets colour 1")
 end
+-- jq program text: relMin is written as a decimal fraction (not floored) and
+-- the header record is format 3
+do
+    local prog = idx.jqProgram(6, 10, 1048576, 0.002)
+    assert(prog:find("[1048576, 0.002000 * $s] | max", 1, true), "relMin of the parent in the keep rule")
+    assert(prog:find("{v: 3, root: .n}", 1, true), "format 3 header")
+    assert(idx.jqProgram(6, 10, 1048576, 0):find("[1048576, 0.000000 * $s] | max", 1, true), "relMin 0")
+end
 print("space_index_test OK")

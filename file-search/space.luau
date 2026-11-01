@@ -93,7 +93,7 @@ space.SCAN_DEADLINE_MS = 1800000
 space.PROBE_WAIT_MS = 15000
 
 -- Values recorded with their measurements in the header of space_index.luau.
-local DEPTH, TOP_N, MIN_BYTES = 6, 10, 1048576
+local DEPTH, TOP_N, MIN_BYTES, REL_MIN = 6, 10, 1048576, 0.002
 space.TOP_N = TOP_N -- read by tests/space_ui_test.lua
 
 local TOOL_DIRS = { "/usr/bin", "/usr/local/bin", "/bin", "~/.local/bin" }
@@ -291,7 +291,7 @@ function space.startLoad(dir, tag)
         return false
     end
     local ok, head = pcall(noctalia.json.decode, text:sub(1, nl - 1))
-    if not ok or type(head) ~= "table" or head.v ~= 2 then
+    if not ok or type(head) ~= "table" or head.v ~= 3 then
         return false
     end
     local info = noctalia.fileInfo(path)
@@ -420,7 +420,7 @@ local function start(current)
     sweep(dir)
     local argv = {
         "/bin/sh", "-c", SCAN_SCRIPT, "sh",
-        findTool("ncdu"), findTool("jq"), idx.jqProgram(DEPTH, TOP_N, MIN_BYTES),
+        findTool("ncdu"), findTool("jq"), idx.jqProgram(DEPTH, TOP_N, MIN_BYTES, REL_MIN),
         stem .. ".scan", stem .. ".tmp", indexPath(dir, root, current.tag), stem .. ".done",
         findTool("nice") or "",
     }

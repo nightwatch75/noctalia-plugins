@@ -64,7 +64,7 @@ local serial = 0
 local function jsonl(root, records)
     serial += 1
     local head = "H" .. serial
-    decoded[head] = { v = 2, root = root }
+    decoded[head] = { v = 3, root = root }
     local lines = { head }
     for _, r in ipairs(records) do
         serial += 1
