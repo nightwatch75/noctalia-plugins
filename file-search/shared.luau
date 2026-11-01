@@ -111,6 +111,15 @@ shared.LOCAL_FS = {
     ntfs3 = true, fuseblk = true, hfs = true, hfsplus = true, tmpfs = true,
 }
 
+-- Remote filesystems: pruned from the Search tab's whole-system walk, and from
+-- the Space scan while space_skip_network is on. Any FUSE type ("fuse",
+-- "fuse.<name>": rclone, sshfs, onedriver, gvfsd-fuse) counts too (see
+-- isRemote); fuseblk is a local block device (LOCAL_FS).
+shared.REMOTE_FS = {
+    nfs = true, nfs4 = true, cifs = true, smb3 = true, smbfs = true, davfs = true,
+    ceph = true, glusterfs = true, afs = true, ["9p"] = true, lustre = true,
+}
+
 -- Always pruned from a whole-system walk, whatever /proc/mounts says: kernel
 -- views and runtime state, never user files (and /proc alone is endless).
 shared.WHOLE_SKIP = { "/proc", "/sys", "/dev", "/run" }
@@ -611,13 +620,19 @@ function shared.computeRoots()
     return kept
 end
 
--- Paths a walk of "/" must not enter: the fixed kernel/runtime trees, every
--- mount whose filesystem is not in LOCAL_FS (network, FUSE, pseudo), and the
--- removable disks, which are either their own root or out of scope. Read from
--- /proc/mounts at build time only — not part of the fingerprint, so a mount
--- coming and going does not trigger a rebuild. A path nested in one already
--- pruned is dropped; find never gets there anyway.
-function shared.wholePrunePaths()
+local function isRemote(fstype)
+    return shared.REMOTE_FS[fstype] or fstype == "fuse" or fstype:sub(1, 5) == "fuse."
+end
+
+-- Paths a walk of "/" must not enter. Always: the fixed kernel/runtime trees
+-- and every pseudo mount (a filesystem neither in LOCAL_FS nor remote: proc,
+-- cgroup, overlay, squashfs…). opts.network adds the remote mounts (see
+-- isRemote), opts.external the removable disks (shared.mounts), which are
+-- either their own root or out of scope. Read from /proc/mounts at build time
+-- only — not part of the fingerprint, so a mount coming and going does not
+-- trigger a rebuild. A path nested in one already pruned is dropped; the walk
+-- never gets there anyway.
+function shared.prunePaths(opts)
     local list = {}
     for _, path in ipairs(shared.WHOLE_SKIP) do
         table.insert(list, path)
@@ -626,7 +641,7 @@ function shared.wholePrunePaths()
     if type(text) == "string" then
         for line in text:gmatch("[^\n]+") do
             local raw, fstype = line:match("^%S+%s+(%S+)%s+(%S+)")
-            if raw ~= nil and not shared.LOCAL_FS[fstype] then
+            if raw ~= nil and not shared.LOCAL_FS[fstype] and (opts.network or not isRemote(fstype)) then
                 local rejected = false
                 local path = raw:gsub("\\(%d%d%d)", function(octal)
                     local code = tonumber(octal, 8)
@@ -642,8 +657,10 @@ function shared.wholePrunePaths()
             end
         end
     end
-    for _, mount in ipairs(shared.mounts) do
-        table.insert(list, (mount:gsub("/+$", "")))
+    if opts.external then
+        for _, mount in ipairs(shared.mounts) do
+            table.insert(list, (mount:gsub("/+$", "")))
+        end
     end
     table.sort(list)
     local kept = {}
@@ -654,6 +671,11 @@ function shared.wholePrunePaths()
         end
     end
     return kept
+end
+
+-- The Search tab's whole-system walk: remote mounts and removable disks too.
+function shared.wholePrunePaths()
+    return shared.prunePaths({ network = true, external = true })
 end
 
 -- Everything that decides how the cache was built. Its two lists are joined

@@ -75,6 +75,7 @@ local space = {
 -- needsTick/step driven by the test: onStep plays what one engine step does.
 function space.onOpen(redraw) space.redraw = redraw; space.opens += 1 end
 function space.onClose() space.closes += 1 end
+function space.onConfigChanged() space.configs = (space.configs or 0) + 1 end
 function space.needsTick() return space.busy end
 function space.step()
     if space.onStep then space.onStep() end
@@ -202,5 +203,10 @@ do
     assert(hasFilter(), "root /: restriction strip")
     shared.roots = { "/home" }
 end
+
+-- A settings change reaches the Space side (it drops an index built with
+-- other excludes).
+onConfigChanged()
+assert(space.configs == 1, "onConfigChanged forwarded to space")
 
 print("file-search panel tab tests: ok")

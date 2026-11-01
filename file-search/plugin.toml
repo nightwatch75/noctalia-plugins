@@ -72,12 +72,20 @@ description_key = "settings.usage_exclude_dirs.description"
 default = ""
 
 # Space tab: ncdu never uses -x (on "/" it would skip a separate /home), so
-# network, FUSE and removable mounts are left out with --exclude instead.
+# network/FUSE and removable mounts are left out with --exclude instead.
+# Pseudo filesystems (proc, overlay, squashfs…) are always left out.
 [[setting]]
-key = "space_exclude_external"
+key = "space_skip_network"
 type = "bool"
-label_key = "settings.space_exclude_external.label"
-description_key = "settings.space_exclude_external.description"
+label_key = "settings.space_skip_network.label"
+description_key = "settings.space_skip_network.description"
+default = true
+
+[[setting]]
+key = "space_skip_external"
+type = "bool"
+label_key = "settings.space_skip_external.label"
+description_key = "settings.space_skip_external.description"
 default = true
 
 [[setting]]

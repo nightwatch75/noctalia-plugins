@@ -107,9 +107,12 @@ local function smallIndex(root, v)
         { id = "0/1", n = "b", s = 4 },
     })
 end
+-- Index file of `root` for the current settings (space-<root>-<tag>.json).
+local function indexFile(root)
+    return DIR .. "/space-" .. (root == "/" and "root" or "home") .. "-" .. require("./space.luau").settingsTag() .. ".json"
+end
 local function putIndex(root, text, age)
-    local tag = root == "/" and "root" or "home"
-    files[DIR .. "/space-" .. tag .. ".json"] = { text = text, mtime = ms // 1000 - (age or 0) }
+    files[indexFile(root)] = { text = text, mtime = ms // 1000 - (age or 0) }
 end
 
 local function drain(space)
@@ -161,10 +164,36 @@ do
     eq(count(args, "--exclude"), 6, "usage excludes feed ncdu")
     eq(args[#args], "node_modules", "usage exclude last")
     config.usage_exclude_dirs = nil
-    config.space_exclude_external = false
+    config.space_skip_network = false
     args = space.excludeArgs()
-    eq(#args, 1, "external mounts kept when the setting is off")
-    eq(args[1], "--exclude-kernfs", "only kernfs")
+    assert(not has(args, "/mnt/nas"), "network mount scanned when space_skip_network is off")
+    assert(has(args, "/proc") and has(args, "/run"), "pseudo and fixed paths always excluded")
+    eq(count(args, "--exclude"), 4, "only /dev /proc /run /sys")
+    eq(args[1], "--exclude-kernfs", "kernfs kept")
+    config.space_skip_network = nil
+end
+
+-- ── settings tag: one per setting combination, in the index file name ───────
+do
+    local space = boot()
+    local seen = {}
+    local function tag()
+        local t = space.settingsTag()
+        assert(t:match("^%x%x%x%x%x%x%x%x$"), "8 hex chars: " .. t)
+        return t
+    end
+    for _, c in ipairs({
+        {}, { space_skip_network = false }, { space_skip_external = false },
+        { space_skip_network = false, space_skip_external = false }, { usage_exclude_dirs = "/mnt/data" },
+        { usage_exclude_dirs = "/mnt/data2" },
+    }) do
+        config = c
+        local t = tag()
+        eq(seen[t], nil, "tag differs per setting combination")
+        seen[t] = true
+    end
+    config = { space_skip_network = true, space_skip_external = true }
+    eq(space.settingsTag(), (function() config = {}; return space.settingsTag() end)(), "nil reads as true")
 end
 
 -- ── checkTools ───────────────────────────────────────────────────────────────
@@ -222,7 +251,7 @@ do
     eq(s.ncdu, "/usr/bin/ncdu", "absolute ncdu"); eq(s.jq, "/usr/bin/jq", "absolute jq")
     eq(s.nice, "/usr/bin/nice", "absolute nice")
     assert(s.program:find("flat(", 1, true), "jq program as an argument")
-    eq(s.index, DIR .. "/space-root.json", "index path per root")
+    eq(s.index, indexFile("/"), "index path per root and settings tag")
     for _, key in ipairs({ "scan", "tmp", "marker" }) do
         eq(s[key]:sub(1, #DIR + 1), DIR .. "/", key .. " in the data dir")
     end
@@ -448,14 +477,19 @@ do
     pending()
     eq(#runs, 2, "a second callback starts nothing")
 
-    -- the setting off: no mount exclude
+    -- the setting off: no probe, no removable exclude
     space = boot()
     shared = require("./shared.luau")
-    config.space_exclude_external = false
-    shared.probeMounts = function(_, done) shared.mounts = { "/mnt/usb" }; done() end
+    config.space_skip_external = false
+    local probed = false
+    shared.mounts = { "/mnt/usb" }
+    shared.probeMounts = function(_, done) probed = true; done() end
     space.scan("/", false, function() end)
     passVersion()
+    eq(probed, false, "space_skip_external off: no mount probe")
+    eq(#runs, 2, "run starts at once")
     assert(not has(runs[2].argv, "/mnt/usb"), "setting off: mount scanned")
+    assert(has(runs[2].argv, "/mnt/nas"), "network still skipped")
 
     -- a late callback after a root switch starts nothing
     space = boot()
@@ -490,7 +524,7 @@ do
     for _, ext in ipairs({ "scan", "tmp", "done" }) do
         eq(files[DIR .. "/space-root-1-1." .. ext], nil, "leftover ." .. ext .. " swept")
     end
-    assert(files[DIR .. "/space-root.json"], "index kept")
+    assert(files[indexFile("/")], "index kept")
 
     space = boot()
     space.scan("/", false, function() end)
@@ -498,6 +532,69 @@ do
     files[live] = { text = "x", mtime = 0 }
     space.onOpen(function() end)
     assert(files[live], "a running scan keeps its file")
+end
+
+-- ── changed settings: never the stale index ─────────────────────────────────
+do
+    local space = boot()
+    putIndex("/", smallIndex("/"), 60)
+    space.onOpen(function() end)
+    drain(space)
+    eq(space.state, "ready", "index of the default settings")
+    eq(#runs, 0, "fresh: no scan")
+    local redraws = 0
+    space.onOpen(function() redraws += 1 end)
+    space.onClose()
+    -- unchanged config: nothing happens
+    space.onConfigChanged()
+    assert(space.index ~= nil, "unchanged config keeps the index")
+    eq(space.state, "ready", "still ready"); eq(#runs, 0, "no scan")
+    -- a changed setting drops the index; the next open scans for the new tag
+    config.space_skip_network = false
+    space.onConfigChanged()
+    eq(space.index, nil, "index dropped"); eq(space.state, "idle", "idle")
+    space.onOpen(function() end)
+    eq(#runs, 1, "no index for the new tag: scan")
+    local run = passVersion()
+    eq(scriptArgs(run).index, indexFile("/"), "scan writes the new tag's file")
+    assert(not has(run.argv, "/mnt/nas"), "new argv: nfs mount scanned")
+    -- the scan completes: the older tag's file (and an untagged legacy one) go
+    local oldFile = DIR .. "/space-root-" .. (function()
+        config.space_skip_network = nil
+        local t = space.settingsTag()
+        config.space_skip_network = false
+        return t
+    end)() .. ".json"
+    assert(files[oldFile], "old tag file still there before the scan ends")
+    files[DIR .. "/space-root.json"] = { text = "x", mtime = 0 }
+    files[DIR .. "/space-home-0badc0de.json"] = { text = "x", mtime = 0 }
+    playScript(run, "ok", smallIndex("/"))
+    ms += 1000
+    drain(space)
+    eq(space.state, "ready", "new index loaded")
+    eq(files[oldFile], nil, "old tag file removed")
+    eq(files[DIR .. "/space-root.json"], nil, "legacy untagged file removed")
+    assert(files[DIR .. "/space-home-0badc0de.json"], "other root kept")
+    assert(files[indexFile("/")], "new index kept")
+
+    -- back to the old setting while open: reset and reload at once
+    space = boot()
+    putIndex("/", smallIndex("/"), 60)
+    space.onOpen(function() end)
+    drain(space)
+    local n = 0
+    space.onOpen(function() n += 1 end)
+    config.space_skip_external = false
+    space.onConfigChanged()
+    assert(n > 0, "redraw on reset")
+    eq(#runs, 1, "open tab: the new tag is scanned at once")
+    -- first launch argv with skipNet on: --exclude for the nfs mount
+    config = { space_skip_external = false }
+    local fresh = boot()
+    fresh.scan("/", false, function() end)
+    local a = passVersion().argv
+    local at = has(a, "/mnt/nas")
+    assert(at and a[at - 1] == "--exclude", "skipNet on: nfs mount excluded")
 end
 
 print("space_scan_test OK")

@@ -85,7 +85,8 @@ local function fixture(root)
 end
 local function putIndex(root, text, age)
     local tag = root == "/" and "root" or "home"
-    files[DIR .. "/space-" .. tag .. ".json"] = { text = text, mtime = ms // 1000 - (age or 0) }
+    files[DIR .. "/space-" .. tag .. "-" .. require("./space.luau").settingsTag() .. ".json"] =
+        { text = text, mtime = ms // 1000 - (age or 0) }
 end
 
 local function drain(space)

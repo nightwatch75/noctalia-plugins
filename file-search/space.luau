@@ -38,7 +38,8 @@
 -- Pipeline:
 --   1. `ncdu --version` with a callback, once per load (ncdu >= 2.0). Only a
 --      parsed version is remembered; a timeout is retried on the next scan.
---   2. shared.probeMounts (see launch) so removable disks can be excluded.
+--   2. shared.probeMounts (see launch) so removable disks can be excluded;
+--      skipped while space_skip_external is off.
 --   3. One DETACHED `/bin/sh -c SCAN_SCRIPT` (runAsync without callback): the
 --      host kills a captured run after 60 s and keeps only 1 MiB of its
 --      stdout, and ncdu + jq take ~45 s on "/" here, so neither limit can
@@ -57,6 +58,10 @@
 -- step(), within SLICE_MS, because a host callback has a 25 ms CPU budget and
 -- the whole file is ~2.5 MB. space.index keeps the previous tree until the
 -- new one is complete.
+--
+-- The index file name carries space.settingsTag(): a changed exclusion
+-- setting points at another file, and space.onConfigChanged drops the index
+-- in memory. A completed scan removes the same root's files of other tags.
 --
 -- A scan is a job table; setRoot() or a newer scan replaces it, and anything
 -- belonging to an older job (probe answer, marker) is ignored. Each run has
@@ -115,6 +120,7 @@ local job = nil     -- { dir, done, probeUntil?, marker?, deadline, nextPoll, lo
 local loader = nil  -- { text, pos, nodes, tree, at }
 local deferred = nil -- done() of a scan waiting for the current load to end
 local generation = 0 -- bumped per loaded index, keys the chart cache
+local seenTag = nil -- settings tag of the index, load or scan in hand (nil = none yet)
 
 -- Panel side (see the panel hooks below).
 local isOpen = false
@@ -132,8 +138,9 @@ local function rootTag(root)
     return root == "/" and "root" or "home"
 end
 
-local function indexPath(dir, root)
-    return dir .. "/space-" .. rootTag(root) .. ".json"
+-- One index file per root and settings tag (see space.settingsTag).
+local function indexPath(dir, root, tag)
+    return dir .. "/space-" .. rootTag(root) .. "-" .. tag .. ".json"
 end
 
 -- Unlinking a file an older run still writes is harmless: it keeps its inode,
@@ -141,6 +148,18 @@ end
 local function sweep(dir)
     for _, name in ipairs(noctalia.listDir(dir) or {}) do
         if name:match("^space%-.+%.scan$") or name:match("^space%-.+%.tmp$") or name:match("^space%-.+%.done$") then
+            noctalia.removeFile(dir .. "/" .. name)
+        end
+    end
+end
+
+-- After a scan of `tag` completed: the index files of the same root built with
+-- other settings, and the untagged name an older version wrote.
+local function dropOldIndexes(dir, root, tag)
+    local rt = rootTag(root)
+    local keep = "space-" .. rt .. "-" .. tag .. ".json"
+    for _, name in ipairs(noctalia.listDir(dir) or {}) do
+        if name ~= keep and (name == "space-" .. rt .. ".json" or name:match("^space%-" .. rt .. "%-%x+%.json$")) then
             noctalia.removeFile(dir .. "/" .. name)
         end
     end
@@ -158,15 +177,32 @@ end
 
 -- ── settings ─────────────────────────────────────────────────────────────────
 
+-- space_skip_network, space_skip_external; nil (not set yet) reads as true.
+local function skips()
+    return noctalia.getConfig("space_skip_network") ~= false, noctalia.getConfig("space_skip_external") ~= false
+end
+
+-- 8 hex chars (djb2) over every setting that shapes the scan. It is part of
+-- the index file name, so a changed setting never serves an old index.
+function space.settingsTag()
+    local net, ext = skips()
+    local dirs = noctalia.getConfig("usage_exclude_dirs")
+    local key = string.format("net=%d;ext=%d;dirs=%s", net and 1 or 0, ext and 1 or 0,
+        type(dirs) == "string" and dirs or "")
+    local h = 5381
+    for i = 1, #key do
+        h = (h * 33 + string.byte(key, i)) % 4294967296
+    end
+    return string.format("%08x", h)
+end
+
 function space.excludeArgs()
     local args = { "--exclude-kernfs" }
-    -- Declared in plugin.toml by a later step; until then nil reads as true.
-    if noctalia.getConfig("space_exclude_external") ~= false then
-        for _, path in ipairs(shared.wholePrunePaths()) do
-            table.insert(args, "--exclude")
-            -- --exclude is an fnmatch pattern; ncdu honours the backslash escape
-            table.insert(args, (path:gsub("[%*%?%[%]\\]", "\\%0")))
-        end
+    local skipNet, skipExt = skips()
+    for _, path in ipairs(shared.prunePaths({ network = skipNet, external = skipExt })) do
+        table.insert(args, "--exclude")
+        -- --exclude is an fnmatch pattern; ncdu honours the backslash escape
+        table.insert(args, (path:gsub("[%*%?%[%]\\]", "\\%0")))
     end
     for _, pattern in ipairs(usage.excludes()) do
         table.insert(args, "--exclude")
@@ -214,14 +250,16 @@ end
 -- decoded by step(). False (nothing loading) for a missing, corrupted or
 -- other-version file: it is a cache, the caller rescans. The header's root is
 -- not compared: ncdu writes the resolved path (a symlinked home differs), and
--- the file name is already per root.
-function space.startLoad(dir)
+-- the file name is already per root. `tag` defaults to the current settings.
+function space.startLoad(dir, tag)
     loader = nil
     space.loading = false
+    tag = tag or space.settingsTag()
+    seenTag = tag
     if dir == nil then
         return false
     end
-    local path = indexPath(dir, space.root)
+    local path = indexPath(dir, space.root, tag)
     local text = noctalia.readFile(path)
     local nl = type(text) == "string" and text:find("\n", 1, true)
     if not nl then
@@ -278,6 +316,7 @@ local function endLoad(tree, at)
     space.state = "ready"
     space.errText = nil
     if scanLoad then
+        dropOldIndexes(job.dir, space.root, job.tag)
         endScan(nil)
     else
         changed()
@@ -313,22 +352,27 @@ function space.fresh()
         and (shared.now() - space.scannedAt) < usage.TTL_SECONDS
 end
 
--- Drops the current index, any scan or load in progress, and starts loading
--- the new root's index.
-function space.setRoot(root)
-    if root == space.root then
-        return
-    end
+-- Drops the current index and any scan or load in progress. A detached run
+-- keeps going; its marker is ignored.
+local function reset()
     job = nil
     loader = nil
     deferred = nil
-    space.root = root
     space.index = nil
     space.scannedAt = 0
     space.scanning = false
     space.loading = false
     space.state = "idle"
     space.errText = nil
+end
+
+-- Drops the current root's state and starts loading the new root's index.
+function space.setRoot(root)
+    if root == space.root then
+        return
+    end
+    reset()
+    space.root = root
     space.startLoad(shared.dataDir())
 end
 
@@ -342,6 +386,8 @@ local function start(current)
     end
     local root = space.root
     local dir = current.dir
+    current.tag = space.settingsTag()
+    seenTag = current.tag
     scanCount += 1
     -- The clock keeps names unique across reloads, where the counter restarts.
     local stem = string.format("%s/space-%s-%d-%d", dir, rootTag(root), noctalia.nowMs(), scanCount)
@@ -349,7 +395,7 @@ local function start(current)
     local argv = {
         "/bin/sh", "-c", SCAN_SCRIPT, "sh",
         findTool("ncdu"), findTool("jq"), idx.jqProgram(DEPTH, TOP_N, MIN_BYTES),
-        stem .. ".scan", stem .. ".tmp", indexPath(dir, root), stem .. ".done",
+        stem .. ".scan", stem .. ".tmp", indexPath(dir, root, current.tag), stem .. ".done",
         findTool("nice") or "",
     }
     for _, arg in ipairs(space.excludeArgs()) do
@@ -372,7 +418,8 @@ end
 -- known from it. A probe that never answers is replaced by step() after
 -- PROBE_WAIT_MS; either way the run starts with what is known.
 local function launch(current)
-    if noctalia.getConfig("space_exclude_external") == false then
+    local _, skipExt = skips()
+    if not skipExt then
         start(current)
         return
     end
@@ -405,7 +452,7 @@ local function poll(now)
         return
     end
     job.loading = true
-    if not space.startLoad(job.dir) then
+    if not space.startLoad(job.dir, job.tag) then
         endScan("index")
     end
 end
@@ -696,6 +743,22 @@ function space.onOpen(onChange)
         space.startLoad(shared.dataDir())
     end
     space.scan(space.root, false, noop)
+end
+
+-- From the panel's onConfigChanged. A changed settings tag drops the index:
+-- its file was built with other excludes. The new tag's index is loaded or
+-- scanned at once when the tab is shown, else on its next open.
+function space.onConfigChanged()
+    local tag = space.settingsTag()
+    if seenTag == nil or tag == seenTag then
+        return
+    end
+    reset()
+    seenTag = tag
+    changed()
+    if isOpen then
+        space.onOpen(redraw)
+    end
 end
 
 -- Also called when the panel leaves the Space tab. Scans and loads keep

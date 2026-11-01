@@ -204,8 +204,9 @@ results whenever the index is out of date.
 | `search_folder` | `folder` | *(empty)* | Root folder the search indexes. Empty = your home folder. |
 | `exclude_dirs` | `string` | `.git, node_modules, .cache, .venv` | Folder names skipped while indexing, separated by `,` or `;`, matched anywhere in the tree. |
 | `show_hidden` | `bool` | `false` | Index files and folders whose name starts with a dot. |
-| `usage_exclude_dirs` | `string` | *(empty)* | Folders left out of the disk usage chart, separated by `,` or `;`. A bare name matches anywhere below the search folder; a path (absolute, or starting with `~`) matches that one folder. Folders on another filesystem are already skipped. |
-| `space_exclude_external` | `bool` | `true` | Space tab: leave external, network and FUSE mounts out of the scan. |
+| `usage_exclude_dirs` | `string` | *(empty)* | Folders that the disk usage chart and the Space tab do not count, separated by `,` or `;`. A bare name matches anywhere below the search folder. An absolute path (or one that starts with `~`) skips that one folder, e.g. an internal disk under `/mnt`. |
+| `space_skip_network` | `bool` | `true` | Space tab: do not scan network mounts (NFS, SMB…) and FUSE mounts (rclone, sshfs, OneDrive…). |
+| `space_skip_external` | `bool` | `true` | Space tab: do not scan external (removable) disks. |
 | `max_results` | `int` | `50` | How many matches the panel lists at most (10–200). |
 | `glyph` (widget) | `glyph` | `search` | Icon shown on the bar. |
 
@@ -261,11 +262,12 @@ folders are skipped.
 - The Space tab scans `/` with `ncdu` on its first use: about 45 s on a fast
   PC. `jq` can use up to about 1.5 GB RAM for a moment. Both run at low
   priority. The index is cached for one day; refresh forces a rescan.
-- External, network and FUSE mounts are skipped by default
-  (`space_exclude_external`).
-- The Space scan also leaves out the folders in "Usage chart: excluded
-  folders". After you change that setting or "Space tab: skip external
-  mounts", press the refresh button: the cached index is kept up to one day.
+- Network, FUSE and external mounts are skipped by default
+  (`space_skip_network`, `space_skip_external`). Pseudo filesystems (`/proc`,
+  overlay, squashfs…) are always skipped.
+- The Space scan also leaves out the folders in "Disk usage: excluded
+  folders". Each combination of these three settings has its own cached
+  index: after a change, the Space tab starts a new scan when it opens.
 - Folders under 1 MiB are counted in "(loose files)". Drill-down stops at
   depth 6.
 - `ncdu`, `jq` and `nice` are searched in `/usr/bin`, `/usr/local/bin`, `/bin`

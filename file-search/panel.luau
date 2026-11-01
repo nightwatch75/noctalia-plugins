@@ -1280,6 +1280,7 @@ function onFrameTick(deltaMs)
 end
 
 function onConfigChanged()
+    space.onConfigChanged() -- before the Search side's early return
     if fzfMissing or indexing then
         return
     end
