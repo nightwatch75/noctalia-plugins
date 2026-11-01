@@ -53,6 +53,7 @@ local usage = require("./usage.luau")
 
 -- The Space tab's body. Same require() route as above.
 local space = require("./space.luau")
+-- Late-bound: onSearchHere is the global defined further down this file.
 space.onSearchHere = function(path) onSearchHere(path) end
 
 -- Which tab is showing: "search" | "space". Reset to search on every open.
@@ -1353,7 +1354,13 @@ end
 function onSearchHere(path)
     local root = shared.roots[1]
     local rel = nil
-    if #shared.roots == 1 and root ~= nil then
+    -- Only the folder scope on the search folder has records relative to one
+    -- root (the only place the restriction strip and chart exist).
+    if shared.scope ~= "folder" or shared.whole or #shared.roots ~= 1 or root == nil then
+        noctalia.notify(shared.tr("title"), shared.tr("space_search_unavailable"))
+        return
+    end
+    do
         if path == root then
             rel = ""
         elseif shared.startsWith(path, root == "/" and "/" or root .. "/") then

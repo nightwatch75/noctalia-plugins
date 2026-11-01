@@ -166,6 +166,19 @@ do
     eq(#notes, 2, "inside: no notice")
     onSearchHere("/home")
     assert(not hasFilter(), "the root itself lifts the restriction")
+    eq(notes[1], "space_search_outside", "outside notice text")
+    -- other scopes / whole system: unavailable notice, no switch
+    for _, mode in ipairs({ "external", "whole" }) do
+        shared.scope, shared.whole = mode == "external" and "external" or "folder", mode == "whole"
+        find(rendered, "tab-space").props.onClick()
+        local before = #notes
+        onSearchHere("/home/sub")
+        assert(find(rendered, "tab-space").props.selected == true, mode .. ": stay on Space")
+        eq(#notes, before + 1, mode .. ": one notice")
+        eq(notes[#notes], "space_search_unavailable", mode .. ": notice text")
+        assert(not hasFilter(), mode .. ": no restriction")
+    end
+    shared.scope, shared.whole = "folder", false
 end
 
 print("file-search panel tab tests: ok")
