@@ -3,9 +3,9 @@
 # unmodified panel source as the string PANEL_SRC, and the test stubs the host
 # globals and loads it with loadstring.
 #
-# Convention for later tests of other modules (space.luau, ...): do the same,
-# splice the module source as a string (MODULE_SRC) and load it with
-# loadstring after stubbing the host globals. Native relative require() is not
+# A test that needs another module starts with the line `-- module: <file>`;
+# this script then also splices that file as the string MODULE_SRC, and the
+# test loads it with loadstring (after stubbing host globals if it needs any). Native relative require() is not
 # used: the runner below has no require, and the panel stubs it anyway.
 #
 # Interpreter: `luau` from PATH if present, else `luau-test` (a ~40-line C++
@@ -25,6 +25,12 @@ for test in tests/*_test.lua; do
         printf 'local PANEL_SRC = [==[\n'
         cat panel.luau
         printf '\n]==]\n'
+        mod=$(sed -n '1s/^-- module: //p' "$test")
+        if [ -n "$mod" ]; then
+            printf 'local MODULE_SRC = [==[\n'
+            cat "$mod"
+            printf '\n]==]\n'
+        fi
         cat "$test"
     } > "$out"
     "$LUAU" "$out"
