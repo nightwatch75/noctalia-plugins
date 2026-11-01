@@ -468,4 +468,25 @@ do
     eq(runs[2].cb, nil, "the detached run")
 end
 
+-- ── onOpen sweeps leftovers of a killed scan, never those of a live one ─────
+do
+    local space = boot()
+    putIndex("/", smallIndex("/"), 60)
+    for _, ext in ipairs({ "scan", "tmp", "done" }) do
+        files[DIR .. "/space-root-1-1." .. ext] = { text = "x", mtime = 0 }
+    end
+    space.onOpen(function() end)
+    for _, ext in ipairs({ "scan", "tmp", "done" }) do
+        eq(files[DIR .. "/space-root-1-1." .. ext], nil, "leftover ." .. ext .. " swept")
+    end
+    assert(files[DIR .. "/space-root.json"], "index kept")
+
+    space = boot()
+    space.scan("/", false, function() end)
+    local live = scriptArgs(passVersion()).scan
+    files[live] = { text = "x", mtime = 0 }
+    space.onOpen(function() end)
+    assert(files[live], "a running scan keeps its file")
+end
+
 print("space_scan_test OK")

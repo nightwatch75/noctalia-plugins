@@ -61,8 +61,8 @@
 -- A scan is a job table; setRoot() or a newer scan replaces it, and anything
 -- belonging to an older job (probe answer, marker) is ignored. Each run has
 -- its own scan/temp/marker names; leftovers of dropped or orphaned runs are
--- swept when the next run starts. The root cannot be switched while a scan
--- runs (see toggleRoot).
+-- swept when the next run starts, and on open when no job is active. The root
+-- cannot be switched while a scan runs (see toggleRoot).
 
 local shared = require("./shared.luau")
 local usage = require("./usage.luau")
@@ -679,6 +679,11 @@ end
 function space.onOpen(onChange)
     isOpen = true
     redraw = onChange
+    -- Leftovers (100+ MB) of a scan killed with the host; a live job's are kept.
+    local dir = shared.dataDir()
+    if job == nil and dir ~= nil then
+        sweep(dir)
+    end
     if space.index == nil and not space.loading and not space.scanning then
         space.startLoad(shared.dataDir())
     end

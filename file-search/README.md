@@ -263,6 +263,14 @@ folders are skipped.
   priority. The index is cached for one day; refresh forces a rescan.
 - External, network and FUSE mounts are skipped by default
   (`space_exclude_external`).
+- The Space scan also leaves out the folders in "Usage chart: excluded
+  folders". After you change that setting or "Space tab: skip external
+  mounts", press the refresh button: the cached index is kept up to one day.
+- Folders under 1 MiB are counted in "(loose files)". Drill-down stops at
+  depth 6.
+- `ncdu`, `jq` and `nice` are searched in `/usr/bin`, `/usr/local/bin`, `/bin`
+  and `~/.local/bin` only: a detached run has no login PATH. Tested with
+  `jq` 1.8.
 - Hard-linked files have their size split between the links, so a folder total
   can differ from the `ncdu` screen. The root total stays exact.
 - `ncdu` 2.0 or newer and `jq` are required.
@@ -273,7 +281,8 @@ folders are skipped.
   it was built with, `count-<scope>` its entry count and build time, and
   `scope`/`ranking`/`usage-chart` the one-word header choices. The disk usage
   measurement is cached in `usage.json`, rendered as one of two alternating
-  SVG files. A fingerprint mismatch (a settings change, a scope change, a
+  SVG files. The Space tab keeps its index in `space-root.json` and
+  `space-home.json`, and its chart in `space-a.svg` / `space-b.svg`. A fingerprint mismatch (a settings change, a scope change, a
   disk plugged in or removed) rebuilds the search-folder index automatically
   and marks a disk index out of date.
 - Several disks share one index, not one each: a rebuild walks every mounted
