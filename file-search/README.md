@@ -268,6 +268,8 @@ folders are skipped.
   priority. The index is cached for one day; refresh forces a rescan.
 - The Space progress bar is an estimate from the duration of the last scan of
   the same folder and settings. The first scan shows only the elapsed time.
+- The Space list shows how many files each folder holds (links and symlinks
+  count once per name).
 - Network, FUSE and external mounts are skipped by default
   (`space_skip_network`, `space_skip_external`). Pseudo filesystems (`/proc`,
   overlay, squashfs…) are always skipped.

@@ -94,6 +94,8 @@
     "spawn": "Could not start the disk scan",
     "timeout": "The disk scan took too long and was stopped"
   },
+  "space_file_one": "1 file",
+  "space_files": "{count} files",
   "space_gone": "{path} is no longer on disk — press ↻ to scan again",
   "space_legend_folders_all": "Folders",
   "space_legend_folders_top": "{count} biggest folders",

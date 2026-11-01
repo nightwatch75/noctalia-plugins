@@ -64,7 +64,7 @@ local serial = 0
 local function jsonl(root, records)
     serial += 1
     local head = "H" .. serial
-    decoded[head] = { v = 3, root = root }
+    decoded[head] = { v = 4, root = root }
     local lines = { head }
     for _, r in ipairs(records) do
         serial += 1
@@ -627,8 +627,8 @@ do
     space.onOpen(function() end)
     drain(space)
     local dir = find(find(space.render(), "space-row-1"), "name-btn").props
-    eq(utf8.len(dir.text), 52, "folder name cut to 52")
-    eq(dir.text, string.rep("d", 51) .. "…", "folder keeps its start, trailing …")
+    eq(utf8.len(dir.text), 44, "folder name cut to 44 (the row shows a file count)")
+    eq(dir.text, string.rep("d", 43) .. "…", "folder keeps its start, trailing …")
     eq(dir.tooltip, LONG_DIR, "tooltip with the full folder name")
     space.enter(LONG_DIR)
     local where = find(space.render(), "space-path").props.text
@@ -936,4 +936,49 @@ do
     end
     eq(#copied, 2, "bad context: no copy")
     eq(#runs, 0, "bad context: nothing runs")
+end
+
+-- ── file count per row ───────────────────────────────────────────────────────
+do
+    local space = boot()
+    local cases = { { 0, "0" }, { 1, "1" }, { 999, "999" }, { 1000, "1k" }, { 1049, "1k" }, { 1050, "1.1k" },
+        { 12345, "12.3k" }, { 999999, "1M" }, { 1000000, "1M" }, { 2500000, "2.5M" } }
+    for _, c in ipairs(cases) do eq(space.formatCount(c[1]), c[2], "formatCount " .. c[1]) end
+end
+do
+    local space = boot()
+    putIndex("/", jsonl("/", {
+        { id = "0", n = "/", s = 100, f = 5, nf = 1002 },
+        { id = "0/0", n = "usr", s = 60, nf = 1000 },
+        { id = "0/1", n = "one", s = 20, nf = 1 },
+        { id = "0/2", n = "t", s = 15, nf = 0, t = { { n = "a.mkv", s = 1, k = 1 } }, c = { 1, 0, 0, 0, 0, 0, 0, 0 } },
+    }), 60)
+    space.onOpen(function() redraws += 1 end)
+    drain(space)
+    local realTr = noctalia.tr
+    noctalia.tr = function(k, v) return v and v.count and k .. ":" .. v.count or k end
+    local tree = space.render()
+    local function countOf(text) return find(rowOf(tree, "space-row-", text), "files") end
+    eq(countOf("usr").props.text, "space_files:1k", "folder row: compact count")
+    eq(countOf("one").props.text, "space_file_one:1", "singular")
+    eq(countOf("t").props.text, "space_files:0", "empty folder: 0")
+    eq(countOf("space_loose").props.text, "space_file_one:1", "loose row = 1002 - 1000 - 1 - 0")
+    eq(countOf("usr").props.width, 64, "fixed width")
+    -- a name over 44 characters is elided on a row with a count
+    local long = string.rep("n", 50)
+    putIndex("/", jsonl("/", { { id = "0", n = "/", s = 10, nf = 1 }, { id = "0/0", n = long, s = 10, nf = 1 } }), 60)
+    space = boot()
+    putIndex("/", jsonl("/", { { id = "0", n = "/", s = 10, nf = 1 }, { id = "0/0", n = long, s = 10, nf = 1 } }), 60)
+    space.onOpen(function() redraws += 1 end)
+    drain(space)
+    local btn = find(find(space.render(), "space-row-1"), "name-btn")
+    eq(utf8.len(btn.props.text), 44, "name cut to 44")
+    assert(btn.props.tooltip, "elided name keeps its tooltip")
+    -- file rows (Types mode with a category): nothing in the count slot
+    noctalia.tr = realTr
+    space = typesReady()
+    space.setTypeFilter(1)
+    tree = space.render()
+    eq(find(tree, "files"), nil, "file rows show no count")
+    noctalia.tr = realTr
 end

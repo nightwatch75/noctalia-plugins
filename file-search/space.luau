@@ -333,7 +333,7 @@ function space.startLoad(dir, tag)
         return false
     end
     local ok, head = pcall(noctalia.json.decode, text:sub(1, nl - 1))
-    if not ok or type(head) ~= "table" or head.v ~= 3 then
+    if not ok or type(head) ~= "table" or head.v ~= 4 then
         return false
     end
     loader = { text = text, pos = nl + 1, nodes = {}, tree = nil, at = info and info.mtime or 0, path = path, size = size or #text }
@@ -349,7 +349,8 @@ local function addRecord(l, line)
         return false
     end
     -- u is absent in an index written before it existed
-    local node = { n = r.n, s = r.s, f = r.f or 0, u = type(r.u) == "number" and r.u or 0, c = r.c, t = r.t, d = {}, leaf = r.leaf }
+    local node = { n = r.n, s = r.s, f = r.f or 0, u = type(r.u) == "number" and r.u or 0,
+        nf = type(r.nf) == "number" and r.nf or 0, c = r.c, t = r.t, d = {}, leaf = r.leaf }
     local parentId = r.id:match("^(.+)/%d+$")
     if parentId ~= nil then
         local parent = l.nodes[parentId]
@@ -655,6 +656,8 @@ local DONUT_SIZE = 200
 local DONUT_THICKNESS = 28
 local LABEL_MAX = 34     -- legend, in the 340 px left column
 local ROW_LABEL_MAX = 52 -- list rows: a button wraps instead of eliding, so stay short
+local ROW_LABEL_MAX_FILES = 44 -- the same, when the row also shows a file count
+local FILES_WIDTH = 64
 local ROW_HEIGHT = 22
 local MAX_ROWS = 200 -- a render builds every row; a cache folder can hold thousands
 local SVG_NAMES = { "space-a.svg", "space-b.svg" }
@@ -935,6 +938,21 @@ function space.progressText()
     return shared.tr("space_elapsed_" .. phase, { time = space.formatElapsed(space.elapsedMs or 0) })
 end
 
+-- 987, 1.2k, 3k, 1.2M (no locale, one decimal, ".0" dropped).
+function space.formatCount(n)
+    if n < 1000 then
+        return string.format("%d", n)
+    end
+    local unit, tenths = "k", math.floor(n / 100 + 0.5)
+    if tenths >= 10000 then
+        unit, tenths = "M", math.floor(n / 100000 + 0.5)
+    end
+    if tenths % 10 == 0 then
+        return string.format("%d%s", tenths // 10, unit)
+    end
+    return string.format("%d.%d%s", tenths // 10, tenths % 10, unit)
+end
+
 local function label(key, text, color)
     return ui.label({ key = key, text = text, fontSize = 12, color = color or "on_surface_variant" })
 end
@@ -944,7 +962,7 @@ local function entryLabel(entry, name)
     if entry.kind == "loose" then
         return shared.tr("space_loose")
     end
-    return display(name, ROW_LABEL_MAX, entry.kind == "file")
+    return display(name, entry.files and ROW_LABEL_MAX_FILES or ROW_LABEL_MAX, entry.kind == "file")
 end
 
 -- The category with most bytes in a folder; nil for an empty one.
@@ -983,13 +1001,16 @@ local function listRow(entry, i, node, colors, palette, strip)
     else
         bar = ui.box({ key = "swatch", fill = colors[entry.node or entry.kind] or colors.other, radius = 2, width = 9, height = 9 })
     end
-    return ui.row({ key = "space-row-" .. i, gap = 6, align = "center", height = ROW_HEIGHT }, {
-        bar,
-        name,
-        label("size", shared.tr("usage_amount", {
-            size = shared.formatBytes(entry.bytes), share = string.format("%.0f", share),
-        })),
-    })
+    local cells = { bar, name }
+    if entry.files then
+        table.insert(cells, ui.label({ key = "files", text = shared.tr(entry.files == 1 and "space_file_one" or "space_files",
+            { count = space.formatCount(entry.files) }), fontSize = 11, color = "on_surface_variant",
+            width = FILES_WIDTH, textAlign = "end" }))
+    end
+    table.insert(cells, label("size", shared.tr("usage_amount", {
+        size = shared.formatBytes(entry.bytes), share = string.format("%.0f", share),
+    })))
+    return ui.row({ key = "space-row-" .. i, gap = 6, align = "center", height = ROW_HEIGHT }, cells)
 end
 
 local function legendRow(slice, i, node)

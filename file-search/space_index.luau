@@ -6,6 +6,7 @@
 
   Decoded index node:  { n = name, s = bytes, f = loose file bytes,
                          u = unreadable folders in the subtree,
+                         nf = files (non-folder entries) in the subtree,
                          c = { 8 bytes per category }, d = { child nodes },
                          t = { { n, s, k = category } } top files, leaf = true? }
   t[i].n is a path relative to the node ("sub/dir/file.mkv"), not a bare name.
@@ -88,10 +89,12 @@ function idx.entries(node, mode, category)
         end
     else
         for _, d in ipairs(node.d or {}) do
-            table.insert(out, { name = d.n, bytes = d.s, kind = "dir", node = d })
+            table.insert(out, { name = d.n, bytes = d.s, kind = "dir", node = d, files = d.nf })
         end
         if (node.f or 0) > 0 then
-            table.insert(out, { name = "", bytes = node.f, kind = "loose" })
+            local kept = 0
+            for _, d in ipairs(node.d or {}) do kept += d.nf or 0 end
+            table.insert(out, { name = "", bytes = node.f, kind = "loose", files = (node.nf or 0) - kept })
         end
     end
     return idx.sort(out, "size", true)
@@ -137,8 +140,8 @@ function idx.sort(entries, key, descending)
 end
 
 -- jq program: `ncdu -o` JSON in, JSON Lines out (run with jq -c): a header
--- `{"v":3,"root":<name>}`, then one record per kept folder in pre-order,
--- `{"id":"0/2/1",n,s,f,u,c,t,leaf?}`. id is the child-index path from the root
+-- `{"v":4,"root":<name>}`, then one record per kept folder in pre-order,
+-- `{"id":"0/2/1",n,s,f,u,nf,c,t,leaf?}`. id is the child-index path from the root
 -- ("0"), so a record's parent is its id minus the last segment and no d is
 -- written; children follow in node.d order. One record per line lets the
 -- panel decode the index a slice at a time.
@@ -149,6 +152,8 @@ end
 -- Folders deeper than depth, under minBytes, or under relMin (a fraction) of
 -- their parent's s go into the parent's f; c, t and u still count them.
 -- u counts folders ncdu could not read ("read_error") in the whole subtree.
+-- nf counts the files of the whole subtree, folded folders included: one per
+-- name (a hard link or symlink counts each time), 0 for an unreadable folder.
 -- shortcut: a hard link counts dsize/nlink per name (exact when every link is
 -- inside the scan); dedupe by dev+ino if links outside the scan matter.
 function idx.jqProgram(depth, topN, minBytes, relMin)
@@ -169,6 +174,7 @@ function idx.jqProgram(depth, topN, minBytes, relMin)
     | ($own + ([$files[].s, $kids[].s] | add // 0)) as $s
     | (if $lvl < %d then [$kids[] | select(.s >= ([%d, %.6f * $s] | max))] else [] end) as $keep
     | {n: .[0].name, s: $s, f: ($s - ([$keep[].s] | add // 0)), d: $keep,
+       nf: (($files | length) + ([$kids[].nf] | add // 0)),
        u: ((if .[0].read_error == true then 1 else 0 end) + ([$kids[].u] | add // 0)),
        c: (reduce $kids[].c as $x (reduce $files[] as $x ([0, 0, 0, 0, 0, 0, 0, $own]; setpath([$x.k - 1]; .[$x.k - 1] + $x.s));
              [range(8) as $j | .[$j] + $x[$j]])),
@@ -176,7 +182,7 @@ function idx.jqProgram(depth, topN, minBytes, relMin)
            | group_by(.k) | map(sort_by(-.s, .n) | .[:%d]) | add // [])}
     | if $lvl == %d then .leaf = true else . end;
   def flat($id): ({id: $id} + del(.d)), (.d | to_entries[] | .key as $k | .value | flat($id + "/" + ($k | tostring)));
-  .[3] | node(0) | ({v: 3, root: .n}, flat("0"))
+  .[3] | node(0) | ({v: 4, root: .n}, flat("0"))
 ]=], table.concat(ext, ","), math.floor(depth), math.floor(minBytes), relMin, math.floor(topN), math.floor(depth))
 end
 

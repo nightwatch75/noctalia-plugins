@@ -49,9 +49,9 @@ jq -c -f "$tmp/rel.jq" tests/fixtures/small.ncdu.json > "$tmp/rel.json"
 # the child-index path, "0" = root). jq -cS puts each on one line, so the
 # record order is compared too.
 cat > "$tmp/want.json" <<'EOF'
-{"v":3,"root":"/fixture"}
+{"v":4,"root":"/fixture"}
 {"id":"0",
-  "n":"/fixture","s":10780651520,"f":53248,"u":1,
+  "n":"/fixture","s":10780651520,"nf":16,"f":53248,"u":1,
   "c":[45056,8192,4096,24576,4096,4096,10737426432,43134976],
   "t":[{"n":"UP.MKV","s":16384,"k":1},{"n":"c.mkv","s":16384,"k":1},
        {"n":"a/pic.png","s":4096,"k":2},{"n":"b/pic-link.jpg","s":4096,"k":2},
@@ -62,33 +62,36 @@ cat > "$tmp/want.json" <<'EOF'
        {"n":"big/blob.img","s":10737418240,"k":7},{"n":"a/deep/deeper/core.iso","s":8192,"k":7},
        {"n":"big/over/o.bin","s":21651456,"k":8},{"n":"big/under/u.bin","s":21471232,"k":8}]}
 {"id":"0/0",
-  "n":"a","s":57344,"f":28672,"u":1,
+  "n":"a","s":57344,"nf":6,"f":28672,"u":1,
   "c":[12288,4096,4096,20480,4096,0,8192,4096],
   "t":[{"n":"movie.mkv","s":12288,"k":1},{"n":"pic.png","s":4096,"k":2},
        {"n":"quo\"te.mp3","s":4096,"k":3},{"n":"deep/big.zip","s":20480,"k":4},
        {"n":"new\nline.txt","s":4096,"k":5},{"n":"deep/deeper/core.iso","s":8192,"k":7}]}
 {"id":"0/0/0",
-  "n":"deep","s":28672,"f":28672,"u":0,"leaf":true,
+  "n":"deep","s":28672,"nf":2,"f":28672,"u":0,"leaf":true,
   "c":[0,0,0,20480,0,0,8192,0],
   "t":[{"n":"big.zip","s":20480,"k":4},{"n":"deeper/core.iso","s":8192,"k":7}]}
 {"id":"0/1",
-  "n":"big","s":10780540928,"f":10737418240,"u":0,
+  "n":"big","s":10780540928,"nf":3,"f":10737418240,"u":0,
   "c":[0,0,0,0,0,0,10737418240,43122688],
   "t":[{"n":"blob.img","s":10737418240,"k":7},
        {"n":"over/o.bin","s":21651456,"k":8},{"n":"under/u.bin","s":21471232,"k":8}]}
 {"id":"0/1/0",
-  "n":"under","s":21471232,"f":21471232,"u":0,"leaf":true,
+  "n":"under","s":21471232,"nf":1,"f":21471232,"u":0,"leaf":true,
   "c":[0,0,0,0,0,0,0,21471232],
   "t":[{"n":"u.bin","s":21471232,"k":8}]}
 {"id":"0/1/1",
-  "n":"over","s":21651456,"f":21651456,"u":0,"leaf":true,
+  "n":"over","s":21651456,"nf":1,"f":21651456,"u":0,"leaf":true,
   "c":[0,0,0,0,0,0,0,21651456],
   "t":[{"n":"o.bin","s":21651456,"k":8}]}
 EOF
 
+# nf: files in the whole subtree (folded folders and unreadable "locked" count;
+# excluded entries do not): hard links count once per name.
+
 # relMin 0.002: id, name and f of each record; "a" and "under" are folded.
 cat > "$tmp/rel_want.json" <<'EOF'
-{"v":3,"root":"/fixture"}
+{"v":4,"root":"/fixture"}
 ["0","/fixture",110592]
 ["0/0","big",10758889472]
 ["0/0/0","over",21651456]

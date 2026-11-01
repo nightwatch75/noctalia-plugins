@@ -94,7 +94,7 @@ for n in "$nice" ""; do
     [ "$(cat "$hostile/space-1.done")" = ok ] || fail "marker (nice '$n'): $(cat "$hostile/space-1.done")"
     [ "$(cat "$tmp/phase")" = reduce ] || fail "phase at reduce (nice '$n'): $(cat "$tmp/phase")"
     [ "$(cat "$tmp/oom")" = 1000 ] || fail "oom_score_adj not raised: $(cat "$tmp/oom")"
-    head -n 1 "$hostile/space-root.json" | jq -e '.v == 3' >/dev/null || fail "index header"
+    head -n 1 "$hostile/space-root.json" | jq -e '.v == 4' >/dev/null || fail "index header"
     jq -c . "$hostile/space-root.json" >/dev/null || fail "index is not JSON Lines"
     [ "$(wc -l < "$hostile/space-root.json")" -gt 1 ] || fail "index has no records"
 done

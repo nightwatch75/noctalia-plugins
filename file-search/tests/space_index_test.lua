@@ -106,11 +106,24 @@ do
     eq(shown[1].color, idx.COLORS_DARK[1], "biggest folder gets colour 1")
 end
 -- jq program text: relMin is written as a decimal fraction (not floored) and
--- the header record is format 3
+-- the header record is format 4
 do
     local prog = idx.jqProgram(6, 10, 1048576, 0.002)
     assert(prog:find("[1048576, 0.002000 * $s] | max", 1, true), "relMin of the parent in the keep rule")
-    assert(prog:find("{v: 3, root: .n}", 1, true), "format 3 header")
+    assert(prog:find("{v: 4, root: .n}", 1, true), "format 4 header")
     assert(idx.jqProgram(6, 10, 1048576, 0):find("[1048576, 0.000000 * $s] | max", 1, true), "relMin 0")
+end
+-- file counts: a folder row carries its subtree count; the loose row holds the
+-- files directly inside plus the folded small folders (node.nf - kept kids)
+do
+    local n = { n = "/", s = 100, f = 40, nf = 20, c = {}, t = {},
+        d = { { n = "a", s = 60, f = 60, nf = 12, c = {}, d = {}, t = {} } } }
+    local es = idx.entries(n, "folders")
+    eq(es[1].files, 12, "folder row count")
+    eq(es[2].kind, "loose", "loose row")
+    eq(es[2].files, 8, "loose row = nf - kept folders")
+    eq(idx.entries(n, "types")[1].files, 12, "types without a category: same rows, same counts")
+    n.t = { { n = "x.mkv", s = 5, k = 1 } }
+    eq(idx.entries(n, "types", 1)[1].files, nil, "file rows have no count")
 end
 print("space_index_test OK")
