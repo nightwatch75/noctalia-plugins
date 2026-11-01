@@ -11,9 +11,9 @@
 --
 -- UI state (file-locals): path (node stack from space.index down to the
 -- current folder; re-walked by name when a new index lands), sortKey
--- ("size" | "name"), sortDesc, mode ("folders" | "types"), typeFilter (a
--- category number in Types mode, nil = none; cleared by entering a folder, going
--- up or switching mode). space.typeFilter is a test-only mirror of it.
+-- ("size" | "name" | "path"; path in Types mode only, see idx.sort), sortDesc,
+-- mode ("folders" | "types"), typeFilter (a category number in Types mode,
+-- nil = none; cleared by entering a folder, going up or switching mode). space.typeFilter is a test-only mirror of it.
 --
 -- State (module fields, read by the panel):
 --   space.state     "idle" | "scanning" | "ready" | "error". A stale index
@@ -638,13 +638,16 @@ function space.setSort(key)
         sortDesc = not sortDesc
     else
         sortKey = key
-        sortDesc = key == "size"
+        sortDesc = key == "size" -- name and path start ascending
     end
     changed()
 end
 
 function space.setMode(value)
     mode = value
+    if mode == "folders" and sortKey == "path" then
+        sortKey = "name" -- a folder name has no "/": path == name
+    end
     typeFilter, space.typeFilter = nil, nil
     changed()
 end
@@ -942,7 +945,7 @@ function space.render()
             table.insert(right, label("space-unreadable", shared.tr("space_unreadable", { count = node.u })))
         end
         table.insert(right, ui.row({ key = "space-sort", gap = 4, align = "center" }, {
-            sortButton("size"), sortButton("name"),
+            sortButton("size"), sortButton("name"), mode == "types" and sortButton("path") or nil,
         }))
         table.insert(right, ui.scroll({ key = "space-list", flexGrow = 1, gap = 2 }, rows))
     end

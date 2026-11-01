@@ -162,7 +162,8 @@ setting keeps `du` out of specific, slow-but-same-filesystem folders instead.
 The *Space* tab shows what fills the disk. It starts at `/`; the `~` button
 switches to your home folder. A donut and a clickable legend show the biggest
 items of the current folder; click a folder to go in, use the up arrow to go
-back. The list below sorts by size or name. *Folders | Types* switches to a
+back. The list below sorts by size or name. In the file list of a type,
+*Name* sorts by the file name and *Path* by the full path. *Folders | Types* switches to a
 view by file type (video, images, audio…) and lists the biggest files of a
 type. The search button in the path row goes back to the Search tab and
 restricts the search to the current folder, if it is inside the search folder;
@@ -268,7 +269,7 @@ folders are skipped.
 - The Space scan also leaves out the folders in "Disk usage: excluded
   folders". Each combination of these three settings has its own cached
   index: after a change, the Space tab starts a new scan when it opens.
-- Folders under 1 MiB are counted in "(loose files)". Drill-down stops at
+- Folders under 1 MiB are counted in "(files and small folders)". Drill-down stops at
   depth 6.
 - `ncdu`, `jq` and `nice` are searched in `/usr/bin`, `/usr/local/bin`, `/bin`
   and `~/.local/bin` only: a detached run has no login PATH. Tested with

@@ -85,13 +85,21 @@ function idx.entries(node, mode, category)
     return idx.sort(out, "size", true)
 end
 
+-- key: "size" (bytes), "name" (last path segment) or "path" (the whole
+-- relative name); name and path ignore case. Ties: full name, then the
+-- original position.
+local function sortValue(e, key)
+    if key == "name" then return (e.name:match("[^/]*$")):lower() end
+    if key == "path" then return e.name:lower() end
+    return e.bytes
+end
+
 function idx.sort(entries, key, descending)
-    local pos = {}
-    for i, e in ipairs(entries) do pos[e] = i end
+    local pos, val = {}, {}
+    for i, e in ipairs(entries) do pos[e], val[e] = i, sortValue(e, key) end
     local out = table.clone(entries)
     table.sort(out, function(a, b)
-        local x, y = a.bytes, b.bytes
-        if key == "name" then x, y = a.name, b.name end
+        local x, y = val[a], val[b]
         if x ~= y then
             if descending then return x > y end
             return x < y

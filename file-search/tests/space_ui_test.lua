@@ -209,6 +209,7 @@ do
     assert(findText(first(), "space_loose"), "name ascending: the loose row (empty name) first")
     find(space.render(), "space-sort-name").props.onClick()
     assert(findText(first(), (WEIRD:gsub("%c", " "))), "second press on name flips to descending")
+    eq(find(space.render(), "space-sort-path"), nil, "no Path button in Folders mode")
 end
 
 -- ── untrusted names: escaped in the SVG, one line in the list ────────────────
@@ -405,6 +406,38 @@ do
     space.setTypeFilter(2)
     eq(rowNames(space.render())[1], "pic.png", "setTypeFilter(2)")
     space.setTypeFilter(nil)
+end
+
+-- ── sort by path (Types mode only), fallback to name in Folders mode ────────
+do
+    local space = boot()
+    putIndex("/", jsonl("/", {
+        { id = "0", n = "/", s = 100, c = { 60, 0, 0, 0, 0, 0, 0, 40 },
+          t = { { n = "a/c.mkv", s = 10, k = 1 }, { n = "b/a.mkv", s = 20, k = 1 }, { n = "z/" .. WEIRD .. ".mkv", s = 30, k = 1 } } },
+        { id = "0/0", n = "a", s = 40 },
+    }), 60)
+    space.onOpen(function() end)
+    drain(space)
+    space.setMode("types")
+    space.setTypeFilter(1)
+    local tree = space.render()
+    local order = {}
+    for _, child in ipairs(find(tree, "space-sort").children) do table.insert(order, child.props.key) end
+    eq(table.concat(order, " "), "space-sort-size space-sort-name space-sort-path", "Size | Name | Path in Types mode")
+    local hostile = ("z/" .. WEIRD .. ".mkv"):gsub("%c", " ")
+    eq(table.concat(rowNames(tree), "|"), hostile .. "|b/a.mkv|a/c.mkv", "size desc")
+    find(tree, "space-sort-name").props.onClick()
+    eq(table.concat(rowNames(space.render()), "|"), "b/a.mkv|a/c.mkv|" .. hostile, "name: basename asc")
+    find(space.render(), "space-sort-path").props.onClick()
+    eq(table.concat(rowNames(space.render()), "|"), "a/c.mkv|b/a.mkv|" .. hostile, "path: full path asc")
+    eq(find(space.render(), "space-sort-path").props.glyph, "arrow-up", "path starts ascending")
+    find(space.render(), "space-sort-path").props.onClick()
+    eq(table.concat(rowNames(space.render()), "|"), hostile .. "|b/a.mkv|a/c.mkv", "second press flips path")
+    -- Folders mode: no Path button, the path key falls back to name
+    space.setMode("folders")
+    tree = space.render()
+    eq(find(tree, "space-sort-path"), nil, "no Path button in Folders mode")
+    eq(find(tree, "space-sort-name").props.selected, true, "path falls back to name")
 end
 
 -- ── file reveal (Types rows) ─────────────────────────────────────────────────

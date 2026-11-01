@@ -12,6 +12,31 @@ s = idx.sort(es, "name", false)
 eq(s[1].name .. s[2].name .. s[3].name, "abc", "name asc")
 eq(es[1].name, "b", "input untouched")
 
+-- name = basename, path = full relative path; both case-insensitive
+local function names(list) local o = {}; for _, x in ipairs(list) do table.insert(o, x.name) end; return table.concat(o, " ") end
+local files = { { name = "a/c.txt", bytes = 1 }, { name = "b/a.txt", bytes = 2 }, { name = "B.txt", bytes = 3 } }
+eq(names(idx.sort(files, "name", false)), "b/a.txt B.txt a/c.txt", "name sorts by basename, case-insensitive")
+eq(names(idx.sort(files, "path", false)), "a/c.txt B.txt b/a.txt", "path sorts by the full path (\".\" < \"/\")")
+eq(names(idx.sort(files, "path", true)), "b/a.txt B.txt a/c.txt", "path descending")
+-- ties: same basename -> full name -> original position
+local ties = { { name = "y/same", bytes = 1, id = 1 }, { name = "x/Same", bytes = 1, id = 2 },
+    { name = "x/Same", bytes = 1, id = 3 } }
+local t = idx.sort(ties, "name", false)
+eq(t[1].name .. t[1].id .. t[2].id .. t[3].name, "x/Same23y/same", "name ties: full name, then position")
+t = idx.sort(ties, "path", true)
+eq(t[1].name .. t[2].id .. t[3].id, "y/same23", "path ties keep the original position")
+-- a hostile name sorts like any other in every key
+local HOSTILE = 'q/we<i&rd"\nname'
+local mixed = { { name = "z.txt", bytes = 5 }, { name = HOSTILE, bytes = 7 }, { name = "a/m.txt", bytes = 1 } }
+for _, key in ipairs({ "size", "name", "path" }) do
+    for _, desc in ipairs({ false, true }) do
+        eq(#idx.sort(mixed, key, desc), 3, key .. ": hostile name kept")
+    end
+end
+eq(idx.sort(mixed, "size", true)[1].name, HOSTILE, "size: hostile first")
+eq(names(idx.sort(mixed, "name", false)), "a/m.txt " .. HOSTILE .. " z.txt", "name: basename we<i...")
+eq(names(idx.sort(mixed, "path", false)), "a/m.txt " .. HOSTILE .. " z.txt", "path: q/ between a/ and z")
+
 local kids, total = {}, 0
 for i = 1, 12 do
     kids[i] = { n = "d" .. i, s = i * 10, f = 0, c = { 0, 0, 0, 0, 0, 0, 0, i * 10 }, d = {}, t = {} }
