@@ -1482,6 +1482,11 @@ function onResultMenu(action, context)
     end
 end
 
+-- Global because openContextMenu names its handler; the logic lives in space.luau.
+function onSpaceMenu(action, context)
+    space.menuAction(action, context)
+end
+
 -- Opens the settings window on this plugin's own page (the host supplies the
 -- plugin id, so a plugin can only ever open its own). The panel closes on the
 -- way; the index survives it, since it lives in the plugin data directory.

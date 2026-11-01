@@ -826,3 +826,114 @@ do
     eq(find(space.render(), "space-legend-title").props.text, "space_legend_types", "types mode")
 end
 
+
+-- ── right-click menu on list rows ────────────────────────────────────────────
+do
+    local menus, closed = {}, 0
+    panel = {
+        openContextMenu = function(spec) table.insert(menus, spec) end,
+        close = function() closed += 1 end,
+    }
+    local copied = {}
+    local function wire()
+        menus, closed, copied = {}, 0, {}
+        noctalia.copyToClipboard = function(text, mime) table.insert(copied, { text, mime }) end
+        noctalia.tr = function(key) return key end
+    end
+    local function btn(tree, text) return find(rowOf(tree, "space-row-", text), "name-btn") end
+    local function expectItems(spec, header)
+        eq(spec.onActivate, "onSpaceMenu", "activate names the global")
+        local want = {
+            { kind = "header", label = header }, { id = "open", label = "menu.open" },
+            { id = "reveal", label = "menu.reveal" }, { kind = "separator" },
+            { id = "copy_path", label = "menu.copy_path" }, { id = "copy_name", label = "menu.copy_name" },
+        }
+        eq(#spec.items, #want, "item count")
+        for i, w in ipairs(want) do
+            eq(spec.items[i].kind, w.kind, "kind " .. i)
+            eq(spec.items[i].id, w.id, "id " .. i)
+            eq(spec.items[i].label, w.label, "label " .. i)
+        end
+    end
+
+    -- folder row at "/", then a leaf folder one level down
+    wire()
+    local space = ready()
+    local tree = space.render()
+    btn(tree, "home").props.onRightClick()
+    eq(#menus, 1, "folder: one menu")
+    eq(menus[1].context, "/home", "root folder: no double slash")
+    expectItems(menus[1], "home")
+    click(rowOf(tree, "space-row-", "home"), "left click drills")
+    eq(find(space.render(), "space-path").props.text, "/home", "left click still enters")
+    eq(#menus, 1, "left click raises no menu")
+    find(space.render(), "space-up").props.onClick()
+    space.enter("usr")
+    tree = space.render()
+    local lib = btn(tree, "lib")
+    assert(lib, "leaf folder row is a button")
+    eq(lib.props.onClick, nil, "leaf button: no left click")
+    lib.props.onRightClick()
+    eq(menus[2].context, "/usr/lib", "nested leaf: root/sub/name")
+    expectItems(menus[2], "lib")
+    assert(not find(rowOf(tree, "space-legend-", "lib"), "name-btn") or not find(rowOf(tree, "space-legend-", "lib"), "name-btn").props.onRightClick, "no menu on the legend")
+
+    -- loose row: no button, no menu
+    space = ready()
+    eq(find(rowOf(space.render(), "space-row-", "space_loose"), "name-btn"), nil, "loose row: no button")
+
+    -- file rows in Types mode
+    wire()
+    space = typesReady()
+    files["/big.mkv"] = { text = "x", mtime = 1 }
+    space.setTypeFilter(1)
+    tree = space.render()
+    btn(tree, "big.mkv").props.onRightClick()
+    eq(menus[1].context, "/big.mkv", "file context")
+    expectItems(menus[1], "big.mkv")
+    local before = #runs
+    click(rowOf(tree, "space-row-", "big.mkv"), "left click reveals")
+    eq(runs[#runs].argv[1], "gdbus", "left click still reveals")
+    eq(#menus, 1, "left click: no menu")
+    -- hostile name: verbatim context, flat header
+    space.setTypeFilter(3)
+    tree = space.render()
+    local hostile = WEIRD .. ".mp3"
+    btn(tree, (hostile:gsub("%c", " "))).props.onRightClick()
+    eq(menus[2].context, "/" .. hostile, "hostile path verbatim")
+    expectItems(menus[2], (hostile:gsub("%c", " ")))
+
+    -- menuAction
+    wire()
+    files["/x y/<a&\"b\nc>"] = { text = "x", mtime = 1 }
+    local hp = "/x y/<a&\"b\nc>"
+    runs, notes = {}, {}
+    space.menuAction("open", hp)
+    eq(runs[1].argv[1], "xdg-open", "open argv")
+    eq(runs[1].argv[2], hp, "open path verbatim")
+    eq(closed, 1, "open closes the panel")
+    space.menuAction("reveal", hp)
+    eq(runs[2].argv[1], "gdbus", "reveal argv")
+    eq(runs[2].argv[10], '["file:///x%20y/%3Ca%26%22b%0Ac%3E"]', "reveal uri encoded")
+    space.menuAction("copy_path", hp)
+    eq(copied[1][1], hp, "copy_path exact")
+    eq(copied[1][2], "text/plain", "copy_path mime")
+    eq(notes[#notes], "copied_entry", "copy_path notice")
+    space.menuAction("copy_name", hp)
+    eq(copied[2][1], "<a&\"b\nc>", "copy_name last segment")
+    eq(notes[#notes], "copied_name", "copy_name notice")
+    eq(closed, 1, "copy keeps the panel")
+    runs, notes = {}, {}
+    space.menuAction("open", "/missing/file")
+    space.menuAction("reveal", "/missing/file")
+    eq(#runs, 0, "missing path: nothing runs")
+    eq(#notes, 2, "missing path: notice each")
+    eq(notes[1], "space_gone", "space_gone notice")
+    eq(closed, 1, "missing open keeps the panel")
+    for _, bad in ipairs({ 5, "rel/path", "", false }) do
+        space.menuAction("copy_path", bad)
+        space.menuAction("open", bad)
+    end
+    eq(#copied, 2, "bad context: no copy")
+    eq(#runs, 0, "bad context: nothing runs")
+end

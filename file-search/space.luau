@@ -750,6 +750,43 @@ local function revealFile(rel)
     shared.revealPath(full)
 end
 
+-- The right-click menu of a list row (same items as the Search tab's, see
+-- panel.luau openResultMenu). The path rides as the context string; the panel's
+-- global onSpaceMenu hands the pick back to menuAction.
+function space.openMenu(entry)
+    panel.openContextMenu({
+        onActivate = "onSpaceMenu",
+        context = absolute(entry.name),
+        items = {
+            { kind = "header", label = display(entry.name, ROW_LABEL_MAX, entry.kind == "file") },
+            { id = "open", label = shared.tr("menu.open") },
+            { id = "reveal", label = shared.tr("menu.reveal") },
+            { kind = "separator" },
+            { id = "copy_path", label = shared.tr("menu.copy_path") },
+            { id = "copy_name", label = shared.tr("menu.copy_name") },
+        },
+    })
+end
+
+function space.menuAction(action, path)
+    if type(path) ~= "string" or path:sub(1, 1) ~= "/" then
+        return
+    end
+    if action == "copy_path" or action == "copy_name" then
+        noctalia.copyToClipboard(action == "copy_path" and path or path:match("[^/]+$") or path, "text/plain")
+        noctalia.notify(shared.tr("title"), shared.tr(action == "copy_path" and "copied_entry" or "copied_name"))
+    elseif action == "open" or action == "reveal" then
+        if not noctalia.fileExists(path) then -- the index may be a day old
+            noctalia.notify(shared.tr("title"), shared.tr("space_gone", { path = path }))
+        elseif action == "reveal" then
+            shared.revealPath(path)
+        else
+            shared.openPath(path)
+            panel.close()
+        end
+    end
+end
+
 -- ── donut ────────────────────────────────────────────────────────────────────
 
 local function paint(slices)
@@ -873,6 +910,7 @@ end
 -- (the common folder) are not shown.
 local function listRow(entry, i, node, colors, palette, strip)
     local onClick = nil
+    local menu = entry.kind ~= "loose" and function() space.openMenu(entry) end or nil
     if entry.kind == "dir" and not entry.node.leaf then
         onClick = function() space.enter(entry.name) end
     elseif entry.kind == "file" then
@@ -882,9 +920,9 @@ local function listRow(entry, i, node, colors, palette, strip)
     local text = entryLabel(entry, shown)
     local full = entry.name:gsub("%c", " ")
     local cut = text ~= shown:gsub("%c", " ")
-    local name = onClick
+    local name = menu
         and ui.button({ key = "name-btn", text = text, fontSize = 12, variant = "ghost", contentAlign = "start",
-            flexGrow = 1, height = ROW_HEIGHT, tooltip = cut and full or nil, onClick = onClick })
+            flexGrow = 1, height = ROW_HEIGHT, tooltip = cut and full or nil, onClick = onClick, onRightClick = menu })
         or ui.label({ key = "name-plain", text = text, fontSize = 12, color = "on_surface", flexGrow = 1 })
     local share = node.s > 0 and entry.bytes / node.s * 100 or 0
     local bar

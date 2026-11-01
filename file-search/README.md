@@ -169,7 +169,8 @@ view by file type (video, images, audio…) and lists the 10 biggest files of a
 type; a line above the list says when it shows only those 10. When all the
 files listed are in one folder, that folder is shown once above the list. The search button goes back to the Search tab and
 restricts the search to the current folder, if it is inside the search folder;
-for any other folder it shows a notice.
+for any other folder it shows a notice. Right-click a row of the list for
+open / show in file manager / copy path / copy name.
 
 ### Launcher
 
