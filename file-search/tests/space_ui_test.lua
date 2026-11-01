@@ -167,20 +167,54 @@ do
     end
     eq(find(tree, "space-path").props.text, "/", "path at root")
     eq(find(tree, "space-up").props.enabled, false, "up disabled at the root")
-    -- right column, top down: path, buttons, sort, list; left: donut and legend only
+    -- left: donut, path, buttons, legend title, legend; right: sort and list only
     local right, left = find(tree, "space-right"), find(tree, "space-left")
     local order = {}
     for _, child in ipairs(right.children) do table.insert(order, child.props.key) end
-    eq(table.concat(order, " "), "space-path space-buttons space-sort space-list", "right column order")
-    eq(find(left, "space-path"), nil, "no path in the left column")
-    eq(find(left, "space-buttons"), nil, "no buttons in the left column")
-    assert(find(left, "space-img") and find(left, "space-legend"), "donut and legend on the left")
+    eq(table.concat(order, " "), "space-sort space-list", "right column order")
+    order = {}
+    for _, child in ipairs(left.children) do table.insert(order, child.props.key) end
+    eq(table.concat(order, " "), "space-img space-path space-buttons space-buttons-mode space-legend-title space-legend",
+        "left column order")
+    for _, key in ipairs({ "space-up", "space-top", "space-root", "space-mode", "space-search-here", "space-refresh",
+        "space-path" }) do
+        assert(find(left, key), key .. " in the left column")
+        eq(find(right, key), nil, key .. " not in the right column")
+    end
     -- slices: usr, weird, home, loose = 4 rows, all fit under MAX_SLICES
     for i = 1, 4 do assert(find(tree, "space-legend-" .. i), "legend row " .. i) end
     assert(not find(tree, "space-legend-5"), "one legend row per slice")
     for i = 1, 4 do assert(find(tree, "space-row-" .. i), "list row " .. i) end
     assert(find(tree, "space-img").props.path:match("/space%-[ab]%.svg$"), "image path")
     svgText()
+end
+
+-- ── top of home button ───────────────────────────────────────────────────────
+do
+    local space = boot(true)
+    putIndex(HOME, fixture(HOME), 60)
+    space.onOpen(function() redraws += 1 end)
+    drain(space)
+    eq(space.root, HOME, "home root")
+    local top = find(space.render(), "space-top")
+    assert(top, "top button")
+    eq(top.props.enabled, false, "top disabled at the root level")
+    eq(top.props.tooltip, "space_tip_top", "tooltip")
+    assert(top.props.glyph ~= "home" and top.props.glyph ~= "device-desktop", "own glyph")
+    click(rowOf(space.render(), "space-legend-", "usr"), "usr")
+    top = find(space.render(), "space-top")
+    eq(top.props.enabled, true, "top enabled below the root of home")
+    space.setMode("types")
+    space.setTypeFilter(1)
+    top.props.onClick()
+    eq(find(space.render(), "space-path").props.text, HOME, "back at the root node")
+    eq(space.typeFilter, nil, "filter cleared")
+    eq(find(space.render(), "space-top").props.enabled, false, "disabled again")
+
+    space = ready() -- root "/"
+    click(rowOf(space.render(), "space-legend-", "usr"), "usr")
+    eq(find(space.render(), "space-up").props.enabled, true, "below the root")
+    eq(find(space.render(), "space-top").props.enabled, false, "top disabled at /")
 end
 
 -- ── legend click enters, up pops ─────────────────────────────────────────────
@@ -245,10 +279,11 @@ do
     eq(space.state, "error", "missing ncdu")
     local tree = space.render()
     assert(findText(find(tree, "space-left"), "space_err.ncdu"), "error text per code, left column")
-    -- no index: the controls stay usable on the right, no sort or list
-    local right = find(tree, "space-right")
-    assert(find(right, "space-path") and find(right, "space-root") and find(right, "space-refresh"), "controls without an index")
-    eq(find(right, "space-root").props.enabled, true, "root button usable after an error")
+    -- no index: the controls stay usable in the left column, the right one is empty
+    local left = find(tree, "space-left")
+    assert(find(left, "space-path") and find(left, "space-root") and find(left, "space-refresh"), "controls without an index")
+    eq(find(left, "space-root").props.enabled, true, "root button usable after an error")
+    eq(#find(tree, "space-right").children, 0, "right column empty without an index")
     eq(find(tree, "space-sort"), nil, "no sort row without an index")
     eq(find(tree, "space-list"), nil, "no list without an index")
 
@@ -569,8 +604,9 @@ do
     noctalia.tr = function(k, v) return k == "space_unreadable" and k .. ":" .. v.count or k end
     eq(find(space.render(), "space-unreadable").props.text, "space_unreadable:66", "count shown")
     local order = {}
-    for _, child in ipairs(find(space.render(), "space-right").children) do table.insert(order, child.props.key) end
-    eq(table.concat(order, " "), "space-path space-buttons space-unreadable space-sort space-list", "line under the controls")
+    for _, child in ipairs(find(space.render(), "space-left").children) do table.insert(order, child.props.key) end
+    eq(table.concat(order, " "), "space-img space-path space-buttons space-buttons-mode space-unreadable space-legend-title space-legend",
+        "unreadable line under the controls")
     space.enter("ok")
     eq(find(space.render(), "space-unreadable"), nil, "u = 0: no line")
     noctalia.tr = realTr
@@ -640,7 +676,7 @@ do
     eq(find(tree, "space-capped").props.color, "on_surface_variant", "muted")
     local order = {}
     for _, child in ipairs(find(tree, "space-right").children) do table.insert(order, child.props.key) end
-    eq(table.concat(order, " "), "space-path space-buttons space-sort space-capped space-list", "line above the list")
+    eq(table.concat(order, " "), "space-sort space-capped space-list", "line above the list")
     eq(find(capped(n - 1).render(), "space-capped"), nil, "fewer than TOP_N: no line")
     space.setTypeFilter(nil)
     eq(find(space.render(), "space-capped"), nil, "no category: no line")
@@ -674,7 +710,7 @@ do
     eq(find(find(tree, "space-row-1"), "name-btn").props.tooltip, nil, "short stripped row: no tooltip")
     local order = {}
     for _, child in ipairs(find(tree, "space-right").children) do table.insert(order, child.props.key) end
-    eq(table.concat(order, " "), "space-path space-buttons space-sort space-common space-list", "label above the list")
+    eq(table.concat(order, " "), "space-sort space-common space-list", "label above the list")
     -- Path sort still uses the full relative path
     sortBtn(tree, "path").props.onClick()
     eq(table.concat(rowNames(space.render()), "|"), "02-vantaggi.mp4|08-pasta.mp4|sub/x.mp4", "path sort")
@@ -771,3 +807,22 @@ do
     find(space.render(), "space-search-here").props.onClick()
     eq(got[2], "/usr", "current folder path")
 end
+-- ── legend title ─────────────────────────────────────────────────────────────
+do
+    local space = ready()
+    local realTr = noctalia.tr
+    noctalia.tr = function(k, v) return v and v.count and k .. ":" .. v.count or k end
+    eq(find(space.render(), "space-legend-title").props.text, "space_legend_folders_top:3", "folded: exact folder count")
+    eq(find(space.render(), "space-legend-title").props.color, "on_surface_variant", "muted")
+    noctalia.tr = realTr
+
+    space = boot()
+    putIndex("/", jsonl("/", { { id = "0", n = "/", s = 30 }, { id = "0/0", n = "a", s = 20 }, { id = "0/1", n = "b", s = 10 } }), 60)
+    space.onOpen(function() end)
+    drain(space)
+    eq(find(space.render(), "space-legend-title").props.text, "space_legend_folders_all", "every folder shown")
+
+    space = typesReady()
+    eq(find(space.render(), "space-legend-title").props.text, "space_legend_types", "types mode")
+end
+

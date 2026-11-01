@@ -677,6 +677,14 @@ function space.up()
     end
 end
 
+function space.top()
+    if #path > 1 then
+        path = { path[1] }
+        typeFilter, space.typeFilter = nil, nil
+        changed()
+    end
+end
+
 function space.enter(name)
     local node = current()
     local child = node and idx.child(node, name)
@@ -949,18 +957,16 @@ end
 function space.render()
     local node = current()
     local atHome = space.root ~= "/"
+    -- Two rows: up, top, root, search and refresh take about 220 px of the 340,
+    -- the Folders | Types switch another 120.
     local controls = ui.row({ key = "space-buttons", gap = 4, align = "center" }, {
         ui.button({ key = "space-up", glyph = "arrow-up", variant = "ghost", enabled = #path > 1,
             tooltip = shared.tr("space_tip_up"), onClick = space.up }),
+        ui.button({ key = "space-top", glyph = "arrow-bar-to-up", variant = "ghost",
+            enabled = atHome and #path > 1, tooltip = shared.tr("space_tip_top"), onClick = space.top }),
         ui.button({ key = "space-root", glyph = atHome and "device-desktop" or "home", variant = "ghost",
             text = atHome and "/" or "~", tooltip = shared.tr(atHome and "space_tip_root" or "space_tip_home"),
             enabled = not space.scanning, onClick = space.toggleRoot }),
-        ui.row({ key = "space-mode", gap = 2 }, {
-            ui.button({ key = "folders", text = shared.tr("space_mode_folders"), variant = "ghost",
-                controlSize = "sm", selected = mode == "folders", onClick = function() space.setMode("folders") end }),
-            ui.button({ key = "types", text = shared.tr("space_mode_types"), variant = "ghost",
-                controlSize = "sm", selected = mode == "types", onClick = function() space.setMode("types") end }),
-        }),
         ui.spacer({ key = "gap", flexGrow = 1 }),
         ui.button({ key = "space-search-here", glyph = "search", variant = "ghost",
             tooltip = shared.tr("space_tip_search_here"),
@@ -968,13 +974,16 @@ function space.render()
         ui.button({ key = "space-refresh", glyph = "refresh", variant = "ghost", enabled = not space.scanning,
             tooltip = shared.tr("space_tip_refresh"), onClick = space.refresh }),
     })
-    -- Shown with or without an index: root and refresh must stay usable.
+    local modeRow = ui.row({ key = "space-buttons-mode", gap = 4, align = "center" }, {
+        ui.row({ key = "space-mode", gap = 2 }, {
+            ui.button({ key = "folders", text = shared.tr("space_mode_folders"), variant = "ghost",
+                controlSize = "sm", selected = mode == "folders", onClick = function() space.setMode("folders") end }),
+            ui.button({ key = "types", text = shared.tr("space_mode_types"), variant = "ghost",
+                controlSize = "sm", selected = mode == "types", onClick = function() space.setMode("types") end }),
+        }),
+    })
     -- The end of a long path is the part that says where you are.
-    local right = {
-        ui.label({ key = "space-path", text = display(absolute(), ROW_LABEL_MAX + 6, true), fontSize = 13,
-            fontWeight = "bold", color = "on_surface" }),
-        controls,
-    }
+    local right = {}
     local left = {}
     if space.scanning then
         if space.progress ~= nil then
@@ -994,16 +1003,31 @@ function space.render()
             table.insert(left, label("space-msg", text, color))
         end
     end
+    local slices = node ~= nil and paint(idx.slices(node, mode, usage.MAX_SLICES)) or nil
     if node ~= nil then
-        local slices = paint(idx.slices(node, mode, usage.MAX_SLICES))
         local image = writeSvg(node, slices)
         if image ~= nil then
             table.insert(left, ui.image({ key = "space-img", path = image, width = DONUT_SIZE, height = DONUT_SIZE }))
         end
+    end
+    -- The end of a long path is the part that says where you are.
+    table.insert(left, ui.label({ key = "space-path", text = display(absolute(), ROW_LABEL_MAX + 6, true), fontSize = 13,
+        fontWeight = "bold", color = "on_surface" }))
+    table.insert(left, controls)
+    table.insert(left, modeRow)
+    if node ~= nil then
+        if (node.u or 0) > 0 then
+            table.insert(left, label("space-unreadable", shared.tr("space_unreadable", { count = node.u })))
+        end
+        local dirs, folded = 0, false
         local legend = {}
         for i, slice in ipairs(slices) do
+            dirs = dirs + (slice.kind == "dir" and 1 or 0)
+            folded = folded or slice.kind == "other" or slice.kind == "loose"
             table.insert(legend, legendRow(slice, i, node))
         end
+        table.insert(left, label("space-legend-title", mode == "types" and shared.tr("space_legend_types")
+            or folded and shared.tr("space_legend_folders_top", { count = dirs }) or shared.tr("space_legend_folders_all")))
         table.insert(left, ui.column({ key = "space-legend", gap = 1 }, legend))
 
         -- Swatch colours: a shown folder takes its slice's colour; the rest stay grey.
@@ -1025,9 +1049,6 @@ function space.render()
         end
         if #entries > MAX_ROWS then
             table.insert(rows, label("space-more", shared.tr("space_more_rows", { count = #entries - MAX_ROWS })))
-        end
-        if (node.u or 0) > 0 then
-            table.insert(right, label("space-unreadable", shared.tr("space_unreadable", { count = node.u })))
         end
         table.insert(right, ui.row({ key = "space-sort", gap = 4, align = "center" }, {
             sortButton("size"), sortButton("name"), mode == "types" and sortButton("path") or nil,

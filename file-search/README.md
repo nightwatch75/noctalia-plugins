@@ -162,11 +162,12 @@ setting keeps `du` out of specific, slow-but-same-filesystem folders instead.
 The *Space* tab shows what fills the disk. It starts with your home folder;
 the `/` button switches to the whole system. A donut and a clickable legend show the biggest
 items of the current folder; click a folder to go in, use the up arrow to go
-back. The list below sorts by size or name. In the file list of a type,
+back, or the top arrow to jump to the top of the home folder. The buttons are under the
+donut; the list on the right sorts by size or name. In the file list of a type,
 *Name* sorts by the file name and *Path* by the full path. *Folders | Types* switches to a
 view by file type (video, images, audio…) and lists the 10 biggest files of a
 type; a line above the list says when it shows only those 10. When all the
-files listed are in one folder, that folder is shown once above the list. The search button in the path row goes back to the Search tab and
+files listed are in one folder, that folder is shown once above the list. The search button goes back to the Search tab and
 restricts the search to the current folder, if it is inside the search folder;
 for any other folder it shows a notice.
 
