@@ -66,19 +66,19 @@
       "label": "Include hidden entries"
     },
     "space_enabled": {
-      "description": "Show the Space tab, which measures disk usage with ncdu and jq. Turn it off to use only the search; nothing is scanned. The panel stays the same width.",
+      "description": "Show the Space tab (disk usage, needs ncdu and jq). Off: search only, nothing is scanned.",
       "label": "Space tab"
     },
     "space_skip_external": {
-      "description": "The Space tab scan does not go into external disks (USB and other removable disks). To skip one more disk, add its absolute path to \"Disk usage: excluded folders\", for example an internal disk mounted under /mnt. When you change this setting, the Space tab starts a new scan the next time it opens.",
+      "description": "Skip USB and other removable disks in the Space scan. A change starts a new scan.",
       "label": "Space tab: skip external disks"
     },
     "space_skip_network": {
-      "description": "The Space tab scan does not go into network mounts (NFS, SMB and other) and FUSE mounts (rclone, sshfs, OneDrive and other). To skip one more disk, add its absolute path to \"Disk usage: excluded folders\", for example an internal disk mounted under /mnt. When you change this setting, the Space tab starts a new scan the next time it opens.",
+      "description": "Skip network (NFS, SMB) and FUSE (rclone, sshfs, OneDrive) mounts in the Space scan. A change starts a new scan.",
       "label": "Space tab: skip network and FUSE mounts"
     },
     "usage_exclude_dirs": {
-      "description": "Folders that the disk usage chart and the Space tab do not count, separated by ',' or ';'. A bare name matches anywhere below the search folder. An absolute path (or a path that starts with ~) skips that one folder. The usage chart already skips folders on another filesystem.",
+      "description": "Folders left out of the usage chart and the Space scan, separated by ',' or ';'. A name matches anywhere below the search folder. An absolute or ~ path skips that one folder, e.g. a disk under /mnt.",
       "label": "Disk usage: excluded folders"
     }
   },

@@ -210,7 +210,7 @@ results whenever the index is out of date.
 | `search_folder` | `folder` | *(empty)* | Root folder the search indexes. Empty = your home folder. |
 | `exclude_dirs` | `string` | `.git, node_modules, .cache, .venv` | Folder names skipped while indexing, separated by `,` or `;`, matched anywhere in the tree. |
 | `show_hidden` | `bool` | `false` | Index files and folders whose name starts with a dot. |
-| `usage_exclude_dirs` | `string` | *(empty)* | Folders that the disk usage chart and the Space tab do not count, separated by `,` or `;`. A bare name matches anywhere below the search folder. An absolute path (or one that starts with `~`) skips that one folder, e.g. an internal disk under `/mnt`. |
+| `usage_exclude_dirs` | `string` | *(empty)* | Folders left out of the usage chart and the Space scan, separated by `,` or `;`. A name matches anywhere below the search folder. An absolute or `~` path skips that one folder, e.g. a disk under `/mnt`. |
 | `space_enabled` | `bool` | `true` | Show the Space tab. Turn it off to use only the search: the tab bar is hidden and nothing is scanned. The panel keeps its width. |
 | `space_skip_network` | `bool` | `true` | Space tab: do not scan network mounts (NFS, SMB…) and FUSE mounts (rclone, sshfs, OneDrive…). |
 | `space_skip_external` | `bool` | `true` | Space tab: do not scan external (removable) disks. |
