@@ -3,11 +3,6 @@
 local idx = loadstring(MODULE_SRC)()
 local function eq(a, b, m) if a ~= b then error(m .. ": got " .. tostring(a) .. " want " .. tostring(b)) end end
 
-eq(idx.categoryOf("a.MKV"), 1, "mkv")
-eq(idx.categoryOf("x.tar.gz"), 4, "tar.gz")
-eq(idx.categoryOf("Makefile"), 8, "no ext")
-eq(idx.categoryOf(".bashrc"), 8, "dotfile")
-
 local es = {
     { name = "b", bytes = 5 }, { name = "a", bytes = 5 }, { name = "c", bytes = 9 },
 }
@@ -66,7 +61,6 @@ eq(tie[1].id, 1, "stable full tie")
 
 -- hostile name stays plain data
 local bad = 'a\nb"<&>.MP4'
-eq(idx.categoryOf(bad), 1, "hostile categoryOf")
 local hn = { n = "/", s = 5, f = 0, c = { 5, 0, 0, 0, 0, 0, 0, 0 }, d = { { n = bad, s = 5, f = 5, c = {}, d = {}, t = {}, leaf = true } }, t = {} }
 eq(idx.entries(hn, "folders")[1].name, bad, "hostile entries")
 eq(idx.sort(idx.entries(hn, "folders"), "name", false)[1].name, bad, "hostile sort")

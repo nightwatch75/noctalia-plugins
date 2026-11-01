@@ -1,6 +1,6 @@
 --!nonstrict
 --[[
-  space_index.luau - pure logic of the Space tab: file categories, entry lists,
+  space_index.luau - pure logic of the Space tab: category table, entry lists,
   sorting, donut slices and node navigation. No host globals: a plain module
   (ends with `return idx`), unit-tested by tests/space_index_test.lua.
 
@@ -11,8 +11,9 @@
   t[i].n is a path relative to the node ("sub/dir/file.mkv"), not a bare name.
 
   EXT below is the ONE extension table. The jq program that builds the index
-  (Task 3) is generated from this same table, so the Luau side and the jq side
-  cannot drift apart. Any extension not listed is category 8 (other).
+  is generated from it and is the only place that assigns a file its category
+  (last extension, case-insensitive). Any extension not listed, no extension
+  or a dotfile is category 8 (other).
 
   On disk the index is JSON Lines (see jqProgram); space.luau rebuilds this
   nested shape from it.
@@ -54,17 +55,6 @@ idx.EXT = {
     { "lua", "luau", "py", "js", "ts", "c", "h", "cpp", "hpp", "rs", "go", "java", "sh", "json", "toml", "yaml", "yml" },
     { "deb", "rpm", "pkg", "apk", "appimage", "iso", "img", "jar", "whl" },
 }
-
-local extMap = {}
-for cat, list in ipairs(idx.EXT) do
-    for _, e in ipairs(list) do extMap[e] = cat end
-end
-
-function idx.categoryOf(name)
-    local ext = string.match(name, "^.+%.([^%.]+)$")
-    if not ext then return 8 end
-    return extMap[string.lower(ext)] or 8
-end
 
 function idx.child(node, name)
     for _, d in ipairs(node.d or {}) do

@@ -13,7 +13,9 @@
 # folded into the root, names with a newline and a quote stay JSON strings.
 # "a/locked" was added by hand: ncdu writes a folder it could not read as
 # {"read_error":true}; u counts such folders in the subtree (1 at "a" and the
-# root, 0 in "deep").
+# root, 0 in "deep"). UP.MKV, x.tar.gz and .bashrc were also added by hand for
+# the category rule: upper-case extension = video, last extension wins
+# (archives), a dotfile and README (no extension) = other.
 set -e
 cd "$(dirname "$0")/.."
 if [ -z "$LUAU" ]; then
@@ -38,16 +40,16 @@ jq -c -f "$tmp/prog.jq" tests/fixtures/small.ncdu.json > "$tmp/got.json"
 cat > "$tmp/want.json" <<'EOF'
 {"v":1,"root":"/fixture"}
 {"id":"0",
-  "n":"/fixture","s":86016,"f":28672,"u":1,
-  "c":[28672,8192,4096,20480,4096,4096,8192,8192],
-  "t":[{"n":"c.mkv","s":16384,"k":1},{"n":"a/movie.mkv","s":12288,"k":1},
+  "n":"/fixture","s":110592,"f":53248,"u":1,
+  "c":[45056,8192,4096,24576,4096,4096,8192,12288],
+  "t":[{"n":"UP.MKV","s":16384,"k":1},{"n":"c.mkv","s":16384,"k":1},
        {"n":"a/pic.png","s":4096,"k":2},{"n":"b/pic-link.jpg","s":4096,"k":2},
        {"n":"a/quo\"te.mp3","s":4096,"k":3},
-       {"n":"a/deep/big.zip","s":20480,"k":4},
+       {"n":"a/deep/big.zip","s":20480,"k":4},{"n":"x.tar.gz","s":4096,"k":4},
        {"n":"a/new\nline.txt","s":4096,"k":5},
        {"n":"b/tiny.lua","s":4096,"k":6},
        {"n":"a/deep/deeper/core.iso","s":8192,"k":7},
-       {"n":"README","s":4096,"k":8}]}
+       {"n":".bashrc","s":4096,"k":8},{"n":"README","s":4096,"k":8}]}
 {"id":"0/0",
   "n":"a","s":57344,"f":28672,"u":1,
   "c":[12288,4096,4096,20480,4096,0,8192,4096],
