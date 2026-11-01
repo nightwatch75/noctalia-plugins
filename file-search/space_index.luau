@@ -5,6 +5,7 @@
   (ends with `return idx`), unit-tested by tests/space_index_test.lua.
 
   Decoded index node:  { n = name, s = bytes, f = loose file bytes,
+                         u = unreadable folders in the subtree,
                          c = { 8 bytes per category }, d = { child nodes },
                          t = { { n, s, k = category } } top files, leaf = true? }
   t[i].n is a path relative to the node ("sub/dir/file.mkv"), not a bare name.
@@ -113,7 +114,7 @@ end
 
 -- jq program: `ncdu -o` JSON in, JSON Lines out (run with jq -c): a header
 -- `{"v":1,"root":<name>}`, then one record per kept folder in pre-order,
--- `{"id":"0/2/1",n,s,f,c,t,leaf?}`. id is the child-index path from the root
+-- `{"id":"0/2/1",n,s,f,u,c,t,leaf?}`. id is the child-index path from the root
 -- ("0"), so a record's parent is its id minus the last segment and no d is
 -- written; children follow in node.d order. One record per line lets the
 -- panel decode the index a slice at a time.
@@ -122,6 +123,7 @@ end
 -- the whole subtree (t names are paths relative to the node, top topN per
 -- category, ties by name). A folder's own dsize counts as a loose "other" byte.
 -- Folders deeper than depth, or under minBytes, go into the parent's f.
+-- u counts folders ncdu could not read ("read_error") in the whole subtree.
 -- shortcut: a hard link counts dsize/nlink per name (exact when every link is
 -- inside the scan); dedupe by dev+ino if links outside the scan matter.
 function idx.jqProgram(depth, topN, minBytes)
@@ -142,6 +144,7 @@ function idx.jqProgram(depth, topN, minBytes)
     | (if $lvl < %d then [$kids[] | select(.s >= %d)] else [] end) as $keep
     | ($own + ([$files[].s, $kids[].s] | add // 0)) as $s
     | {n: .[0].name, s: $s, f: ($s - ([$keep[].s] | add // 0)), d: $keep,
+       u: ((if .[0].read_error == true then 1 else 0 end) + ([$kids[].u] | add // 0)),
        c: (reduce $kids[].c as $x (reduce $files[] as $x ([0, 0, 0, 0, 0, 0, 0, $own]; setpath([$x.k - 1]; .[$x.k - 1] + $x.s));
              [range(8) as $j | .[$j] + $x[$j]])),
        t: ([$files[] | select(.s > 0)] + [$kids[] | .n as $p | .t[] | .n = $p + "/" + .n]

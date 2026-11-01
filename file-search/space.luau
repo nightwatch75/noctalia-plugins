@@ -244,7 +244,8 @@ local function addRecord(l, line)
         or type(r.n) ~= "string" or type(r.s) ~= "number" or type(r.c) ~= "table" or type(r.t) ~= "table" then
         return false
     end
-    local node = { n = r.n, s = r.s, f = r.f or 0, c = r.c, t = r.t, d = {}, leaf = r.leaf }
+    -- u is absent in an index written before it existed
+    local node = { n = r.n, s = r.s, f = r.f or 0, u = type(r.u) == "number" and r.u or 0, c = r.c, t = r.t, d = {}, leaf = r.leaf }
     local parentId = r.id:match("^(.+)/%d+$")
     if parentId ~= nil then
         local parent = l.nodes[parentId]
@@ -869,6 +870,9 @@ function space.render()
         end
         if #entries > MAX_ROWS then
             table.insert(rows, label("space-more", shared.tr("space_more_rows", { count = #entries - MAX_ROWS })))
+        end
+        if (node.u or 0) > 0 then
+            table.insert(right, label("space-unreadable", shared.tr("space_unreadable", { count = node.u })))
         end
         table.insert(right, ui.row({ key = "space-sort", gap = 4, align = "center" }, {
             sortButton("size"), sortButton("name"),

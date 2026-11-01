@@ -273,6 +273,8 @@ folders are skipped.
   `jq` 1.8.
 - Hard-linked files have their size split between the links, so a folder total
   can differ from the `ncdu` screen. The root total stays exact.
+- A folder that `ncdu` cannot read (permission denied) counts as 0 bytes. The
+  Space tab shows how many such folders the current folder contains.
 - `ncdu` 2.0 or newer and `jq` are required.
 - The index lives in the plugin's private data directory
   (`noctalia.pluginDataDir()`, by default

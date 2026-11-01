@@ -102,6 +102,7 @@
   "space_tip_root": "Show the whole system (/)",
   "space_tip_search_here": "Search inside this folder",
   "space_tip_up": "Up one folder",
+  "space_unreadable": "{count} folders could not be read — the sizes may be too low",
   "status_indexing": "Indexing {path}…",
   "status_indexing_multi": "Indexing {count} locations…",
   "syntax_hint": "'exact · ^starts · ends$ · !exclude · a | b",

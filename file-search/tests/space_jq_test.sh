@@ -11,6 +11,9 @@
 # Checks: totals, category sums, top files per category (topN 2, ties by name),
 # "deep" is the depth-2 leaf with "deeper" folded in, "b" (8192 < 8193) is
 # folded into the root, names with a newline and a quote stay JSON strings.
+# "a/locked" was added by hand: ncdu writes a folder it could not read as
+# {"read_error":true}; u counts such folders in the subtree (1 at "a" and the
+# root, 0 in "deep").
 set -e
 cd "$(dirname "$0")/.."
 if [ -z "$LUAU" ]; then
@@ -35,7 +38,7 @@ jq -c -f "$tmp/prog.jq" tests/fixtures/small.ncdu.json > "$tmp/got.json"
 cat > "$tmp/want.json" <<'EOF'
 {"v":1,"root":"/fixture"}
 {"id":"0",
-  "n":"/fixture","s":86016,"f":28672,
+  "n":"/fixture","s":86016,"f":28672,"u":1,
   "c":[28672,8192,4096,20480,4096,4096,8192,8192],
   "t":[{"n":"c.mkv","s":16384,"k":1},{"n":"a/movie.mkv","s":12288,"k":1},
        {"n":"a/pic.png","s":4096,"k":2},{"n":"b/pic-link.jpg","s":4096,"k":2},
@@ -46,13 +49,13 @@ cat > "$tmp/want.json" <<'EOF'
        {"n":"a/deep/deeper/core.iso","s":8192,"k":7},
        {"n":"README","s":4096,"k":8}]}
 {"id":"0/0",
-  "n":"a","s":57344,"f":28672,
+  "n":"a","s":57344,"f":28672,"u":1,
   "c":[12288,4096,4096,20480,4096,0,8192,4096],
   "t":[{"n":"movie.mkv","s":12288,"k":1},{"n":"pic.png","s":4096,"k":2},
        {"n":"quo\"te.mp3","s":4096,"k":3},{"n":"deep/big.zip","s":20480,"k":4},
        {"n":"new\nline.txt","s":4096,"k":5},{"n":"deep/deeper/core.iso","s":8192,"k":7}]}
 {"id":"0/0/0",
-  "n":"deep","s":28672,"f":28672,"leaf":true,
+  "n":"deep","s":28672,"f":28672,"u":0,"leaf":true,
   "c":[0,0,0,20480,0,0,8192,0],
   "t":[{"n":"big.zip","s":20480,"k":4},{"n":"deeper/core.iso","s":8192,"k":7}]}
 EOF

@@ -448,6 +448,20 @@ do
     eq(seen[grey], nil, "folder outside the slices: neutral swatch")
 end
 
+-- ── unreadable folders: one muted line when the current folder has some ─────
+do
+    local space = boot()
+    putIndex("/", jsonl("/", { { id = "0", n = "/", s = 10, u = 66 }, { id = "0/0", n = "ok", s = 4 } }), 60)
+    space.onOpen(function() end)
+    drain(space)
+    local realTr = noctalia.tr
+    noctalia.tr = function(k, v) return k == "space_unreadable" and k .. ":" .. v.count or k end
+    eq(find(space.render(), "space-unreadable").props.text, "space_unreadable:66", "count shown")
+    space.enter("ok")
+    eq(find(space.render(), "space-unreadable"), nil, "u = 0: no line")
+    noctalia.tr = realTr
+end
+
 print("space_ui_test OK")
 
 -- ── toggleRoot clears the type filter ────────────────────────────────────────

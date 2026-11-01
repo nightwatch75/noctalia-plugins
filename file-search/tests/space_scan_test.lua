@@ -369,6 +369,17 @@ do
     eq(space.index.d[200].n, "d199", "order kept")
 end
 
+-- ── u (unreadable folders) is loaded; an older index without it reads as 0 ──
+do
+    local space = boot()
+    putIndex("/", jsonl("/", 1, { { id = "0", n = "/", s = 10, u = 3 }, { id = "0/0", n = "a", s = 6, u = 2 },
+        { id = "0/1", n = "b", s = 4 } }), 0)
+    space.startLoad(DIR)
+    drain(space)
+    eq(space.index.u, 3, "root u"); eq(space.index.d[1].u, 2, "child u")
+    eq(space.index.d[2].u, 0, "absent u defaults to 0")
+end
+
 -- ── a bad line discards the index; nothing stuck ─────────────────────────────
 do
     local space = boot()
