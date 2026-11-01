@@ -51,6 +51,12 @@ local shared = require("./shared.luau")
 -- the bar widget and the launcher have no chart to draw.
 local usage = require("./usage.luau")
 
+-- The Space tab's body. Same require() route as above.
+local space = require("./space.luau")
+
+-- Which tab is showing: "search" | "space". Reset to search on every open.
+local activeTab = "search"
+
 -- Read out of the plugin's own manifest (readFile resolves a relative path
 -- against the plugin directory), so the header cannot drift from the version
 -- the store shows. Empty when unreadable — a missing version is not worth an
@@ -997,6 +1003,34 @@ local function stopKeyRepeat()
     syncFrameTick()
 end
 
+-- Tab bar under the header: Search (this file) and Space (space.luau). The
+-- ids double as node keys ("tab-<id>"), so both stay stable across renders.
+local TABS = { "search", "space" }
+local TAB_GLYPH = { search = "search", space = "chart-pie" }
+
+local function setActiveTab(id)
+    if id == activeTab then
+        return
+    end
+    activeTab = id
+    render()
+end
+
+local function tabSelector()
+    local buttons = {}
+    for _, id in ipairs(TABS) do
+        table.insert(buttons, ui.button({
+            key = "tab-" .. id,
+            glyph = TAB_GLYPH[id],
+            text = shared.tr("tab_" .. id),
+            variant = "ghost", controlSize = "sm", flexGrow = 1,
+            selected = (activeTab == id),
+            onClick = function() setActiveTab(id) end,
+        }))
+    end
+    return ui.row({ key = "tabs", gap = 4, align = "center" }, buttons)
+end
+
 render = function()
     setSpinnerTicking(indexing and #results == 0)
     -- Clamped here, so a list that shrank or emptied needs no call of its own.
@@ -1004,8 +1038,7 @@ render = function()
 
     -- Every child of the panel and of the header carries a stable key, so the
     -- reconciler matches roles instead of guessing by position and type.
-    local children = {
-        ui.row({ key = "header", gap = 6, align = "center" }, {
+    local header = ui.row({ key = "header", gap = 6, align = "center" }, {
             ui.label({
                 key = "title",
                 text = shared.tr("title"),
@@ -1025,7 +1058,18 @@ render = function()
             ui.button({ key = "refresh", glyph = "refresh", variant = "ghost", tooltip = shared.tr("tip_refresh"), onClick = "onRefreshIndex" }),
             ui.button({ key = "settings", glyph = "settings", variant = "ghost", tooltip = shared.tr("tip_settings"), onClick = "onOpenSettings" }),
             ui.button({ key = "close", glyph = "close", variant = "ghost", tooltip = shared.tr("tip_close"), onClick = "onClosePanel" }),
-        }),
+    })
+
+    if activeTab == "space" then
+        panel.render(ui.column({ flexGrow = 1, gap = 12, align = "stretch" }, {
+            header, tabSelector(), space.render(),
+        }))
+        return
+    end
+
+    local children = {
+        header,
+        tabSelector(),
         ui.input({
             key = "query-" .. inputRev,
             value = query,
@@ -1181,6 +1225,7 @@ end
 
 function onOpen(_context)
     fzfMissing = not noctalia.commandExists("fzf")
+    activeTab = "search"
     query = ""
     results = {}
     errMsg = nil
@@ -1194,6 +1239,7 @@ function onOpen(_context)
     sel = 1
     inputRev += 1
     noctalia.state.set("file_search_open", true)
+    space.onOpen()
     local dir = shared.dataDir()
     if dir ~= nil then
         -- Re-read on every open: the launcher may have cycled the scope, and
@@ -1229,6 +1275,7 @@ function onClose()
     setSpinnerTicking(false)
     stopKeyRepeat() -- a key held while the panel closes never reports its release
     noctalia.state.set("file_search_open", false)
+    space.onClose()
 end
 
 -- plugin_api >= 18. Throttled to SPINNER_STEP_MS regardless of the host's

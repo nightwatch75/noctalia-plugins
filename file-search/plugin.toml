@@ -88,7 +88,10 @@ include_in_global_search = false
 [[panel]]
 id = "panel"
 entry = "panel.luau"
-width = 520
+# 900 x 720: the width is for the Space tab, whose treemap needs room for
+# readable labels, and the Search layout stretches to fill it. The panel size
+# is read once from here and shared by both tabs.
+width = 900
 # 720, up from 480, because the usage chart added ~200px under the results:
 # a 108px donut, seven legend rows, the click hint and the skipped-mounts line,
 # which between them are taller than the chart itself. At 600 the result list

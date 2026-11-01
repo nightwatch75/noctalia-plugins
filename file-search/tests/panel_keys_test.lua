@@ -67,8 +67,10 @@ local usage = {
     scan = function() end,
     writeSvg = function() end,
 }
+local space = { onOpen = function() end, onClose = function() end, render = function() end }
 require = function(path)
-    return path == "./shared.luau" and shared or usage
+    if path == "./shared.luau" then return shared end
+    return path == "./space.luau" and space or usage
 end
 assert(loadstring(PANEL_SRC, "=panel.luau"))()
 
