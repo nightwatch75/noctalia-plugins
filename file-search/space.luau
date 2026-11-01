@@ -495,7 +495,6 @@ function space.needsTick()
     return space.scanning or space.loading
 end
 
-
 -- ── navigation ───────────────────────────────────────────────────────────────
 
 local LEFT_WIDTH = 340
@@ -503,6 +502,7 @@ local DONUT_SIZE = 200
 local DONUT_THICKNESS = 28
 local LABEL_MAX = 34
 local ROW_HEIGHT = 22
+local MAX_ROWS = 200 -- a render builds every row; a cache folder can hold thousands
 local SVG_NAMES = { "space-a.svg", "space-b.svg" }
 local GREY = { dark = { other = "#5b6180", loose = "#3d4256" }, light = { other = "#9aa2b8", loose = "#c3c8d6" } }
 
@@ -685,7 +685,8 @@ function space.onOpen(onChange)
     space.scan(space.root, false, noop)
 end
 
--- Scans and loads keep going; their late results only stop redrawing.
+-- Also called when the panel leaves the Space tab. Scans and loads keep
+-- going; their late results only stop redrawing.
 function space.onClose()
     isOpen = false
 end
@@ -857,8 +858,12 @@ function space.render()
             end
         end
         local rows = {}
-        for i, entry in ipairs(idx.sort(idx.entries(node, mode, typeFilter), sortKey, sortDesc)) do
-            table.insert(rows, listRow(entry, i, node, colors, mode == "types" and (dark and idx.COLORS_DARK or idx.COLORS_LIGHT) or nil))
+        local entries = idx.sort(idx.entries(node, mode, typeFilter), sortKey, sortDesc)
+        for i = 1, math.min(#entries, MAX_ROWS) do
+            table.insert(rows, listRow(entries[i], i, node, colors, mode == "types" and (dark and idx.COLORS_DARK or idx.COLORS_LIGHT) or nil))
+        end
+        if #entries > MAX_ROWS then
+            table.insert(rows, label("space-more", shared.tr("space_more_rows", { count = #entries - MAX_ROWS })))
         end
         table.insert(right, ui.row({ key = "space-sort", gap = 4, align = "center" }, {
             sortButton("size"), sortButton("name"),

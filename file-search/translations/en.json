@@ -90,6 +90,7 @@
   "space_loose": "(loose files)",
   "space_mode_folders": "Folders",
   "space_mode_types": "Types",
+  "space_more_rows": "{count} more not shown",
   "space_rescanning": "Scanning again — the numbers below are from the last scan",
   "space_scanning": "Scanning the disk… this takes about a minute",
   "space_search_outside": "That folder is outside the search folder",

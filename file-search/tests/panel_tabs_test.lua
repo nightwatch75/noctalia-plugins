@@ -69,12 +69,12 @@ local usage = {
     writeSvg = function() end,
 }
 local space = {
-    busy = false, onStep = nil,
-    onOpen = function() end, onClose = function() end,
+    busy = false, onStep = nil, opens = 0, closes = 0,
     render = function() return ui.label({ key = "space", text = "space" }) end,
 }
 -- needsTick/step driven by the test: onStep plays what one engine step does.
-function space.onOpen(redraw) space.redraw = redraw end
+function space.onOpen(redraw) space.redraw = redraw; space.opens += 1 end
+function space.onClose() space.closes += 1 end
 function space.needsTick() return space.busy end
 function space.step()
     if space.onStep then space.onStep() end
@@ -112,6 +112,16 @@ find(rendered, "tab-search").props.onClick()
 assert(find(rendered, "tab-search").props.selected == true)
 assert(find(rendered, "query-1") ~= nil)
 assert(find(rendered, "space") == nil)
+
+-- Leaving Space closes its side (its events stop redrawing the Search tab);
+-- entering opens it again.
+do
+    local opens, closes = space.opens, space.closes
+    find(rendered, "tab-space").props.onClick()
+    assert(space.opens == opens + 1 and space.closes == closes, "entering Space opens it")
+    find(rendered, "tab-search").props.onClick()
+    assert(space.closes == closes + 1, "leaving Space closes it")
+end
 
 -- Frame tick follows space.needsTick() after every step. (a) A step that
 -- ends a load (its redraw sees nothing left, the tick goes off) and then
@@ -179,6 +189,18 @@ do
         assert(not hasFilter(), mode .. ": no restriction")
     end
     shared.scope, shared.whole = "folder", false
+    -- a control character in the path: unavailable, no switch
+    find(rendered, "tab-space").props.onClick()
+    onSearchHere("/home/a\nb")
+    assert(find(rendered, "tab-space").props.selected == true, "control char: stay on Space")
+    eq(notes[#notes], "space_search_unavailable", "control char: notice text")
+    assert(not hasFilter(), "control char: no restriction")
+    -- a search root of "/" (records relative to it, no leading slash)
+    shared.roots = { "/" }
+    onSearchHere("/etc/x")
+    assert(find(rendered, "tab-search").props.selected == true, "root /: inside")
+    assert(hasFilter(), "root /: restriction strip")
+    shared.roots = { "/home" }
 end
 
 print("file-search panel tab tests: ok")

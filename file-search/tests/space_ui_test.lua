@@ -247,6 +247,30 @@ do
     assert(space.index ~= nil, "index kept")
 end
 
+-- ── long lists: 200 rows, then one muted line ───────────────────────────────
+do
+    local recs = { { id = "0", n = "/", s = 0, f = 0 } }
+    for i = 1, 250 do
+        recs[#recs + 1] = { id = "0/" .. (i - 1), n = string.format("d%03d", i), s = i, leaf = true }
+        recs[1].s += i
+    end
+    local space = boot()
+    putIndex("/", jsonl("/", recs), 60)
+    space.onOpen(function() end)
+    drain(space)
+    local realTr = noctalia.tr
+    noctalia.tr = function(k, v) return k == "space_more_rows" and k .. ":" .. v.count or k end
+    local tree = space.render()
+    assert(find(tree, "space-row-200") and not find(tree, "space-row-201"), "200 rows")
+    assert(findText(find(tree, "space-row-200"), "d051"), "cap after the sort (size, biggest first)")
+    eq(find(tree, "space-more").props.text, "space_more_rows:50", "the rest counted")
+    space.setSort("name")
+    assert(findText(find(space.render(), "space-row-200"), "d200"), "cap after the sort (name)")
+    noctalia.tr = realTr
+    space = ready()
+    eq(find(space.render(), "space-more"), nil, "short list: no extra line")
+end
+
 -- ── late callbacks after close are ignored ───────────────────────────────────
 do
     local space = boot()

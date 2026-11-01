@@ -973,6 +973,8 @@ local function setActiveTab(id)
     if id == "space" then
         -- Not on panel open: a Search-only session never starts an ncdu scan.
         space.onOpen(render)
+    else
+        space.onClose() -- its scan events stop re-rendering this tab
     end
     render()
 end
@@ -1001,18 +1003,18 @@ render = function()
     -- Every child of the panel and of the header carries a stable key, so the
     -- reconciler matches roles instead of guessing by position and type.
     local headerItems = {
-            ui.label({
-                key = "title",
-                text = shared.tr("title"),
-                fontSize = 16,
-                fontWeight = "bold",
-                color = "on_surface",
-            }),
-            -- Version off the manifest, small and dimmed: it answers "which
-            -- build am I running" without competing with the title. The spacer
-            -- rather than a flexGrow title keeps the two together on the left.
-            ui.label({ key = "version", text = pluginVersion, fontSize = 10, color = "on_surface_variant" }),
-            ui.spacer({ key = "gap", flexGrow = 1 }),
+        ui.label({
+            key = "title",
+            text = shared.tr("title"),
+            fontSize = 16,
+            fontWeight = "bold",
+            color = "on_surface",
+        }),
+        -- Version off the manifest, small and dimmed: it answers "which
+        -- build am I running" without competing with the title. The spacer
+        -- rather than a flexGrow title keeps the two together on the left.
+        ui.label({ key = "version", text = pluginVersion, fontSize = 10, color = "on_surface_variant" }),
+        ui.spacer({ key = "gap", flexGrow = 1 }),
     }
     -- Search-only buttons; the Space tab has its own row.
     if activeTab == "search" then
@@ -1350,22 +1352,22 @@ end
 -- search root, so a folder below it is just a longer prefix for folderToken
 -- ("^a/b/"); the root itself means no restriction. Anything else (another
 -- root, the home when the search folder is elsewhere, several roots) cannot
--- be expressed, so it is a notice and the tab stays.
+-- be expressed, so it is a notice and the tab stays. So is a path with a
+-- control character (it comes from a disk name).
 function onSearchHere(path)
     local root = shared.roots[1]
-    local rel = nil
     -- Only the folder scope on the search folder has records relative to one
     -- root (the only place the restriction strip and chart exist).
-    if shared.scope ~= "folder" or shared.whole or #shared.roots ~= 1 or root == nil then
+    if shared.scope ~= "folder" or shared.whole or #shared.roots ~= 1 or root == nil or path:find("%c") then
         noctalia.notify(shared.tr("title"), shared.tr("space_search_unavailable"))
         return
     end
-    do
-        if path == root then
-            rel = ""
-        elseif shared.startsWith(path, root == "/" and "/" or root .. "/") then
-            rel = path:sub(#root == 1 and 2 or #root + 2)
-        end
+    local prefix = root == "/" and "/" or root .. "/"
+    local rel = nil
+    if path == root then
+        rel = ""
+    elseif shared.startsWith(path, prefix) then
+        rel = path:sub(#prefix + 1)
     end
     if rel == nil then
         noctalia.notify(shared.tr("title"), shared.tr("space_search_outside"))

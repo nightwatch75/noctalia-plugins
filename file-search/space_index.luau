@@ -152,9 +152,9 @@ function idx.jqProgram(depth, topN, minBytes)
 ]=], table.concat(ext, ","), math.floor(depth), math.floor(minBytes), math.floor(topN), math.floor(depth))
 end
 
--- Donut rows. folders: one per entry, colour index = position in the unsorted
--- the shown rank (set by idx.slices). types: one per non-empty category,
--- colour index = category number.
+-- Donut rows. folders: one per entry, biggest first; idx.slices gives a folder
+-- the colour of its rank among the shown slices. types: one per non-empty
+-- category, colour index = category number.
 local function sliceRows(node, mode)
     local rows = {}
     if mode == "types" then
