@@ -13,7 +13,7 @@ ui = setmetatable({}, { __index = function(_, kind)
     return function(props, children) return { kind = kind, props = props or {}, children = children } end
 end })
 
-local function boot()
+local function boot(home)
     files, decoded, runs, tools, notes = {}, {}, {}, { lsblk = false }, {}
     ms, redraws = 1e9, 0
     noctalia = {
@@ -54,7 +54,10 @@ local function boot()
         end
         return cache[name]
     end
-    return require("./space.luau")
+    local space = require("./space.luau")
+    -- The fixtures are rooted at "/"; `home` keeps the start on the home folder.
+    if not home then space.setRoot("/") end
+    return space
 end
 
 local serial = 0

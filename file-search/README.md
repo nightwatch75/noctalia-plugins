@@ -159,8 +159,8 @@ setting keeps `du` out of specific, slow-but-same-filesystem folders instead.
 
 ### Space tab
 
-The *Space* tab shows what fills the disk. It starts at `/`; the `~` button
-switches to your home folder. A donut and a clickable legend show the biggest
+The *Space* tab shows what fills the disk. It starts with your home folder;
+the `/` button switches to the whole system. A donut and a clickable legend show the biggest
 items of the current folder; click a folder to go in, use the up arrow to go
 back. The list below sorts by size or name. In the file list of a type,
 *Name* sorts by the file name and *Path* by the full path. *Folders | Types* switches to a
@@ -261,8 +261,8 @@ folders are skipped.
 
 ## Notes
 
-- The Space tab scans `/` with `ncdu` on its first use: about 45 s on a fast
-  PC. `jq` can use up to about 1.5 GB RAM for a moment. Both run at low
+- The Space tab scans your home folder with `ncdu` on its first use; a scan
+  of `/` takes about 45 s on a fast PC. `jq` can use up to about 1.5 GB RAM for a moment. Both run at low
   priority. The index is cached for one day; refresh forces a rescan.
 - Network, FUSE and external mounts are skipped by default
   (`space_skip_network`, `space_skip_external`). Pseudo filesystems (`/proc`,

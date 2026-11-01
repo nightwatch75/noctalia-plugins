@@ -22,7 +22,7 @@ local HOME = "/home/u"
 local DAY = 86400
 
 -- A fresh VM: new module instances (the ncdu version is cached per load).
-local function boot()
+local function boot(home)
     files = { ["/proc/mounts"] = { text = MOUNTS, mtime = 0 } }
     -- no lsblk: the mount probe falls back to /proc/mounts and answers at once
     decoded, runs, config, tools = {}, {}, {}, { lsblk = false }
@@ -70,7 +70,10 @@ local function boot()
         end
         return cache[name]
     end
-    return require("./space.luau")
+    local space = require("./space.luau")
+    -- The fixtures are rooted at "/"; `home` keeps the start on the home folder.
+    if not home then space.setRoot("/") end
+    return space
 end
 
 local function has(list, value)
@@ -233,6 +236,23 @@ do
     eq(space.checkTools(), nil, "a timeout does not mark ncdu old")
     space.scan("/", true, function() end)
     eq(runs[2].argv[2], "--version", "probed again")
+end
+
+-- ── the tab starts on the home folder; no usable home falls back to "/" ─────
+do
+    local space = boot(true)
+    eq(space.root, HOME, "initial root is home")
+    space.onOpen(function() end) -- no index: the first scan starts by itself
+    local a = passVersion().argv
+    eq(a[#a - 1], "--", "root after --"); eq(a[#a], HOME, "first scan of the home folder")
+    assert(scriptArgs(runs[#runs]).index:find("/space-home-", 1, true), "home index file")
+    space.toggleRoot() -- refused while scanning
+    eq(space.root, HOME, "still home")
+
+    local realHome = HOME
+    HOME = ""
+    eq(boot(true).root, "/", "empty home: /")
+    HOME = realHome
 end
 
 -- ── full pipeline: one detached run, polled marker, sliced load ──────────────

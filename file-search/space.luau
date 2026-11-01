@@ -33,7 +33,7 @@
 --                     "empty"     ncdu wrote no scan file
 --                     "reduce"    jq or the final mv failed
 --                     "index"     the new index file does not decode
---   space.root      "/" or the home path
+--   space.root      the home path (the start) or "/"
 --   space.index     decoded index tree (see space_index.luau), nil = none
 --   space.scannedAt unix seconds of the index file (its mtime)
 --
@@ -113,7 +113,13 @@ space.state = "idle"
 space.scanning = false
 space.loading = false
 space.errText = nil
-space.root = "/"
+-- expandPath answers "" (or nil under a stub) without a usable home.
+local function homeRoot()
+    local home = noctalia.expandPath("~")
+    return type(home) == "string" and home ~= "" and home or "/"
+end
+
+space.root = homeRoot()
 space.index = nil
 space.scannedAt = 0
 
@@ -671,7 +677,7 @@ function space.toggleRoot()
     end
     path = {}
     typeFilter, space.typeFilter = nil, nil
-    space.scan(space.root == "/" and noctalia.expandPath("~") or "/", false, noop)
+    space.scan(space.root == "/" and homeRoot() or "/", false, noop)
     changed()
 end
 
