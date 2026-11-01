@@ -38,7 +38,7 @@ jq -c -f "$tmp/prog.jq" tests/fixtures/small.ncdu.json > "$tmp/got.json"
 # the child-index path, "0" = root). jq -cS puts each on one line, so the
 # record order is compared too.
 cat > "$tmp/want.json" <<'EOF'
-{"v":1,"root":"/fixture"}
+{"v":2,"root":"/fixture"}
 {"id":"0",
   "n":"/fixture","s":110592,"f":53248,"u":1,
   "c":[45056,8192,4096,24576,4096,4096,8192,12288],

@@ -100,7 +100,7 @@ local function jsonl(root, v, records)
     return table.concat(lines, "\n") .. "\n"
 end
 local function smallIndex(root, v)
-    return jsonl(root, v or 1, {
+    return jsonl(root, v or 2, {
         { id = "0", n = root, s = 10 },
         { id = "0/0", n = "a", s = 6 },
         { id = "0/0/0", n = "x", s = 6, leaf = true },
@@ -381,7 +381,7 @@ do
     local old = space.index
     local records = { { id = "0", n = "/", s = 1000 } }
     for i = 0, 199 do table.insert(records, { id = "0/" .. i, n = "d" .. i, s = 5 }) end
-    putIndex("/", jsonl("/", 1, records), 0)
+    putIndex("/", jsonl("/", 2, records), 0)
     decodeCost = 3
     assert(space.startLoad(DIR), "big index starts")
     local steps = 0
@@ -401,7 +401,7 @@ end
 -- ── u (unreadable folders) is loaded; an older index without it reads as 0 ──
 do
     local space = boot()
-    putIndex("/", jsonl("/", 1, { { id = "0", n = "/", s = 10, u = 3 }, { id = "0/0", n = "a", s = 6, u = 2 },
+    putIndex("/", jsonl("/", 2, { { id = "0", n = "/", s = 10, u = 3 }, { id = "0/0", n = "a", s = 6, u = 2 },
         { id = "0/1", n = "b", s = 4 } }), 0)
     space.startLoad(DIR)
     drain(space)
@@ -420,7 +420,7 @@ do
     eq(space.state, "idle", "no error without a scan: the caller rescans")
 
     -- a record whose parent is missing is as bad as invalid JSON
-    putIndex("/", jsonl("/", 1, { { id = "0", n = "/", s = 1 }, { id = "0/4/2", n = "x", s = 1 } }), 0)
+    putIndex("/", jsonl("/", 2, { { id = "0", n = "/", s = 1 }, { id = "0/4/2", n = "x", s = 1 } }), 0)
     space.startLoad(DIR)
     drain(space)
     eq(space.index, nil, "orphan record discards the index")
@@ -428,7 +428,7 @@ do
     -- during a scan, a bad index ends the scan with "index"
     space.scan("/", false, function() end)
     playScript(passVersion(), "ok", "H0\n{bad\n")
-    decoded.H0 = { v = 1, root = "/" }
+    decoded.H0 = { v = 2, root = "/" }
     drain(space)
     eq(space.errText, "index", "bad new index"); eq(space.scanning, false, "scan not stuck")
 end
@@ -438,8 +438,8 @@ do
     local space = boot()
     putIndex("/", "{garbage\n", 0)
     eq(space.startLoad(DIR), false, "corrupted header discarded")
-    putIndex("/", smallIndex("/", 2), 0)
-    eq(space.startLoad(DIR), false, "other version discarded")
+    putIndex("/", smallIndex("/", 1), 0)
+    eq(space.startLoad(DIR), false, "an index of format 1 (5 files per type) is discarded")
     putIndex("/", "", 0)
     eq(space.startLoad(DIR), false, "empty file discarded")
     eq(space.startLoad(nil), false, "no data dir")

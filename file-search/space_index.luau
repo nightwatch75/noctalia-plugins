@@ -18,10 +18,18 @@
   On disk the index is JSON Lines (see jqProgram); space.luau rebuilds this
   nested shape from it.
 
-  Index build: jqProgram(6, 5, 1048576) = depth 6, top 5 files per category,
-  folders under 1 MiB folded. Measured on a real `/` scan (ncdu 2.9.2, 127 MB,
-  1.88M entries, jq 1.8.2): index 2.5 MB, ~29 s, jq peak RSS ~1.5 GB (jq alone
-  needs ~1.3 GB to parse that file). Depth 8 gives 4.3 MB for the same time.
+  Index build: jqProgram(6, 10, 1048576) = depth 6, top 10 files per category,
+  folders under 1 MiB folded. Measured on a real `/` scan (ncdu 2.9.2, 127 MB
+  scan file, jq 1.8.2, 4087 index lines), top N files per category:
+      N    jq time  jq peak RSS  index    biggest line
+      5    32.0 s   1476 MB      2.6 MB   5.2 KB
+      10   33.4 s   1490 MB      4.4 MB   9.7 KB
+      25   35.3 s   1526 MB      9.1 MB   24.5 KB
+      50   38.0 s   1575 MB      15.7 MB  48.6 KB
+      100  41.1 s   1649 MB      26.1 MB  98.5 KB
+  10 is the largest N under ~5 MB. A stock JSON decode of its whole index
+  takes ~50 ms and of its biggest line 0.03 ms, so the sliced load stays
+  within budget. Fewer than N files in a list means the list is complete.
   Tested by tests/space_jq_test.sh on tests/fixtures/small.ncdu.json.
 
   Slice colour index: in folders mode it is the rank of the folder among the
@@ -111,7 +119,7 @@ function idx.sort(entries, key, descending)
 end
 
 -- jq program: `ncdu -o` JSON in, JSON Lines out (run with jq -c): a header
--- `{"v":1,"root":<name>}`, then one record per kept folder in pre-order,
+-- `{"v":2,"root":<name>}`, then one record per kept folder in pre-order,
 -- `{"id":"0/2/1",n,s,f,u,c,t,leaf?}`. id is the child-index path from the root
 -- ("0"), so a record's parent is its id minus the last segment and no d is
 -- written; children follow in node.d order. One record per line lets the
@@ -149,7 +157,7 @@ function idx.jqProgram(depth, topN, minBytes)
            | group_by(.k) | map(sort_by(-.s, .n) | .[:%d]) | add // [])}
     | if $lvl == %d then .leaf = true else . end;
   def flat($id): ({id: $id} + del(.d)), (.d | to_entries[] | .key as $k | .value | flat($id + "/" + ($k | tostring)));
-  .[3] | node(0) | ({v: 1, root: .n}, flat("0"))
+  .[3] | node(0) | ({v: 2, root: .n}, flat("0"))
 ]=], table.concat(ext, ","), math.floor(depth), math.floor(minBytes), math.floor(topN), math.floor(depth))
 end
 

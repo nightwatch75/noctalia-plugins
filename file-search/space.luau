@@ -56,7 +56,7 @@
 --
 -- The index is JSON Lines (see idx.jqProgram) and decoded a few lines per
 -- step(), within SLICE_MS, because a host callback has a 25 ms CPU budget and
--- the whole file is ~2.5 MB. space.index keeps the previous tree until the
+-- the whole file is ~4.5 MB. space.index keeps the previous tree until the
 -- new one is complete.
 --
 -- The index file name carries space.settingsTag(): a changed exclusion
@@ -84,7 +84,8 @@ space.SCAN_DEADLINE_MS = 1800000
 space.PROBE_WAIT_MS = 15000
 
 -- Values recorded with their measurements in the header of space_index.luau.
-local DEPTH, TOP_N, MIN_BYTES = 6, 5, 1048576
+local DEPTH, TOP_N, MIN_BYTES = 6, 10, 1048576
+space.TOP_N = TOP_N -- read by tests/space_ui_test.lua
 
 local TOOL_DIRS = { "/usr/bin", "/usr/local/bin", "/bin", "~/.local/bin" }
 
@@ -266,7 +267,7 @@ function space.startLoad(dir, tag)
         return false
     end
     local ok, head = pcall(noctalia.json.decode, text:sub(1, nl - 1))
-    if not ok or type(head) ~= "table" or head.v ~= 1 then
+    if not ok or type(head) ~= "table" or head.v ~= 2 then
         return false
     end
     local info = noctalia.fileInfo(path)
@@ -324,7 +325,7 @@ local function endLoad(tree, at)
 end
 
 -- At least one line per call, then lines until SLICE_MS is spent. Lines are
--- cut with find from a moving cursor: one gmatch pass over 2.5 MB would be a
+-- cut with find from a moving cursor: one gmatch pass over 4.5 MB would be a
 -- slice of its own.
 local function sliceLoad(started)
     local l = loader
@@ -947,6 +948,10 @@ function space.render()
         table.insert(right, ui.row({ key = "space-sort", gap = 4, align = "center" }, {
             sortButton("size"), sortButton("name"), mode == "types" and sortButton("path") or nil,
         }))
+        -- The index keeps only the TOP_N biggest files per type and folder.
+        if mode == "types" and typeFilter and #entries >= TOP_N then
+            table.insert(right, label("space-capped", shared.tr("space_capped", { count = #entries })))
+        end
         table.insert(right, ui.scroll({ key = "space-list", flexGrow = 1, gap = 2 }, rows))
     end
     return ui.row({ key = "space", flexGrow = 1, gap = 16 }, {

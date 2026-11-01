@@ -80,7 +80,7 @@ for n in "$nice" ""; do
     run "$n"
     [ "$(cat "$hostile/space-1.done")" = ok ] || fail "marker (nice '$n'): $(cat "$hostile/space-1.done")"
     [ "$(cat "$tmp/oom")" = 1000 ] || fail "oom_score_adj not raised: $(cat "$tmp/oom")"
-    head -n 1 "$hostile/space-root.json" | jq -e '.v == 1' >/dev/null || fail "index header"
+    head -n 1 "$hostile/space-root.json" | jq -e '.v == 2' >/dev/null || fail "index header"
     jq -c . "$hostile/space-root.json" >/dev/null || fail "index is not JSON Lines"
     [ "$(wc -l < "$hostile/space-root.json")" -gt 1 ] || fail "index has no records"
 done

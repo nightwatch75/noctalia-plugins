@@ -61,7 +61,7 @@ local serial = 0
 local function jsonl(root, records)
     serial += 1
     local head = "H" .. serial
-    decoded[head] = { v = 1, root = root }
+    decoded[head] = { v = 2, root = root }
     local lines = { head }
     for _, r in ipairs(records) do
         serial += 1
@@ -554,6 +554,34 @@ do
     local props = find(find(space.render(), "space-row-1"), "name-btn").props
     eq(props.text, ((WEIRD .. ".mp3"):gsub("%c", " ")), "quote, < and & kept as text, newline as space")
     eq(props.tooltip, nil, "short hostile name: no tooltip")
+end
+
+-- ── capped type list: one muted line when the index may have cut it ─────────
+do
+    local function capped(count)
+        local t = {}
+        for i = 1, count do t[i] = { n = string.format("f%02d.mkv", i), s = 100 - i, k = 1 } end
+        local space = boot()
+        putIndex("/", jsonl("/", { { id = "0", n = "/", s = 10000, c = { 5000, 0, 0, 0, 0, 0, 0, 5000 }, t = t } }), 60)
+        space.onOpen(function() end)
+        drain(space)
+        space.setMode("types")
+        space.setTypeFilter(1)
+        noctalia.tr = function(k, v) return k == "space_capped" and k .. ":" .. v.count or k end
+        return space
+    end
+    local space = capped(boot().TOP_N)
+    local n = space.TOP_N
+    assert(n and n >= 5, "TOP_N exposed")
+    local tree = space.render()
+    eq(find(tree, "space-capped").props.text, "space_capped:" .. n, "TOP_N entries: capped line")
+    eq(find(tree, "space-capped").props.color, "on_surface_variant", "muted")
+    local order = {}
+    for _, child in ipairs(find(tree, "space-right").children) do table.insert(order, child.props.key) end
+    eq(table.concat(order, " "), "space-path space-buttons space-sort space-capped space-list", "line above the list")
+    eq(find(capped(n - 1).render(), "space-capped"), nil, "fewer than TOP_N: no line")
+    space.setTypeFilter(nil)
+    eq(find(space.render(), "space-capped"), nil, "no category: no line")
 end
 
 print("space_ui_test OK")
