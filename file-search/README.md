@@ -274,7 +274,7 @@ folders are skipped.
 - The Space scan also leaves out the folders in "Disk usage: excluded
   folders". Each combination of these three settings has its own cached
   index: after a change, the Space tab starts a new scan when it opens.
-- Folders under 1 MiB, or under 0.2% of their parent folder, are counted in
+- Folders under 1 MiB, or under 0.05% of their parent folder, are counted in
   "(files and small folders)". Drill-down stops at depth 6.
 - If the disk index is too big for the plugin (very large disks), the tab
   asks you to skip more folders in the settings. A normal index is about

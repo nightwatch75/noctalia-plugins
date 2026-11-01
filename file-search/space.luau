@@ -110,7 +110,7 @@ space.INDEX_MAX_BYTES = 9 * 1048576
 space.HEAP_SOFT_BYTES = 72 * 1048576
 
 -- Values recorded with their measurements in the header of space_index.luau.
-local DEPTH, TOP_N, MIN_BYTES, REL_MIN = 6, 10, 1048576, 0.002
+local DEPTH, TOP_N, MIN_BYTES, REL_MIN = 6, 10, 1048576, 0.0005
 space.TOP_N = TOP_N -- read by tests/space_ui_test.lua
 
 local TOOL_DIRS = { "/usr/bin", "/usr/local/bin", "/bin", "~/.local/bin" }
@@ -224,13 +224,14 @@ local function skips()
     return noctalia.getConfig("space_skip_network") ~= false, noctalia.getConfig("space_skip_external") ~= false
 end
 
--- 8 hex chars (djb2) over every setting that shapes the scan. It is part of
--- the index file name, so a changed setting never serves an old index.
+-- 8 hex chars (djb2) over every setting that shapes the scan and the index
+-- tuning (depth, top files, fold sizes). It is part of the index file name, so
+-- a changed setting or a retuned build never serves an old index.
 function space.settingsTag()
     local net, ext = skips()
     local dirs = noctalia.getConfig("usage_exclude_dirs")
-    local key = string.format("net=%d;ext=%d;dirs=%s", net and 1 or 0, ext and 1 or 0,
-        type(dirs) == "string" and dirs or "")
+    local key = string.format("net=%d;ext=%d;dirs=%s;build=%d/%d/%d/%g", net and 1 or 0, ext and 1 or 0,
+        type(dirs) == "string" and dirs or "", DEPTH, TOP_N, MIN_BYTES, REL_MIN)
     local h = 5381
     for i = 1, #key do
         h = (h * 33 + string.byte(key, i)) % 4294967296

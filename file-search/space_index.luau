@@ -18,16 +18,18 @@
   On disk the index is JSON Lines (see jqProgram); space.luau rebuilds this
   nested shape from it.
 
-  Index build: jqProgram(6, 10, 1048576, 0.002) = depth 6, top 10 files per
-  category, a folder is folded when under 1 MiB or under 0.2% of its parent.
+  Index build: jqProgram(6, 10, 1048576, 0.0005) = depth 6, top 10 files per
+  category, a folder is folded when under 1 MiB or under 0.05% of its parent.
   The user sees these folders in "(files and small folders)". Measured on a
   real disk (ncdu 2.9.2, jq 1.8.2; `/` scan 128 MB, home scan 79 MB):
       root  relMin  jq time  jq peak RSS  index    lines
       /     0       33.3 s   1494 MB      4.4 MB   4087
       /     0.002   33.6 s   1472 MB      3.7 MB   3303
+      /     0.0005  26.4 s   1491 MB      4.3 MB   3867
       home  0       21.1 s   1004 MB      4.8 MB   4737
       home  0.002   21.3 s    992 MB      4.1 MB   3975
-  The relative fold costs no jq time; the index is 14-16% smaller. Top 10
+      home  0.0005  16.2 s   1004 MB      4.7 MB   4594
+  The relative fold costs no jq time; at 0.002 the index is 14-16% smaller than at 0, at 0.0005 about 3% smaller (the shipped value). Top 10
   files per category was chosen earlier as the largest N under ~5 MB. A
   stock JSON decode of a whole index takes ~50 ms and of its biggest line
   0.03 ms, so the sliced load stays within budget. Fewer than N files in a
