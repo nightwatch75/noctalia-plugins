@@ -1246,8 +1246,11 @@ end
 -- actual tick rate; render() itself flips setNeedsFrameTick off once indexing
 -- ends or results stop being empty, so this never spins forever unattended.
 function onFrameTick(deltaMs)
+    -- The tick follows needsTick() after every step: a step can end a load
+    -- (whose redraw turns the tick off) and then start the deferred rescan.
     if space.needsTick() then
         space.step()
+        syncFrameTick()
     end
     if heldStep ~= 0 then
         repeatInMs -= deltaMs

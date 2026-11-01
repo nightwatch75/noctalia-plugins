@@ -272,4 +272,15 @@ do
     eq(#runs, 0, "scan() of another root waits for its load before the fresh check")
 end
 
+-- ── deferred rescan redraws with scanning on, so the label and tick follow ──
+do
+    local space = boot()
+    putIndex("/", fixture("/"), 2 * 86400)
+    local last
+    space.onOpen(function() last = { tick = space.needsTick(), scanning = space.scanning } end)
+    while space.loading do space.step() end
+    eq(#runs, 1, "stale index: deferred rescan started")
+    assert(last and last.scanning and last.tick, "last redraw sees the rescan running")
+end
+
 print("space_ui_test OK")

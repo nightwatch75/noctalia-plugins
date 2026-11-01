@@ -104,6 +104,7 @@ local ncduOld = nil -- nil = not probed yet
 local job = nil     -- { dir, done, marker?, deadline, nextPoll, loading? }
 local loader = nil  -- { text, pos, nodes, tree, at }
 local deferred = nil -- done() of a scan waiting for the current load to end
+local generation = 0 -- bumped per loaded index, keys the chart cache
 
 -- Panel side (see the panel hooks below).
 local isOpen = false
@@ -260,6 +261,7 @@ local function endLoad(tree, at)
         return
     end
     space.index = tree
+    generation += 1
     space.scannedAt = at
     space.state = "ready"
     space.errText = nil
@@ -452,6 +454,7 @@ function space.step()
         local done = deferred
         deferred = nil
         space.scan(space.root, false, done)
+        changed() -- the "scanning again" label
     end
     return space.needsTick()
 end
@@ -598,7 +601,7 @@ local function writeSvg(node, slices)
     if dir == nil then
         return nil
     end
-    local key = tostring(node) .. mode .. tostring(noctalia.isDarkMode())
+    local key = generation .. "/" .. #path .. "/" .. tostring(node) .. mode .. tostring(noctalia.isDarkMode())
     if key == svg.key and svg.path ~= nil then
         return svg.path
     end

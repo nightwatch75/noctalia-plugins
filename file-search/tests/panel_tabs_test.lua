@@ -68,10 +68,17 @@ local usage = {
     writeSvg = function() end,
 }
 local space = {
+    busy = false, onStep = nil,
     onOpen = function() end, onClose = function() end,
-    needsTick = function() return false end, step = function() return false end,
     render = function() return ui.label({ key = "space", text = "space" }) end,
 }
+-- needsTick/step driven by the test: onStep plays what one engine step does.
+function space.onOpen(redraw) space.redraw = redraw end
+function space.needsTick() return space.busy end
+function space.step()
+    if space.onStep then space.onStep() end
+    return space.busy
+end
 require = function(path)
     if path == "./shared.luau" then return shared end
     return path == "./space.luau" and space or usage
@@ -104,5 +111,33 @@ find(rendered, "tab-search").props.onClick()
 assert(find(rendered, "tab-search").props.selected == true)
 assert(find(rendered, "query-1") ~= nil)
 assert(find(rendered, "space") == nil)
+
+-- Frame tick follows space.needsTick() after every step. (a) A step that
+-- ends a load (its redraw sees nothing left, the tick goes off) and then
+-- starts the deferred rescan: the tick must be on again afterwards.
+find(rendered, "tab-space").props.onClick()
+space.busy = true
+space.onStep = function()
+    space.busy = false
+    space.redraw() -- endLoad -> changed(): render sees nothing left
+    space.busy = true -- the deferred scan starts in the same step
+end
+onFrameTick(16)
+assert(frameTick == true, "tick on while the deferred scan runs")
+space.onStep = function() space.busy = false end -- marker consumed, load done
+onFrameTick(16)
+assert(frameTick == false, "tick off once nothing is left")
+
+-- (b) Reopened on the Search tab while a scan runs: the tick goes off after
+-- the last step even though no redraw comes from the closed-over space side.
+onClose()
+space.busy = true
+space.onStep = nil
+onOpen(nil)
+assert(find(rendered, "tab-search").props.selected == true)
+assert(frameTick == true, "tick on: the scan still needs polling")
+space.onStep = function() space.busy = false end
+onFrameTick(16)
+assert(frameTick == false, "tick off on the Search tab after the last step")
 
 print("file-search panel tab tests: ok")
