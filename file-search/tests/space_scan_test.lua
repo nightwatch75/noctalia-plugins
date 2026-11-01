@@ -808,4 +808,28 @@ do
     eq(space.scanning, false, "scan ended")
 end
 
+-- ── onDisabled: a running scan is dropped, nothing new starts ───────────────
+do
+    local space = boot()
+    space.onDisabled() -- nothing running: no-op, starts nothing
+    eq(#runs, 0, "idle onDisabled starts nothing")
+    local doneCalls = 0
+    space.scan("/", false, function() doneCalls += 1 end)
+    local run = passVersion()
+    eq(space.scanning, true, "scan running")
+    space.onDisabled()
+    eq(space.scanning, false, "scan dropped"); eq(space.loading, false, "no load")
+    eq(space.state, "idle", "idle")
+    eq(space.needsTick(), false, "no tick")
+    local before = #runs
+    playScript(run, "ok", smallIndex("/"))
+    ms += 1000
+    space.step()
+    eq(space.index, nil, "late marker ignored"); eq(space.loading, false, "late marker starts no load")
+    eq(doneCalls, 0, "no done for a dropped scan")
+    space.onOpen(function() end) -- re-enable: the dropped run is not resurrected
+    eq(space.index, nil, "old result not loaded after re-enable")
+    eq(space.scanning and #runs > before or false, false, "no stale marker polled")
+end
+
 print("space_scan_test OK")

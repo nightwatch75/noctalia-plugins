@@ -59,6 +59,12 @@ space.onSearchHere = function(path) onSearchHere(path) end
 -- Which tab is showing: "search" | "space". Reset to search on every open.
 local activeTab = "search"
 
+-- The Space tab can be turned off in the settings (nil = not set = on). Every
+-- call into `space` below sits behind this.
+local function spaceOn()
+    return noctalia.getConfig("space_enabled") ~= false
+end
+
 -- Read out of the plugin's own manifest (readFile resolves a relative path
 -- against the plugin directory), so the header cannot drift from the version
 -- the store shows. Empty when unreadable — a missing version is not worth an
@@ -130,7 +136,7 @@ local spinnerTicking = false
 -- The frame tick has three users: the spinner, a held arrow key and the
 -- Space tab's scan engine (space.step).
 local function syncFrameTick()
-    panel.setNeedsFrameTick(spinnerTicking or heldStep ~= 0 or space.needsTick())
+    panel.setNeedsFrameTick(spinnerTicking or heldStep ~= 0 or (spaceOn() and space.needsTick()))
 end
 
 local function setSpinnerTicking(on)
@@ -965,7 +971,7 @@ local TABS = { "search", "space" }
 local TAB_GLYPH = { search = "search", space = "chart-pie" }
 
 local function setActiveTab(id)
-    if id == activeTab then
+    if id == activeTab or (id == "space" and not spaceOn()) then
         return
     end
     activeTab = id
@@ -973,7 +979,7 @@ local function setActiveTab(id)
     if id == "space" then
         -- Not on panel open: a Search-only session never starts an ncdu scan.
         space.onOpen(render)
-    else
+    elseif spaceOn() then
         space.onClose() -- its scan events stop re-rendering this tab
     end
     render()
@@ -1028,7 +1034,7 @@ render = function()
     table.insert(headerItems, ui.button({ key = "close", glyph = "close", variant = "ghost", tooltip = shared.tr("tip_close"), onClick = "onClosePanel" }))
     local header = ui.row({ key = "header", gap = 6, align = "center" }, headerItems)
 
-    if activeTab == "space" then
+    if activeTab == "space" and spaceOn() then
         panel.render(ui.column({ flexGrow = 1, gap = 12, align = "stretch" }, {
             header, tabSelector(), space.render(),
         }))
@@ -1037,7 +1043,6 @@ render = function()
 
     local children = {
         header,
-        tabSelector(),
         ui.input({
             key = "query-" .. inputRev,
             value = query,
@@ -1048,6 +1053,9 @@ render = function()
         }),
         syntaxLegend(),
     }
+    if spaceOn() then
+        table.insert(children, 2, tabSelector())
+    end
 
     local strip = usageFilterStrip()
     if strip ~= nil then
@@ -1242,7 +1250,9 @@ function onClose()
     setSpinnerTicking(false)
     stopKeyRepeat() -- a key held while the panel closes never reports its release
     noctalia.state.set("file_search_open", false)
-    space.onClose()
+    if spaceOn() then
+        space.onClose()
+    end
     panel.setNeedsFrameTick(false) -- a running scan resumes on the next open
 end
 
@@ -1252,7 +1262,7 @@ end
 function onFrameTick(deltaMs)
     -- The tick follows needsTick() after every step: a step can end a load
     -- (whose redraw turns the tick off) and then start the deferred rescan.
-    if space.needsTick() then
+    if spaceOn() and space.needsTick() then
         space.step()
         syncFrameTick()
     end
@@ -1280,7 +1290,17 @@ function onFrameTick(deltaMs)
 end
 
 function onConfigChanged()
-    space.onConfigChanged() -- before the Search side's early return
+    if spaceOn() then
+        space.onConfigChanged() -- before the Search side's early return
+    elseif activeTab == "space" then
+        activeTab = "search"
+        space.onClose()
+        space.onDisabled()
+        stopKeyRepeat()
+        render()
+    else
+        space.onDisabled() -- a scan left running by a closed panel
+    end
     if fzfMissing or indexing then
         return
     end
@@ -1318,7 +1338,7 @@ end
 -- while the query input has focus; typing still goes to the input.
 function onKey(chord, pressed)
     local step = KEY_STEPS[chord]
-    if step == nil or activeTab == "space" then
+    if step == nil or (activeTab == "space" and spaceOn()) then
         return
     end
     if not pressed then
@@ -1356,6 +1376,9 @@ end
 -- be expressed, so it is a notice and the tab stays. So is a path with a
 -- control character (it comes from a disk name).
 function onSearchHere(path)
+    if not spaceOn() then
+        return
+    end
     local root = shared.roots[1]
     -- Only the folder scope on the search folder has records relative to one
     -- root (the only place the restriction strip and chart exist).
@@ -1484,6 +1507,9 @@ end
 
 -- Global because openContextMenu names its handler; the logic lives in space.luau.
 function onSpaceMenu(action, context)
+    if not spaceOn() then
+        return
+    end
     space.menuAction(action, context)
 end
 

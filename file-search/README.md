@@ -159,6 +159,8 @@ setting keeps `du` out of specific, slow-but-same-filesystem folders instead.
 
 ### Space tab
 
+You can turn this tab off with the `space_enabled` setting.
+
 The *Space* tab shows what fills the disk. It starts with your home folder;
 the `/` button switches to the whole system. A donut and a clickable legend show the biggest
 items of the current folder; click a folder to go in, use the up arrow to go
@@ -209,6 +211,7 @@ results whenever the index is out of date.
 | `exclude_dirs` | `string` | `.git, node_modules, .cache, .venv` | Folder names skipped while indexing, separated by `,` or `;`, matched anywhere in the tree. |
 | `show_hidden` | `bool` | `false` | Index files and folders whose name starts with a dot. |
 | `usage_exclude_dirs` | `string` | *(empty)* | Folders that the disk usage chart and the Space tab do not count, separated by `,` or `;`. A bare name matches anywhere below the search folder. An absolute path (or one that starts with `~`) skips that one folder, e.g. an internal disk under `/mnt`. |
+| `space_enabled` | `bool` | `true` | Show the Space tab. Turn it off to use only the search: the tab bar is hidden and nothing is scanned. The panel keeps its width. |
 | `space_skip_network` | `bool` | `true` | Space tab: do not scan network mounts (NFS, SMB…) and FUSE mounts (rclone, sshfs, OneDrive…). |
 | `space_skip_external` | `bool` | `true` | Space tab: do not scan external (removable) disks. |
 | `max_results` | `int` | `50` | How many matches the panel lists at most (10–200). |
@@ -230,9 +233,11 @@ results whenever the index is out of date.
   on any Linux desktop. Missing `du`, the usage chart says so; everything
   else still works
 - [`ncdu`](https://dev.yorhel.nl/ncdu) 2.0 or newer — scans the disk for the
-  Space tab
+  Space tab (needed only for the Space tab)
 - [`jq`](https://jqlang.github.io/jq/) — reduces the scan to the Space index
-- `nice` (GNU coreutils) — runs the scan at low priority
+  (needed only for the Space tab)
+- `nice` (GNU coreutils) — runs the scan at low priority (needed only for the
+  Space tab)
 - `lsblk` (util-linux) — lists mounted USB/removable volumes, only run when
   the scope includes them. Missing, it falls back to `/proc/mounts` and the
   udisks2 layout (`/run/media/<user>/…`, `/media/…`)

@@ -3,6 +3,7 @@
 -- panel source as PANEL_SRC.
 
 local rendered, opened, frameTick
+local config = {}
 local searches = {} -- callbacks of the fzf runs the panel has started
 
 local function node(kind)
@@ -21,7 +22,7 @@ noctalia = {
     readFile = function() return nil end,
     writeFile = function() return true end,
     log = function() end,
-    getConfig = function() return nil end,
+    getConfig = function(key) return config[key] end,
     fileInfo = function() return nil end,
     fileExists = function() return true end,
     commandExists = function() return true end,
@@ -75,6 +76,7 @@ local space = {
 -- needsTick/step driven by the test: onStep plays what one engine step does.
 function space.onOpen(redraw) space.redraw = redraw; space.opens += 1 end
 function space.onClose() space.closes += 1 end
+function space.onDisabled() space.disabled = (space.disabled or 0) + 1 end
 function space.onConfigChanged() space.configs = (space.configs or 0) + 1 end
 function space.needsTick() return space.busy end
 function space.step()
@@ -208,5 +210,59 @@ end
 -- other excludes).
 onConfigChanged()
 assert(space.configs == 1, "onConfigChanged forwarded to space")
+
+-- ── space_enabled = false ───────────────────────────────────────────────────
+do
+    local argvs = {}
+    local runAsync = noctalia.runAsync
+    noctalia.runAsync = function(argv, callback)
+        table.insert(argvs, type(argv) == "table" and table.concat(argv, " ") or tostring(argv))
+        return runAsync(argv, callback)
+    end
+    local steps = 0
+    space.onStep = function() steps += 1 end
+
+    -- on Space, then the setting goes off: back to Search, closed once
+    onClose()
+    onOpen(nil)
+    find(rendered, "tab-space").props.onClick()
+    local closes, disabled = space.closes, space.disabled or 0
+    config.space_enabled = false
+    onConfigChanged()
+    assert(space.closes == closes + 1, "space.onClose once")
+    assert(space.disabled == disabled + 1, "space.onDisabled once")
+    assert(find(rendered, "tab-search") == nil and find(rendered, "tab-space") == nil, "no tab bar")
+    assert(find(rendered, "refresh") ~= nil, "Search body")
+    assert(find(rendered, "space") == nil, "no Space body")
+
+    -- fresh open: Search layout without the bar, same keys otherwise
+    onClose()
+    onOpen(nil)
+    assert(find(rendered, "tabs") == nil)
+    assert(find(rendered, "header") ~= nil and find(rendered, "refresh") ~= nil, "Search header kept")
+    local opens = space.opens
+    space.busy = true -- would keep the tick alive if the panel asked
+    onFrameTick(16)
+    assert(steps == 0, "frame tick never steps Space")
+    assert(frameTick == false, "tick off for Space")
+    onKey("down", true)
+    onKey("down", false)
+    onSearchHere("/home/x") -- guarded: no tab switch, no Space call
+    assert(find(rendered, "tab-space") == nil and space.opens == opens, "Space never opened")
+    for _, a in ipairs(argvs) do
+        assert(not a:find("ncdu") and not a:find("jq") and not a:find("/bin/sh"), "Space spawned: " .. a)
+    end
+    space.busy = false
+    onClose()
+    assert(space.closes == closes + 1, "onClose does not call space.onClose while off")
+
+    -- back on: the bar is back, starting on Search
+    config.space_enabled = true
+    onConfigChanged()
+    onOpen(nil)
+    assert(find(rendered, "tab-search").props.selected == true and find(rendered, "tab-space") ~= nil)
+    config.space_enabled = nil
+    noctalia.runAsync = runAsync
+end
 
 print("file-search panel tab tests: ok")

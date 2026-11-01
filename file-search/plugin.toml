@@ -71,6 +71,14 @@ label_key = "settings.usage_exclude_dirs.label"
 description_key = "settings.usage_exclude_dirs.description"
 default = ""
 
+# Space tab off switch. Read as on unless it is a literal false.
+[[setting]]
+key = "space_enabled"
+type = "bool"
+label_key = "settings.space_enabled.label"
+description_key = "settings.space_enabled.description"
+default = true
+
 # Space tab: ncdu never uses -x (on "/" it would skip a separate /home), so
 # network/FUSE and removable mounts are left out with --exclude instead.
 # Pseudo filesystems (proc, overlay, squashfs…) are always left out.

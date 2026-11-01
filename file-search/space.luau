@@ -917,6 +917,15 @@ function space.onConfigChanged()
     end
 end
 
+-- The tab was turned off in the settings: the running scan or load is dropped
+-- (its marker is never polled again) and nothing new starts. No-op when idle.
+function space.onDisabled()
+    if job == nil and loader == nil and deferred == nil then
+        return
+    end
+    reset()
+end
+
 -- Also called when the panel leaves the Space tab. Scans and loads keep
 -- going; their late results only stop redrawing.
 function space.onClose()
