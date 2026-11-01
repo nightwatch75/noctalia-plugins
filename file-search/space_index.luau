@@ -7,6 +7,7 @@
   Decoded index node:  { n = name, s = bytes, f = loose file bytes,
                          c = { 8 bytes per category }, d = { child nodes },
                          t = { { n, s, k = category } } top files, leaf = true? }
+  t[i].n is a path relative to the node ("sub/dir/file.mkv"), not a bare name.
 
   EXT below is the ONE extension table. The jq program that builds the index
   (Task 3) is generated from this same table, so the Luau side and the jq side
@@ -137,7 +138,7 @@ function idx.jqProgram(depth, topN, minBytes)
            | group_by(.k) | map(sort_by(-.s, .n) | .[:%d]) | add // [])}
     | if $lvl == %d then .leaf = true else . end;
   .[3] | node(0) | {v: 1, root: .n, tree: .}
-]=], table.concat(ext, ","), depth, minBytes, topN, depth)
+]=], table.concat(ext, ","), math.floor(depth), math.floor(minBytes), math.floor(topN), math.floor(depth))
 end
 
 -- Donut rows. folders: one per entry, colour index = position in the unsorted

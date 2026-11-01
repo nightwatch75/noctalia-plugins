@@ -7,6 +7,9 @@
 # this script then also splices that file as the string MODULE_SRC, and the
 # test loads it with loadstring (after stubbing host globals if it needs any). Native relative require() is not
 # used: the runner below has no require, and the panel stubs it anyway.
+# `-- module: <file> <dep>...` splices every listed file into the table
+# MODULES (keyed by file name), for a test whose require stub loads the real
+# dependencies; MODULE_SRC is still the first one.
 #
 # Then it runs tests/space_jq_test.sh (shell + jq, not a *_test.lua): the jq
 # index reducer of space_index.luau on a real ncdu fixture.
@@ -28,11 +31,15 @@ for test in tests/*_test.lua; do
         printf 'local PANEL_SRC = [==[\n'
         cat panel.luau
         printf '\n]==]\n'
-        mod=$(sed -n '1s/^-- module: //p' "$test")
-        if [ -n "$mod" ]; then
-            printf 'local MODULE_SRC = [==[\n'
-            cat "$mod"
-            printf '\n]==]\n'
+        mods=$(sed -n '1s/^-- module: //p' "$test")
+        if [ -n "$mods" ]; then
+            printf 'local MODULES = {}\n'
+            for mod in $mods; do
+                printf 'MODULES["%s"] = [==[\n' "$mod"
+                cat "$mod"
+                printf '\n]==]\n'
+            done
+            printf 'local MODULE_SRC = MODULES["%s"]\n' "${mods%% *}"
         fi
         cat "$test"
     } > "$out"
