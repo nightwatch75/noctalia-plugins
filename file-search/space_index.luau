@@ -13,6 +13,9 @@
   (Task 3) is generated from this same table, so the Luau side and the jq side
   cannot drift apart. Any extension not listed is category 8 (other).
 
+  On disk the index is JSON Lines (see jqProgram); space.luau rebuilds this
+  nested shape from it.
+
   Index build: jqProgram(6, 5, 1048576) = depth 6, top 5 files per category,
   folders under 1 MiB folded. Measured on a real `/` scan (ncdu 2.9.2, 127 MB,
   1.88M entries, jq 1.8.2): index 2.5 MB, ~29 s, jq peak RSS ~1.5 GB (jq alone
@@ -106,7 +109,12 @@ function idx.sort(entries, key, descending)
     return out
 end
 
--- jq program: `ncdu -o` JSON in, `{"v":1,"root":<name>,"tree":<Node>}` out.
+-- jq program: `ncdu -o` JSON in, JSON Lines out (run with jq -c): a header
+-- `{"v":1,"root":<name>}`, then one record per kept folder in pre-order,
+-- `{"id":"0/2/1",n,s,f,c,t,leaf?}`. id is the child-index path from the root
+-- ("0"), so a record's parent is its id minus the last segment and no d is
+-- written; children follow in node.d order. One record per line lets the
+-- panel decode the index a slice at a time.
 -- ncdu: a folder is an array whose first item is its info object, a file is
 -- an object; "excluded" entries carry no size and are skipped. c and t cover
 -- the whole subtree (t names are paths relative to the node, top topN per
@@ -137,7 +145,8 @@ function idx.jqProgram(depth, topN, minBytes)
        t: ([$files[] | select(.s > 0)] + [$kids[] | .n as $p | .t[] | .n = $p + "/" + .n]
            | group_by(.k) | map(sort_by(-.s, .n) | .[:%d]) | add // [])}
     | if $lvl == %d then .leaf = true else . end;
-  .[3] | node(0) | {v: 1, root: .n, tree: .}
+  def flat($id): ({id: $id} + del(.d)), (.d | to_entries[] | .key as $k | .value | flat($id + "/" + ($k | tostring)));
+  .[3] | node(0) | ({v: 1, root: .n}, flat("0"))
 ]=], table.concat(ext, ","), math.floor(depth), math.floor(minBytes), math.floor(topN), math.floor(depth))
 end
 
