@@ -11,6 +11,10 @@
   EXT below is the ONE extension table. The jq program that builds the index
   (Task 3) is generated from this same table, so the Luau side and the jq side
   cannot drift apart. Any extension not listed is category 8 (other).
+
+  Slice colour index: in folders mode it is the position in the unsorted
+  node.d (a folder keeps its colour when the sort changes); in types mode it
+  is the category number.
 ]]
 
 local idx = {}
@@ -56,23 +60,15 @@ function idx.child(node, name)
     return nil
 end
 
--- folders: sub-folders plus one "loose" row for files directly inside.
--- types: one row per non-empty category; with `category`, that category's top files.
+-- Folders view (also types view with no category selected): sub-folders plus
+-- one "loose" row for files directly inside. With a category in types mode:
+-- that category's top files only.
 function idx.entries(node, mode, category)
     local out = {}
-    if mode == "types" then
-        if category then
-            for _, f in ipairs(node.t or {}) do
-                if f.k == category then
-                    table.insert(out, { name = f.n, bytes = f.s, kind = "file", category = category })
-                end
-            end
-        else
-            for i = 1, 8 do
-                local b = (node.c or {})[i] or 0
-                if b > 0 then
-                    table.insert(out, { name = idx.CATEGORIES[i], bytes = b, kind = "file", category = i })
-                end
+    if mode == "types" and category then
+        for _, f in ipairs(node.t or {}) do
+            if f.k == category then
+                table.insert(out, { name = f.n, bytes = f.s, kind = "file", category = category })
             end
         end
     else
@@ -103,26 +99,43 @@ function idx.sort(entries, key, descending)
     return out
 end
 
--- Top maxSlices-1 entries plus one "other" holding the rest, so the bytes sum to node.s.
+-- Donut rows. folders: one per entry, colour index = position in the unsorted
+-- node.d. types: one per non-empty category, colour index = category number.
+local function sliceRows(node, mode)
+    local rows = {}
+    if mode == "types" then
+        for i = 1, 8 do
+            local b = (node.c or {})[i] or 0
+            if b > 0 then
+                table.insert(rows, { name = idx.CATEGORIES[i], bytes = b, kind = "category", index = i })
+            end
+        end
+        return idx.sort(rows, "size", true)
+    end
+    for _, e in ipairs(idx.entries(node, "folders")) do
+        if e.node then
+            for j, d in ipairs(node.d) do
+                if d == e.node then e.index = j break end
+            end
+        end
+        table.insert(rows, e)
+    end
+    return rows
+end
+
+-- Top maxSlices-1 rows plus one "other" holding the rest, so the bytes sum to node.s.
 function idx.slices(node, mode, maxSlices)
     local out = {}
     if (node.s or 0) <= 0 then return out end
-    local list = idx.entries(node, mode)
+    local list = sliceRows(node, mode)
     local kept = #list > maxSlices and maxSlices - 1 or #list
     local sum = 0
     for i = 1, kept do
         local e = list[i]
         sum += e.bytes
-        local ci = e.category
-        if mode ~= "types" then
-            ci = nil
-            for j, d in ipairs(node.d or {}) do
-                if d == e.node then ci = j break end
-            end
-        end
         table.insert(out, {
-            label = e.name, bytes = e.bytes, kind = e.kind,
-            index = ci, color = ci and idx.COLORS_DARK[(ci - 1) % 8 + 1] or nil,
+            label = e.name, bytes = e.bytes, kind = e.kind, index = e.index,
+            color = e.index and idx.COLORS_DARK[(e.index - 1) % 8 + 1] or nil,
         })
     end
     if node.s > sum then
