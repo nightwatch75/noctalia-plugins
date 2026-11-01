@@ -1,0 +1,984 @@
+-- module: space.luau shared.luau usage.luau space_index.luau
+-- Space tab UI of space.luau (Folders mode), with the host stubbed: ui.* build
+-- plain tables, files live in memory, json.decode maps known line texts to
+-- tables (see space_scan_test.lua). Run through tests/file-search/run.sh.
+
+local function eq(a, b, m) if a ~= b then error(m .. ": got " .. tostring(a) .. " want " .. tostring(b), 2) end end
+
+local files, decoded, runs, tools, ms, redraws, notes
+local DIR = "/data"
+local HOME = "/home/u"
+
+ui = setmetatable({}, { __index = function(_, kind)
+    return function(props, children) return { kind = kind, props = props or {}, children = children } end
+end })
+
+local function boot(home)
+    files, decoded, runs, tools, notes = {}, {}, {}, { lsblk = false }, {}
+    ms, redraws = 1e9, 0
+    noctalia = {
+        readFile = function(p) local f = files[p]; return f and f.text end,
+        writeFile = function(p, t) files[p] = { text = t, mtime = ms // 1000 }; return true end,
+        removeFile = function(p) files[p] = nil; return true end,
+        fileInfo = function(p) local f = files[p]; return f and { size = #f.text, mtime = f.mtime, isDir = false } end,
+        fileExists = function(p)
+            local name = p:match("^/usr/bin/([^/]+)$")
+            if name then return tools[name] ~= false end
+            return files[p] ~= nil
+        end,
+        listDir = function() return {} end,
+        commandExists = function(n) return tools[n] ~= false end,
+        getConfig = function() return nil end,
+        expandPath = function(p) return (p:gsub("^~", HOME)) end,
+        nowMs = function() return ms end,
+        pluginDataDir = function() return DIR end,
+        isDarkMode = function() return true end,
+        tr = function(key) return key end,
+        log = function() end,
+        notify = function(title, body) table.insert(notes, body or title) end,
+        json = { decode = function(t)
+            local v = decoded[t]
+            if v == nil then return nil, "bad json" end
+            return v
+        end },
+        runAsync = function(argv, cb, timeout)
+            table.insert(runs, { argv = argv, cb = cb, timeout = timeout })
+            return true
+        end,
+    }
+    local cache = {}
+    require = function(path)
+        local name = path:gsub("^%./", "")
+        if cache[name] == nil then
+            cache[name] = assert(loadstring(MODULES[name], "=" .. name))()
+        end
+        return cache[name]
+    end
+    local space = require("./space.luau")
+    -- The fixtures are rooted at "/"; `home` keeps the start on the home folder.
+    if not home then space.setRoot("/") end
+    return space
+end
+
+local serial = 0
+local function jsonl(root, records)
+    serial += 1
+    local head = "H" .. serial
+    decoded[head] = { v = 4, root = root }
+    local lines = { head }
+    for _, r in ipairs(records) do
+        serial += 1
+        local key = "R" .. serial
+        r.f, r.c, r.t = r.f or 0, r.c or { 0, 0, 0, 0, 0, 0, 0, 0 }, r.t or {}
+        decoded[key] = r
+        table.insert(lines, key)
+    end
+    return table.concat(lines, "\n") .. "\n"
+end
+
+local WEIRD = 'we<i&rd"\nname'
+local function fixture(root)
+    return jsonl(root, {
+        { id = "0", n = root, s = 100, f = 5 },
+        { id = "0/0", n = "usr", s = 60 },
+        { id = "0/0/0", n = "lib", s = 50, leaf = true },
+        { id = "0/1", n = WEIRD, s = 20 },
+        { id = "0/2", n = "home", s = 15 },
+    })
+end
+local function putIndex(root, text, age)
+    local tag = root == "/" and "root" or "home"
+    files[DIR .. "/space-" .. tag .. "-" .. require("./space.luau").settingsTag() .. ".json"] =
+        { text = text, mtime = ms // 1000 - (age or 0) }
+end
+
+local function drain(space)
+    for _ = 1, 10000 do
+        if not space.step() then return end
+        ms += 1000
+    end
+    error("step() never settles")
+end
+
+local function find(node, key)
+    if type(node) ~= "table" then return nil end
+    if node.props and node.props.key == key then return node end
+    for _, child in ipairs(node.children or {}) do
+        local hit = find(child, key)
+        if hit then return hit end
+    end
+end
+local function findText(node, text)
+    if type(node) ~= "table" then return nil end
+    if node.props and node.props.text == text then return node end
+    for _, child in ipairs(node.children or {}) do
+        local hit = findText(child, text)
+        if hit then return hit end
+    end
+end
+local function clickable(node)
+    if type(node) ~= "table" then return nil end
+    if node.props and node.props.onClick then return node end
+    for _, child in ipairs(node.children or {}) do
+        local hit = clickable(child)
+        if hit then return hit end
+    end
+end
+local function click(node, m)
+    local hit = clickable(node)
+    assert(hit, m .. ": nothing clickable")
+    hit.props.onClick()
+end
+-- The row (list or legend) whose label shows `text`.
+local function rowOf(tree, prefix, text)
+    for i = 1, 50 do
+        local row = find(tree, prefix .. i)
+        if row and findText(row, text) then return row end
+    end
+end
+-- A sort button whatever its state (the key ends in -a / -d when active).
+local function sortBtn(tree, key)
+    return find(tree, "space-sort-" .. key) or find(tree, "space-sort-" .. key .. "-a") or find(tree, "space-sort-" .. key .. "-d")
+end
+local function svgText()
+    local a, b = files[DIR .. "/space-a.svg"], files[DIR .. "/space-b.svg"]
+    assert((a == nil) ~= (b == nil), "exactly one of the two svg names on disk")
+    return (a or b).text
+end
+
+local function ready()
+    local space = boot()
+    putIndex("/", fixture("/"), 60)
+    space.onOpen(function() redraws += 1 end)
+    drain(space)
+    eq(space.state, "ready", "fixture loads")
+    eq(#runs, 0, "fresh index: no scan")
+    return space
+end
+
+-- ── layout keys in ready state ───────────────────────────────────────────────
+do
+    local space = ready()
+    assert(redraws > 0, "load end redraws")
+    local tree = space.render()
+    for _, key in ipairs({ "space-up", "space-root", "space-mode", "space-path", "space-img", "space-refresh",
+        "space-sort-size-d", "space-sort-name" }) do
+        assert(find(tree, key), "key " .. key)
+    end
+    eq(find(tree, "space-path").props.text, "/", "path at root")
+    eq(find(tree, "space-up").props.enabled, false, "up disabled at the root")
+    -- left: donut, path, buttons, legend title, legend; right: sort and list only
+    local right, left = find(tree, "space-right"), find(tree, "space-left")
+    local order = {}
+    for _, child in ipairs(right.children) do table.insert(order, child.props.key) end
+    eq(table.concat(order, " "), "space-sort space-list", "right column order")
+    order = {}
+    for _, child in ipairs(left.children) do table.insert(order, child.props.key) end
+    eq(table.concat(order, " "), "space-img space-path space-buttons space-buttons-mode space-legend-title space-legend",
+        "left column order")
+    for _, key in ipairs({ "space-up", "space-top", "space-root", "space-mode", "space-search-here", "space-refresh",
+        "space-path" }) do
+        assert(find(left, key), key .. " in the left column")
+        eq(find(right, key), nil, key .. " not in the right column")
+    end
+    -- slices: usr, weird, home, loose = 4 rows, all fit under MAX_SLICES
+    for i = 1, 4 do assert(find(tree, "space-legend-" .. i), "legend row " .. i) end
+    assert(not find(tree, "space-legend-5"), "one legend row per slice")
+    for i = 1, 4 do assert(find(tree, "space-row-" .. i), "list row " .. i) end
+    assert(find(tree, "space-img").props.path:match("/space%-[ab]%.svg$"), "image path")
+    svgText()
+end
+
+-- ── top of home button ───────────────────────────────────────────────────────
+do
+    local space = boot(true)
+    putIndex(HOME, fixture(HOME), 60)
+    space.onOpen(function() redraws += 1 end)
+    drain(space)
+    eq(space.root, HOME, "home root")
+    local top = find(space.render(), "space-top")
+    assert(top, "top button")
+    eq(top.props.enabled, false, "top disabled at the root level")
+    eq(top.props.tooltip, "space_tip_top", "tooltip")
+    assert(top.props.glyph ~= "home" and top.props.glyph ~= "device-desktop", "own glyph")
+    click(rowOf(space.render(), "space-legend-", "usr"), "usr")
+    top = find(space.render(), "space-top")
+    eq(top.props.enabled, true, "top enabled below the root of home")
+    space.setMode("types")
+    space.setTypeFilter(1)
+    top.props.onClick()
+    eq(find(space.render(), "space-path").props.text, HOME, "back at the root node")
+    eq(space.typeFilter, nil, "filter cleared")
+    eq(find(space.render(), "space-top").props.enabled, false, "disabled again")
+
+    space = ready() -- root "/"
+    click(rowOf(space.render(), "space-legend-", "usr"), "usr")
+    eq(find(space.render(), "space-up").props.enabled, true, "below the root")
+    eq(find(space.render(), "space-top").props.enabled, false, "top disabled at /")
+end
+
+-- ── legend click enters, up pops ─────────────────────────────────────────────
+do
+    local space = ready()
+    local tree = space.render()
+    local usr = rowOf(tree, "space-legend-", "usr")
+    assert(usr, "usr legend row")
+    click(usr, "usr legend")
+    tree = space.render()
+    eq(find(tree, "space-path").props.text, "/usr", "path entered")
+    eq(find(tree, "space-up").props.enabled, true, "up enabled below the root")
+    -- leaf directory: no click anywhere in its row or legend row
+    local lib = rowOf(tree, "space-row-", "lib")
+    assert(lib, "lib row")
+    eq(clickable(lib), nil, "leaf list row has no onClick")
+    eq(clickable(rowOf(tree, "space-legend-", "lib")), nil, "leaf legend row has no onClick")
+    find(tree, "space-up").props.onClick()
+    eq(find(space.render(), "space-path").props.text, "/", "up pops")
+    -- a list row click also enters
+    click(rowOf(space.render(), "space-row-", "home"), "home row")
+    eq(find(space.render(), "space-path").props.text, "/home", "row enters")
+end
+
+-- ── sort header ──────────────────────────────────────────────────────────────
+do
+    local space = ready()
+    local function first() return find(space.render(), "space-row-1") end
+    assert(findText(first(), "usr"), "biggest first by default")
+    sortBtn(space.render(), "size").props.onClick()
+    assert(findText(first(), "space_loose"), "second press on size flips to ascending")
+    sortBtn(space.render(), "name").props.onClick()
+    assert(findText(first(), "space_loose"), "name ascending: the loose row (empty name) first")
+    sortBtn(space.render(), "name").props.onClick()
+    assert(findText(first(), (WEIRD:gsub("%c", " "))), "second press on name flips to descending")
+    eq(sortBtn(space.render(), "path"), nil, "no Path button in Folders mode")
+end
+
+-- ── untrusted names: escaped in the SVG, one line in the list ────────────────
+do
+    local space = ready()
+    local row = rowOf(space.render(), "space-row-", 'we<i&rd" name')
+    assert(row, "control characters shown as spaces in the list")
+    click(row, "weird row")
+    space.render() -- the chart is written by render
+    local svg = svgText()
+    assert(svg:find("we&lt;i&amp;rd&quot;", 1, true), "name escaped in the svg")
+    assert(not svg:find("<i", 1, true) and not svg:find("\n", 1, true), "no raw markup or newline in the svg")
+end
+
+-- ── scanning, error, refresh ─────────────────────────────────────────────────
+do
+    local space = boot()
+    space.onOpen(function() redraws += 1 end) -- no index file: the scan starts by itself
+    eq(space.state, "scanning", "no index: scanning")
+    assert(find(find(space.render(), "space-left"), "space-progress-text"), "scanning label, left column")
+
+    space = boot()
+    tools.ncdu = false
+    space.onOpen(function() redraws += 1 end)
+    drain(space)
+    eq(space.state, "error", "missing ncdu")
+    local tree = space.render()
+    assert(findText(find(tree, "space-left"), "space_err.ncdu"), "error text per code, left column")
+    -- no index: the controls stay usable in the left column, the right one is empty
+    local left = find(tree, "space-left")
+    assert(find(left, "space-path") and find(left, "space-root") and find(left, "space-refresh"), "controls without an index")
+    eq(find(left, "space-root").props.enabled, true, "root button usable after an error")
+    eq(#find(tree, "space-right").children, 0, "right column empty without an index")
+    eq(find(tree, "space-sort"), nil, "no sort row without an index")
+    eq(find(tree, "space-list"), nil, "no list without an index")
+
+    space = ready()
+    find(space.render(), "space-refresh").props.onClick()
+    eq(#runs, 1, "refresh ignores the cache")
+    eq(runs[1].argv[2], "--version", "refresh starts a scan")
+end
+
+-- ── scan progress: an estimate from the last duration, else elapsed time ────
+do
+    -- boot() builds a new host table: the labelling tr goes in after it
+    local function withTr(space)
+        noctalia.tr = function(k, v) local x = v and (v.percent or v.time); return x and (k .. ":" .. x) or k end
+        return space
+    end
+    local function text(tree, key) local n = find(tree, key); return n and n.props.text end
+
+    -- first scan of this root: no bar, elapsed time
+    local space = withTr(boot())
+    space.scan("/", false, function() end)
+    runs[1].cb({ exitCode = 0, stdout = "ncdu 2.9.2", stderr = "", timedOut = false })
+    ms += 45000
+    space.step()
+    local tree = space.render()
+    eq(find(tree, "space-progress"), nil, "no estimate: no bar")
+    eq(text(tree, "space-progress-text"), "space_elapsed_scan:0:45", "elapsed label")
+    eq(find(tree, "space-msg"), nil, "no other line without an index")
+    local marker = runs[2].argv[11]
+    files[marker .. ".phase"] = { text = "reduce", mtime = 0 }
+    ms += 1000
+    space.step()
+    eq(text(space.render(), "space-progress-text"), "space_elapsed_reduce:0:46", "elapsed label, reduce")
+
+    -- a rescan with history over a shown index: bar, percent, the old-numbers hint
+    space = withTr(ready())
+    local timeFile = DIR .. "/space-root-" .. space.settingsTag() .. ".time"
+    files[timeFile] = { text = "30000", mtime = 0 }
+    space.refresh()
+    runs[1].cb({ exitCode = 0, stdout = "ncdu 2.9.2", stderr = "", timedOut = false })
+    ms += 15000
+    space.step()
+    tree = space.render()
+    local left = find(tree, "space-left")
+    eq(find(left, "space-progress").kind, "progress", "a ui.progress bar")
+    eq(find(left, "space-progress").props.progress, 0.5, "bar fraction")
+    eq(text(left, "space-progress-text"), "space_progress_scan:50", "estimate label")
+    eq(text(left, "space-msg"), "space_rescanning", "old numbers hint")
+    files[runs[2].argv[11] .. ".phase"] = { text = "reduce", mtime = 0 }
+    ms += 6000
+    space.step()
+    eq(text(space.render(), "space-progress-text"), "space_progress_reduce:70", "estimate label, reduce")
+
+    -- the scan ends: the bar and its label go
+    files[runs[2].argv[10]] = { text = fixture("/"), mtime = ms // 1000 }
+    files[runs[2].argv[11]] = { text = "ok\n", mtime = 0 }
+    ms += 1000
+    drain(space)
+    tree = space.render()
+    eq(find(tree, "space-progress"), nil, "no bar after the scan")
+    eq(find(tree, "space-progress-text"), nil, "no progress label after the scan")
+    eq(find(tree, "space-msg"), nil, "no hint after the scan")
+end
+
+-- ── no root switch while a scan runs (a detached run cannot be stopped) ──────
+do
+    local space = ready()
+    eq(find(space.render(), "space-root").props.enabled, true, "root button enabled when idle")
+    space.refresh()
+    eq(space.scanning, true, "refresh scans")
+    eq(find(space.render(), "space-root").props.enabled, false, "root button disabled while scanning")
+    space.toggleRoot()
+    eq(space.root, "/", "toggleRoot refused while scanning")
+    eq(#runs, 1, "no second scan")
+    assert(space.index ~= nil, "index kept")
+end
+
+-- ── long lists: 200 rows, then one muted line ───────────────────────────────
+do
+    local recs = { { id = "0", n = "/", s = 0, f = 0 } }
+    for i = 1, 250 do
+        recs[#recs + 1] = { id = "0/" .. (i - 1), n = string.format("d%03d", i), s = i, leaf = true }
+        recs[1].s += i
+    end
+    local space = boot()
+    putIndex("/", jsonl("/", recs), 60)
+    space.onOpen(function() end)
+    drain(space)
+    local realTr = noctalia.tr
+    noctalia.tr = function(k, v) return k == "space_more_rows" and k .. ":" .. v.count or k end
+    local tree = space.render()
+    assert(find(tree, "space-row-200") and not find(tree, "space-row-201"), "200 rows")
+    assert(findText(find(tree, "space-row-200"), "d051"), "cap after the sort (size, biggest first)")
+    eq(find(tree, "space-more").props.text, "space_more_rows:50", "the rest counted")
+    space.setSort("name")
+    assert(findText(find(space.render(), "space-row-200"), "d200"), "cap after the sort (name)")
+    noctalia.tr = realTr
+    space = ready()
+    eq(find(space.render(), "space-more"), nil, "short list: no extra line")
+end
+
+-- ── late callbacks after close are ignored ───────────────────────────────────
+do
+    local space = boot()
+    space.onOpen(function() redraws += 1 end)
+    local before = redraws
+    space.onClose()
+    runs[1].cb({ exitCode = 0, stdout = "ncdu 1.19\n", stderr = "", timedOut = false })
+    eq(space.state, "error", "the probe answer still lands")
+    eq(redraws, before, "no redraw after close")
+end
+
+-- ── root switch keeps a fresh cached index, rescans a stale one ──────────────
+do
+    local space = ready()
+    putIndex(HOME, fixture(HOME), 60)
+    find(space.render(), "space-root").props.onClick()
+    eq(space.root, HOME, "switched to home")
+    drain(space)
+    eq(#runs, 0, "fresh home index: no scan")
+    eq(space.state, "ready", "home index shown")
+    eq(find(space.render(), "space-path").props.text, HOME, "path line shows home")
+
+    space = ready()
+    putIndex(HOME, fixture(HOME), 2 * 86400)
+    space.toggleRoot()
+    eq(#runs, 0, "no scan before the load ends")
+    while space.loading do space.step() end -- the deferred scan starts in the step that ends the load
+    eq(#runs, 1, "stale home index: rescan")
+    assert(space.index ~= nil and space.scanning, "stale index shown while the rescan runs")
+
+    -- the same through scan() itself (the Task 4 open Minor)
+    space = ready()
+    putIndex(HOME, fixture(HOME), 60)
+    space.scan(HOME, false, function() end)
+    drain(space)
+    eq(#runs, 0, "scan() of another root waits for its load before the fresh check")
+end
+
+-- ── deferred rescan redraws with scanning on, so the label and tick follow ──
+do
+    local space = boot()
+    putIndex("/", fixture("/"), 2 * 86400)
+    local last
+    space.onOpen(function() last = { tick = space.needsTick(), scanning = space.scanning } end)
+    while space.loading do space.step() end
+    eq(#runs, 1, "stale index: deferred rescan started")
+    assert(last and last.scanning and last.tick, "last redraw sees the rescan running")
+end
+
+-- ── Types mode ───────────────────────────────────────────────────────────────
+local function typesFixture(root)
+    return jsonl(root, {
+        { id = "0", n = root, s = 1000, f = 40, c = { 400, 200, 100, 80, 60, 50, 40, 70 },
+          t = { { n = "big.mkv", s = 300, k = 1 }, { n = "usr/clip.mp4", s = 100, k = 1 },
+                { n = "usr/pic.png", s = 200, k = 2 }, { n = "gone.mkv", s = 5, k = 1 },
+                { n = WEIRD .. ".mp3", s = 100, k = 3 } } },
+        { id = "0/0", n = "usr", s = 600, f = 0, c = { 100, 200, 0, 0, 0, 0, 0, 300 },
+          t = { { n = "clip.mp4", s = 100, k = 1 }, { n = "pic.png", s = 200, k = 2 } } },
+        { id = "0/1", n = "home", s = 300, f = 0, c = { 300, 0, 0, 0, 0, 0, 0, 0 },
+          t = { { n = "a.mkv", s = 300, k = 1 } } },
+    })
+end
+local function typesReady()
+    local space = boot()
+    putIndex("/", typesFixture("/"), 60)
+    space.onOpen(function() redraws += 1 end)
+    drain(space)
+    find(space.render(), "space-mode").children[2].props.onClick()
+    return space
+end
+local function rowNames(tree)
+    local out = {}
+    for i = 1, 50 do
+        local row = find(tree, "space-row-" .. i)
+        if not row then break end
+        table.insert(out, (find(row, "name-btn") or find(row, "name-plain")).props.text)
+    end
+    return out
+end
+do
+    local space = typesReady()
+    local tree = space.render()
+    for i = 1, 8 do
+        local row = find(tree, "space-legend-" .. i)
+        assert(row, "category legend row " .. i)
+    end
+    assert(rowOf(tree, "space-legend-", "cat_video"), "category names from translations")
+    assert(not find(tree, "space-legend-9"), "8 rows")
+    -- legend sizes add up to the folder total (1000 B in the fixture)
+    local realTr = noctalia.tr
+    noctalia.tr = function(k, v) if k == "usage_amount" then return v.size end return k end
+    local sum = 0
+    for i = 1, 8 do
+        local n = tonumber(find(find(space.render(), "space-legend-" .. i), "size").props.text:match("^(%d+) B$"))
+        assert(n, "legend size is plain bytes")
+        sum += n
+    end
+    noctalia.tr = realTr
+    eq(sum, 1000, "legend sizes sum to the folder total")
+    -- no filter: same list as Folders mode, every row has a type bar
+    local names = rowNames(tree)
+    eq(table.concat(names, "|"), "usr|home|space_loose", "unfiltered list = folders list")
+    for i = 1, 3 do assert(find(find(tree, "space-row-" .. i), "typebar"), "type bar on row " .. i) end
+    -- filter: files of the category below the folder, biggest first
+    click(rowOf(tree, "space-legend-", "cat_video"), "video legend")
+    names = rowNames(space.render())
+    eq(table.concat(names, "|"), "big.mkv|usr/clip.mp4|gone.mkv", "video files below the folder")
+    click(rowOf(space.render(), "space-legend-", "cat_video"), "video again")
+    eq(#rowNames(space.render()), 3, "second click clears the filter")
+    -- entering a folder keeps the mode and clears the filter
+    click(rowOf(space.render(), "space-legend-", "cat_video"), "video")
+    space.enter("usr")
+    tree = space.render()
+    assert(find(tree, "space-legend-1") and rowOf(tree, "space-legend-", "cat_images"), "still types mode")
+    eq(space.typeFilter, nil, "filter cleared on enter")
+    space.setTypeFilter(2)
+    eq(rowNames(space.render())[1], "pic.png", "setTypeFilter(2)")
+    space.setTypeFilter(nil)
+end
+
+-- ── sort by path (Types mode only), fallback to name in Folders mode ────────
+do
+    local space = boot()
+    putIndex("/", jsonl("/", {
+        { id = "0", n = "/", s = 100, c = { 60, 0, 0, 0, 0, 0, 0, 40 },
+          t = { { n = "a/c.mkv", s = 10, k = 1 }, { n = "b/a.mkv", s = 20, k = 1 }, { n = "z/" .. WEIRD .. ".mkv", s = 30, k = 1 } } },
+        { id = "0/0", n = "a", s = 40 },
+    }), 60)
+    space.onOpen(function() end)
+    drain(space)
+    space.setMode("types")
+    space.setTypeFilter(1)
+    local tree = space.render()
+    local order = {}
+    for _, child in ipairs(find(tree, "space-sort").children) do table.insert(order, child.props.key) end
+    eq(table.concat(order, " "), "space-sort-size-d space-sort-name space-sort-path", "Size | Name | Path in Types mode")
+    local hostile = ("z/" .. WEIRD .. ".mkv"):gsub("%c", " ")
+    eq(table.concat(rowNames(tree), "|"), hostile .. "|b/a.mkv|a/c.mkv", "size desc")
+    sortBtn(tree, "name").props.onClick()
+    eq(table.concat(rowNames(space.render()), "|"), "b/a.mkv|a/c.mkv|" .. hostile, "name: basename asc")
+    sortBtn(space.render(), "path").props.onClick()
+    eq(table.concat(rowNames(space.render()), "|"), "a/c.mkv|b/a.mkv|" .. hostile, "path: full path asc")
+    eq(sortBtn(space.render(), "path").props.glyph, "arrow-up", "path starts ascending")
+    sortBtn(space.render(), "path").props.onClick()
+    eq(table.concat(rowNames(space.render()), "|"), hostile .. "|b/a.mkv|a/c.mkv", "second press flips path")
+    -- Folders mode: no Path button, the path key falls back to name
+    space.setMode("folders")
+    tree = space.render()
+    eq(sortBtn(tree, "path"), nil, "no Path button in Folders mode")
+    eq(sortBtn(tree, "name").props.selected, true, "path falls back to name")
+end
+
+-- ── file reveal (Types rows) ─────────────────────────────────────────────────
+do
+    local space = typesReady()
+    files["/big.mkv"] = { text = "x", mtime = 1 }
+    space.setTypeFilter(1)
+    local tree = space.render()
+    click(rowOf(tree, "space-row-", "big.mkv"), "big.mkv row")
+    eq(#notes, 0, "existing file: no notice")
+    eq(runs[#runs].argv[1], "gdbus", "reveal through gdbus")
+    assert(runs[#runs].argv[10]:find("file:///big.mkv", 1, true), "uri of the file")
+    local before = #runs
+    click(rowOf(tree, "space-row-", "gone.mkv"), "missing row")
+    eq(#runs, before, "missing file: no reveal")
+    eq(#notes, 1, "missing file: one notice")
+    -- hostile name: file exists, argv stays one element, no crash
+    space.setTypeFilter(3)
+    tree = space.render()
+    files["/" .. WEIRD .. ".mp3"] = { text = "x", mtime = 1 }
+    click(rowOf(tree, "space-row-", (WEIRD .. ".mp3"):gsub("%c", " ")), "hostile row")
+    eq(runs[#runs].argv[1], "gdbus", "hostile name revealed")
+    local lit = runs[#runs].argv[10]
+    assert(lit:find("%0A", 1, true), "newline percent-encoded")
+    assert(not lit:sub(3, -3):find('[\n"<&]'), "no raw newline, quote or markup in the literal")
+end
+
+-- ── slice colours: never shared, legend == svg == list ───────────────────────
+do
+    local recs = { { id = "0", n = "/", s = 0, f = 0 } }
+    local total = 0
+    for i = 1, 13 do
+        recs[#recs + 1] = { id = "0/" .. (i - 1), n = "d" .. i, s = 100 + i, leaf = true }
+        total += 100 + i
+    end
+    recs[1].s = total
+    local space = boot()
+    putIndex("/", jsonl("/", recs), 60)
+    space.onOpen(function() redraws += 1 end)
+    drain(space)
+    local tree = space.render()
+    local svg, seen, shown = svgText(), {}, 0
+    for i = 1, 8 do
+        local row = find(tree, "space-legend-" .. i)
+        local name = findText(row, "d" .. (14 - i)) and "d" .. (14 - i)
+        local fill = find(row, "swatch").props.fill
+        if name then
+            shown += 1
+            eq(seen[fill], nil, "legend colours differ")
+            seen[fill] = true
+            assert(svg:find('stroke="' .. fill .. '"', 1, true), "svg uses the legend colour " .. fill)
+            eq(find(rowOf(tree, "space-row-", name), "swatch").props.fill, fill, "list swatch == legend " .. name)
+        end
+    end
+    eq(shown, 7, "7 folder slices")
+    local grey = find(rowOf(tree, "space-row-", "d1"), "swatch").props.fill
+    eq(seen[grey], nil, "folder outside the slices: neutral swatch")
+end
+
+-- ── unreadable folders: one muted line when the current folder has some ─────
+do
+    local space = boot()
+    putIndex("/", jsonl("/", { { id = "0", n = "/", s = 10, u = 66 }, { id = "0/0", n = "ok", s = 4 } }), 60)
+    space.onOpen(function() end)
+    drain(space)
+    local realTr = noctalia.tr
+    noctalia.tr = function(k, v) return k == "space_unreadable" and k .. ":" .. v.count or k end
+    eq(find(space.render(), "space-unreadable").props.text, "space_unreadable:66", "count shown")
+    local order = {}
+    for _, child in ipairs(find(space.render(), "space-left").children) do table.insert(order, child.props.key) end
+    eq(table.concat(order, " "), "space-img space-path space-buttons space-buttons-mode space-unreadable space-legend-title space-legend",
+        "unreadable line under the controls")
+    space.enter("ok")
+    eq(find(space.render(), "space-unreadable"), nil, "u = 0: no line")
+    noctalia.tr = realTr
+end
+
+-- ── long names: files keep their end, folders their start, tooltip on cut ──
+do
+    local LONG_FILE = "Videos/Recordings/2026/ottobre/05-chiusura-impastato-finale.mkv" -- 63 chars
+    local LONG_DIR = string.rep("d", 60) .. "-end"
+    local SHORT_FILE = "Music/clip-within-the-limit.mkv" -- another folder: nothing shared to strip
+    local space = boot()
+    putIndex("/", jsonl("/", {
+        { id = "0", n = "/", s = 100, c = { 30, 0, 0, 0, 0, 0, 0, 70 },
+          t = { { n = LONG_FILE, s = 20, k = 1 }, { n = SHORT_FILE, s = 10, k = 1 } } },
+        { id = "0/0", n = LONG_DIR, s = 70 },
+        { id = "0/0/0", n = "x", s = 70, leaf = true },
+    }), 60)
+    space.onOpen(function() end)
+    drain(space)
+    local dir = find(find(space.render(), "space-row-1"), "name-btn").props
+    eq(utf8.len(dir.text), 44, "folder name cut to 44 (the row shows a file count)")
+    eq(dir.text, string.rep("d", 43) .. "…", "folder keeps its start, trailing …")
+    eq(dir.tooltip, LONG_DIR, "tooltip with the full folder name")
+    space.enter(LONG_DIR)
+    local where = find(space.render(), "space-path").props.text
+    assert(where:sub(1, 3) == "…" and where:sub(-4) == "-end" and utf8.len(where) == 58, "path keeps its end: " .. where)
+    space.up()
+    space.setMode("types")
+    space.setTypeFilter(1)
+    local tree = space.render()
+    local long = find(find(tree, "space-row-1"), "name-btn").props
+    eq(long.text, "…/2026/ottobre/05-chiusura-impastato-finale.mkv", "file keeps its tail from a / boundary")
+    eq(long.tooltip, LONG_FILE, "tooltip with the full path")
+    local short = find(find(tree, "space-row-2"), "name-btn").props
+    eq(short.text, SHORT_FILE, "name within the limit unchanged")
+    eq(short.tooltip, nil, "no tooltip when nothing is cut")
+end
+
+-- ── hostile file names in a list row: plain text, one line, no tooltip ──────
+do
+    local space = typesReady()
+    space.setTypeFilter(3)
+    local props = find(find(space.render(), "space-row-1"), "name-btn").props
+    eq(props.text, ((WEIRD .. ".mp3"):gsub("%c", " ")), "quote, < and & kept as text, newline as space")
+    eq(props.tooltip, nil, "short hostile name: no tooltip")
+end
+
+-- ── capped type list: one muted line when the index may have cut it ─────────
+do
+    local function capped(count)
+        local t = {}
+        for i = 1, count do t[i] = { n = string.format("f%02d.mkv", i), s = 100 - i, k = 1 } end
+        local space = boot()
+        putIndex("/", jsonl("/", { { id = "0", n = "/", s = 10000, c = { 5000, 0, 0, 0, 0, 0, 0, 5000 }, t = t } }), 60)
+        space.onOpen(function() end)
+        drain(space)
+        space.setMode("types")
+        space.setTypeFilter(1)
+        noctalia.tr = function(k, v) return k == "space_capped" and k .. ":" .. v.count or k end
+        return space
+    end
+    local space = capped(boot().TOP_N)
+    local n = space.TOP_N
+    assert(n and n >= 5, "TOP_N exposed")
+    local tree = space.render()
+    eq(find(tree, "space-capped").props.text, "space_capped:" .. n, "TOP_N entries: capped line")
+    eq(find(tree, "space-capped").props.color, "on_surface_variant", "muted")
+    local order = {}
+    for _, child in ipairs(find(tree, "space-right").children) do table.insert(order, child.props.key) end
+    eq(table.concat(order, " "), "space-sort space-capped space-list", "line above the list")
+    eq(find(capped(n - 1).render(), "space-capped"), nil, "fewer than TOP_N: no line")
+    space.setTypeFilter(nil)
+    eq(find(space.render(), "space-capped"), nil, "no category: no line")
+end
+
+-- ── Types rows: the folder they share is shown once above the list ──────────
+do
+    local function load(t)
+        local space = boot()
+        putIndex("/", jsonl("/", { { id = "0", n = "/", s = 10000, c = { 5000, 0, 0, 0, 0, 0, 0, 5000 }, t = t } }), 60)
+        space.onOpen(function() end)
+        drain(space)
+        space.setMode("types")
+        space.setTypeFilter(1)
+        noctalia.tr = function(k, v) return k == "space_common_path" and k .. ":" .. v.path or k end
+        return space
+    end
+    -- all in one folder: prefix gone from every row, shown once in the label
+    local space = load({
+        { n = "home/u/Videos/Recordings/08-pasta.mp4", s = 30, k = 1 },
+        { n = "home/u/Videos/Recordings/02-vantaggi.mp4", s = 20, k = 1 },
+        { n = "home/u/Videos/Recordings/sub/x.mp4", s = 10, k = 1 },
+    })
+    local tree = space.render()
+    eq(find(tree, "space-common").props.text, "space_common_path:/home/u/Videos/Recordings", "common folder label")
+    eq(find(tree, "space-common").props.color, "on_surface_variant", "muted")
+    eq(table.concat(rowNames(tree), "|"), "08-pasta.mp4|02-vantaggi.mp4|sub/x.mp4", "prefix stripped")
+    for _, name in ipairs(rowNames(tree)) do
+        assert(not name:find("Recordings", 1, true), "label prefix not repeated in a row: " .. name)
+    end
+    eq(find(find(tree, "space-row-1"), "name-btn").props.tooltip, nil, "short stripped row: no tooltip")
+    local order = {}
+    for _, child in ipairs(find(tree, "space-right").children) do table.insert(order, child.props.key) end
+    eq(table.concat(order, " "), "space-sort space-common space-list", "label above the list")
+    -- Path sort still uses the full relative path
+    sortBtn(tree, "path").props.onClick()
+    eq(table.concat(rowNames(space.render()), "|"), "02-vantaggi.mp4|08-pasta.mp4|sub/x.mp4", "path sort")
+    -- the reveal still uses the full path
+    files["/home/u/Videos/Recordings/02-vantaggi.mp4"] = { text = "x", mtime = 1 }
+    click(find(space.render(), "space-row-1"), "stripped row")
+    assert(runs[#runs].argv[10]:find("file:///home/u/Videos/Recordings/02-vantaggi.mp4", 1, true), "reveal full path")
+
+    -- mixed folders: no shared folder, nothing stripped, no label
+    tree = load({ { n = "a/c.mkv", s = 10, k = 1 }, { n = "b/a.mkv", s = 20, k = 1 } }).render()
+    eq(find(tree, "space-common"), nil, "mixed folders: no label")
+    eq(table.concat(rowNames(tree), "|"), "b/a.mkv|a/c.mkv", "mixed folders: full relative paths")
+    -- a shared part of a name is not a folder: "ab/" and "ac/" share nothing
+    tree = load({ { n = "ab/x.mkv", s = 10, k = 1 }, { n = "ac/y.mkv", s = 20, k = 1 } }).render()
+    eq(find(tree, "space-common"), nil, "common letters are not a folder")
+
+    -- one entry: its folder
+    tree = load({ { n = "v/w/only.mkv", s = 10, k = 1 } }).render()
+    eq(find(tree, "space-common").props.text, "space_common_path:/v/w", "one entry: its folder")
+    eq(table.concat(rowNames(tree), "|"), "only.mkv", "one entry stripped")
+    -- a file directly in the folder: no prefix
+    eq(find(load({ { n = "top.mkv", s = 10, k = 1 } }).render(), "space-common"), nil, "no folder part: no label")
+
+    -- hostile names stay plain text
+    tree = load({ { n = "d/" .. WEIRD .. ".mkv", s = 20, k = 1 }, { n = "d/b.mkv", s = 10, k = 1 } }).render()
+    eq(rowNames(tree)[1], ((WEIRD .. ".mkv"):gsub("%c", " ")), "hostile row: quote, < and & as text, newline as space")
+    eq(find(tree, "space-common").props.text, "space_common_path:/d", "hostile: label")
+    tree = load({ { n = WEIRD .. "/a.mkv", s = 20, k = 1 }, { n = WEIRD .. "/b.mkv", s = 10, k = 1 } }).render()
+    eq(find(tree, "space-common").props.text, "space_common_path:/" .. WEIRD:gsub("%c", " "), "hostile folder: one line")
+
+    -- still too long after stripping: keepEnd at 52, tooltip with the full name
+    local LONG = "p/" .. string.rep("x", 60) .. ".mkv"
+    tree = load({ { n = LONG, s = 20, k = 1 } }).render()
+    local props = find(find(tree, "space-row-1"), "name-btn").props
+    eq(utf8.len(props.text), 52, "long stripped row cut to 52")
+    eq(props.tooltip, LONG, "tooltip with the full name")
+
+    -- Folders mode and Types without a category: unchanged
+    space = load({ { n = "v/w/only.mkv", s = 10, k = 1 } })
+    space.setTypeFilter(nil)
+    eq(find(space.render(), "space-common"), nil, "no category: no label")
+    space.setMode("folders")
+    eq(find(space.render(), "space-common"), nil, "folders mode: no label")
+end
+
+-- ── sort buttons: the state is in the key, so a stale glyph cannot survive ──
+do
+    local space = typesReady()
+    space.setTypeFilter(1)
+    local function buttons()
+        local out = {}
+        for _, b in ipairs(find(space.render(), "space-sort").children) do out[b.props.key] = b.props end
+        return out
+    end
+    local b = buttons()
+    eq(b["space-sort-size-d"].glyph, "arrow-down", "size active descending")
+    b["space-sort-path"].onClick()
+    b = buttons()
+    assert(b["space-sort-path-a"], "path active ascending")
+    buttons()["space-sort-name"].onClick()
+    b = buttons()
+    eq(b["space-sort-name-a"].glyph, "arrow-up", "name active ascending")
+    eq(b["space-sort-size"].glyph, nil, "size inactive: no glyph")
+    eq(b["space-sort-path"].glyph, nil, "path inactive: no glyph")
+    b["space-sort-name-a"].onClick()
+    b = buttons()
+    eq(b["space-sort-name-d"].glyph, "arrow-down", "second press flips the glyph")
+    local glyphs = 0
+    for key, props in pairs(b) do
+        if props.glyph then glyphs += 1 end
+        if not key:match("%-[ad]$") then eq(props.glyph, nil, "inactive " .. key .. ": no glyph") end
+    end
+    eq(glyphs, 1, "one glyph only")
+end
+
+print("space_ui_test OK")
+
+-- ── toggleRoot clears the type filter ────────────────────────────────────────
+do
+    local space = typesReady()
+    space.setTypeFilter(1)
+    space.toggleRoot()
+    eq(space.typeFilter, nil, "toggleRoot clears typeFilter")
+end
+
+-- ── search here: the button hands the current absolute path to the panel ────
+do
+    local space = ready()
+    local got = {}
+    space.onSearchHere = function(p) table.insert(got, p) end
+    find(space.render(), "space-search-here").props.onClick()
+    eq(got[1], "/", "root path")
+    space.enter("usr")
+    find(space.render(), "space-search-here").props.onClick()
+    eq(got[2], "/usr", "current folder path")
+end
+-- ── legend title ─────────────────────────────────────────────────────────────
+do
+    local space = ready()
+    local realTr = noctalia.tr
+    noctalia.tr = function(k, v) return v and v.count and k .. ":" .. v.count or k end
+    eq(find(space.render(), "space-legend-title").props.text, "space_legend_folders_top:3", "folded: exact folder count")
+    eq(find(space.render(), "space-legend-title").props.color, "on_surface_variant", "muted")
+    noctalia.tr = realTr
+
+    space = boot()
+    putIndex("/", jsonl("/", { { id = "0", n = "/", s = 30 }, { id = "0/0", n = "a", s = 20 }, { id = "0/1", n = "b", s = 10 } }), 60)
+    space.onOpen(function() end)
+    drain(space)
+    eq(find(space.render(), "space-legend-title").props.text, "space_legend_folders_all", "every folder shown")
+
+    space = typesReady()
+    eq(find(space.render(), "space-legend-title").props.text, "space_legend_types", "types mode")
+end
+
+
+-- ── right-click menu on list rows ────────────────────────────────────────────
+do
+    local menus, closed = {}, 0
+    panel = {
+        openContextMenu = function(spec) table.insert(menus, spec) end,
+        close = function() closed += 1 end,
+    }
+    local copied = {}
+    local function wire()
+        menus, closed, copied = {}, 0, {}
+        noctalia.copyToClipboard = function(text, mime) table.insert(copied, { text, mime }) end
+        noctalia.tr = function(key) return key end
+    end
+    local function btn(tree, text) return find(rowOf(tree, "space-row-", text), "name-btn") end
+    local function expectItems(spec, header)
+        eq(spec.onActivate, "onSpaceMenu", "activate names the global")
+        local want = {
+            { kind = "header", label = header }, { id = "open", label = "menu.open" },
+            { id = "reveal", label = "menu.reveal" }, { kind = "separator" },
+            { id = "copy_path", label = "menu.copy_path" }, { id = "copy_name", label = "menu.copy_name" },
+        }
+        eq(#spec.items, #want, "item count")
+        for i, w in ipairs(want) do
+            eq(spec.items[i].kind, w.kind, "kind " .. i)
+            eq(spec.items[i].id, w.id, "id " .. i)
+            eq(spec.items[i].label, w.label, "label " .. i)
+        end
+    end
+
+    -- folder row at "/", then a leaf folder one level down
+    wire()
+    local space = ready()
+    local tree = space.render()
+    btn(tree, "home").props.onRightClick()
+    eq(#menus, 1, "folder: one menu")
+    eq(menus[1].context, "/home", "root folder: no double slash")
+    expectItems(menus[1], "home")
+    click(rowOf(tree, "space-row-", "home"), "left click drills")
+    eq(find(space.render(), "space-path").props.text, "/home", "left click still enters")
+    eq(#menus, 1, "left click raises no menu")
+    find(space.render(), "space-up").props.onClick()
+    space.enter("usr")
+    tree = space.render()
+    local lib = btn(tree, "lib")
+    assert(lib, "leaf folder row is a button")
+    eq(lib.props.onClick, nil, "leaf button: no left click")
+    lib.props.onRightClick()
+    eq(menus[2].context, "/usr/lib", "nested leaf: root/sub/name")
+    expectItems(menus[2], "lib")
+    assert(not find(rowOf(tree, "space-legend-", "lib"), "name-btn") or not find(rowOf(tree, "space-legend-", "lib"), "name-btn").props.onRightClick, "no menu on the legend")
+
+    -- loose row: no button, no menu
+    space = ready()
+    eq(find(rowOf(space.render(), "space-row-", "space_loose"), "name-btn"), nil, "loose row: no button")
+
+    -- file rows in Types mode
+    wire()
+    space = typesReady()
+    files["/big.mkv"] = { text = "x", mtime = 1 }
+    space.setTypeFilter(1)
+    tree = space.render()
+    btn(tree, "big.mkv").props.onRightClick()
+    eq(menus[1].context, "/big.mkv", "file context")
+    expectItems(menus[1], "big.mkv")
+    local before = #runs
+    click(rowOf(tree, "space-row-", "big.mkv"), "left click reveals")
+    eq(runs[#runs].argv[1], "gdbus", "left click still reveals")
+    eq(#menus, 1, "left click: no menu")
+    -- hostile name: verbatim context, flat header
+    space.setTypeFilter(3)
+    tree = space.render()
+    local hostile = WEIRD .. ".mp3"
+    btn(tree, (hostile:gsub("%c", " "))).props.onRightClick()
+    eq(menus[2].context, "/" .. hostile, "hostile path verbatim")
+    expectItems(menus[2], (hostile:gsub("%c", " ")))
+
+    -- menuAction
+    wire()
+    files["/x y/<a&\"b\nc>"] = { text = "x", mtime = 1 }
+    local hp = "/x y/<a&\"b\nc>"
+    runs, notes = {}, {}
+    space.menuAction("open", hp)
+    eq(runs[1].argv[1], "xdg-open", "open argv")
+    eq(runs[1].argv[2], hp, "open path verbatim")
+    eq(closed, 1, "open closes the panel")
+    space.menuAction("reveal", hp)
+    eq(runs[2].argv[1], "gdbus", "reveal argv")
+    eq(runs[2].argv[10], '["file:///x%20y/%3Ca%26%22b%0Ac%3E"]', "reveal uri encoded")
+    space.menuAction("copy_path", hp)
+    eq(copied[1][1], hp, "copy_path exact")
+    eq(copied[1][2], "text/plain", "copy_path mime")
+    eq(notes[#notes], "copied_entry", "copy_path notice")
+    space.menuAction("copy_name", hp)
+    eq(copied[2][1], "<a&\"b\nc>", "copy_name last segment")
+    eq(notes[#notes], "copied_name", "copy_name notice")
+    eq(closed, 1, "copy keeps the panel")
+    runs, notes = {}, {}
+    space.menuAction("open", "/missing/file")
+    space.menuAction("reveal", "/missing/file")
+    eq(#runs, 0, "missing path: nothing runs")
+    eq(#notes, 2, "missing path: notice each")
+    eq(notes[1], "space_gone", "space_gone notice")
+    eq(closed, 1, "missing open keeps the panel")
+    for _, bad in ipairs({ 5, "rel/path", "", false }) do
+        space.menuAction("copy_path", bad)
+        space.menuAction("open", bad)
+    end
+    eq(#copied, 2, "bad context: no copy")
+    eq(#runs, 0, "bad context: nothing runs")
+end
+
+-- ── file count per row ───────────────────────────────────────────────────────
+do
+    local space = boot()
+    local cases = { { 0, "0" }, { 1, "1" }, { 999, "999" }, { 1000, "1k" }, { 1049, "1k" }, { 1050, "1.1k" },
+        { 12345, "12.3k" }, { 999999, "1M" }, { 1000000, "1M" }, { 2500000, "2.5M" } }
+    for _, c in ipairs(cases) do eq(space.formatCount(c[1]), c[2], "formatCount " .. c[1]) end
+end
+do
+    local space = boot()
+    putIndex("/", jsonl("/", {
+        { id = "0", n = "/", s = 100, f = 5, nf = 1002 },
+        { id = "0/0", n = "usr", s = 60, nf = 1000 },
+        { id = "0/1", n = "one", s = 20, nf = 1 },
+        { id = "0/2", n = "t", s = 15, nf = 0, t = { { n = "a.mkv", s = 1, k = 1 } }, c = { 1, 0, 0, 0, 0, 0, 0, 0 } },
+    }), 60)
+    space.onOpen(function() redraws += 1 end)
+    drain(space)
+    local realTr = noctalia.tr
+    noctalia.tr = function(k, v) return v and v.count and k .. ":" .. v.count or k end
+    local tree = space.render()
+    local function countOf(text) return find(rowOf(tree, "space-row-", text), "files") end
+    eq(countOf("usr").props.text, "space_files:1k", "folder row: compact count")
+    eq(countOf("one").props.text, "space_file_one:1", "singular")
+    eq(countOf("t").props.text, "space_files:0", "empty folder: 0")
+    eq(countOf("space_loose").props.text, "space_file_one:1", "loose row = 1002 - 1000 - 1 - 0")
+    eq(countOf("usr").props.width, 64, "fixed width")
+    -- a name over 44 characters is elided on a row with a count
+    local long = string.rep("n", 50)
+    putIndex("/", jsonl("/", { { id = "0", n = "/", s = 10, nf = 1 }, { id = "0/0", n = long, s = 10, nf = 1 } }), 60)
+    space = boot()
+    putIndex("/", jsonl("/", { { id = "0", n = "/", s = 10, nf = 1 }, { id = "0/0", n = long, s = 10, nf = 1 } }), 60)
+    space.onOpen(function() redraws += 1 end)
+    drain(space)
+    local btn = find(find(space.render(), "space-row-1"), "name-btn")
+    eq(utf8.len(btn.props.text), 44, "name cut to 44")
+    assert(btn.props.tooltip, "elided name keeps its tooltip")
+    -- file rows (Types mode with a category): nothing in the count slot
+    noctalia.tr = realTr
+    space = typesReady()
+    space.setTypeFilter(1)
+    tree = space.render()
+    eq(find(tree, "files"), nil, "file rows show no count")
+    noctalia.tr = realTr
+end

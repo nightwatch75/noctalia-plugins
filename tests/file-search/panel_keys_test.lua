@@ -1,5 +1,5 @@
 -- Keyboard model of panel.luau: the selection, wrap-around, hold-to-repeat
--- timing and Enter, with the host stubbed. Run through tests/run.sh, which
+-- timing and Enter, with the host stubbed. Run through tests/file-search/run.sh, which
 -- prepends the unmodified panel source as PANEL_SRC.
 
 local rendered, opened, frameTick
@@ -67,8 +67,11 @@ local usage = {
     scan = function() end,
     writeSvg = function() end,
 }
+local space = { onOpen = function() end, onClose = function() end, render = function() end,
+    needsTick = function() return false end, step = function() return false end }
 require = function(path)
-    return path == "./shared.luau" and shared or usage
+    if path == "./shared.luau" then return shared end
+    return path == "./space.luau" and space or usage
 end
 assert(loadstring(PANEL_SRC, "=panel.luau"))()
 
