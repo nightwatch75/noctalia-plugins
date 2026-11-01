@@ -17,6 +17,7 @@ local MOUNTS = table.concat({
 }, "\n")
 
 local files, decoded, runs, config, tools, ms, decodeCost, spawnOk
+local heapKiB, decodes, reads -- gcinfo() stub value; json.decode calls; readFile calls per path
 local DIR = "/data"
 local HOME = "/home/u"
 local DAY = 86400
@@ -27,8 +28,10 @@ local function boot(home)
     -- no lsblk: the mount probe falls back to /proc/mounts and answers at once
     decoded, runs, config, tools = {}, {}, {}, { lsblk = false }
     ms, decodeCost, spawnOk = 1e9, 0, true
+    heapKiB, decodes, reads = 0, 0, {}
+    gcinfo = function() return heapKiB end
     noctalia = {
-        readFile = function(p) local f = files[p]; return f and f.text end,
+        readFile = function(p) reads[p] = (reads[p] or 0) + 1; local f = files[p]; return f and f.text end,
         writeFile = function(p, t) files[p] = { text = t, mtime = ms // 1000 }; return true end,
         removeFile = function(p) files[p] = nil; return true end,
         fileInfo = function(p) local f = files[p]; return f and { size = #f.text, mtime = f.mtime, isDir = false } end,
@@ -54,6 +57,7 @@ local function boot(home)
         tr = function(k, v) return v and (k .. ":" .. tostring(v.percent or v.time)) or k end,
         json = { decode = function(t)
             ms += decodeCost
+            decodes += 1
             local v = decoded[t]
             if v == nil then return nil, "bad json" end
             return v
@@ -713,6 +717,93 @@ do
     local a = passVersion().argv
     local at = has(a, "/mnt/nas")
     assert(at and a[at - 1] == "--exclude", "skipNet on: nfs mount excluded")
+end
+
+-- ── index guards: file size and Lua heap ─────────────────────────────────────
+-- A file over INDEX_MAX_BYTES is refused before it is read (fileInfo size).
+do
+    local space = boot()
+    local max = space.INDEX_MAX_BYTES
+    assert(max and max > 4e6 and max < 128 * 1048576, "INDEX_MAX_BYTES set")
+    local text = smallIndex("/") .. string.rep("x", max)
+    putIndex("/", text, 0)
+    local before, read0 = decodes, reads[indexFile("/")] or 0
+    eq(space.startLoad(DIR), false, "too big: not loaded")
+    eq(decodes, before, "too big: no decode")
+    eq(reads[indexFile("/")] or 0, read0, "too big: not even read")
+    eq(space.errText, "index_big", "index_big code"); eq(space.state, "error", "no index to show: error")
+    eq(space.loading, false, "not loading")
+    space.scan("/", false, function() end)
+    eq(#runs, 0, "a too big index is not rescanned by itself")
+    -- the string check after the read: fileInfo lies (file grew after the stat)
+    space = boot()
+    putIndex("/", text, 0)
+    noctalia.fileInfo = function() return { size = 10, mtime = 0, isDir = false } end
+    eq(space.startLoad(DIR), false, "too big after the read")
+    eq(decodes, 0, "no decode after a read over the limit")
+    eq(space.errText, "index_big", "index_big code after the read")
+    -- the same file is not read again
+    local n = reads[indexFile("/")]
+    eq(space.startLoad(DIR), false, "tripped file refused again")
+    eq(reads[indexFile("/")], n, "tripped file not read again")
+    -- a normal index still loads
+    space = boot()
+    putIndex("/", smallIndex("/"), 0)
+    assert(space.startLoad(DIR), "normal index loads")
+    drain(space)
+    eq(space.state, "ready", "normal index ready"); eq(space.errText, nil, "no error")
+end
+
+-- Heap over HEAP_SOFT_BYTES mid-load: the load stops, the old index stays.
+do
+    local space = boot()
+    putIndex("/", smallIndex("/"), 60)
+    space.startLoad(DIR)
+    drain(space)
+    local old = space.index
+    local records = { { id = "0", n = "/", s = 1000 } }
+    for i = 0, 199 do table.insert(records, { id = "0/" .. i, n = "d" .. i, s = 5 }) end
+    local big = jsonl("/", 3, records)
+    space.scan("/", true, function() end)
+    playScript(passVersion(), "ok", big)
+    decodeCost = 3
+    local guard = 0
+    while not space.loading do space.step(); ms += 1000; guard += 1; assert(guard < 100, "load never starts") end
+    space.step() -- one slice under the limit
+    assert(space.loading, "load spans several slices")
+    heapKiB = space.HEAP_SOFT_BYTES // 1024 + 1
+    local before = decodes
+    drain(space)
+    eq(decodes, before, "no decode after the heap trip")
+    eq(space.index, old, "old index stays shown")
+    eq(space.state, "ready", "ready: an index is shown"); eq(space.errText, "index_big", "notice")
+    eq(space.scanning, false, "scan not stuck"); eq(space.loading, false, "load not stuck")
+    -- the same file is not read again, a new scan resets the guard
+    heapKiB = 0
+    local n = reads[indexFile("/")]
+    space.setRoot(HOME); space.setRoot("/")
+    eq(reads[indexFile("/")], n, "tripped file not read again")
+    eq(space.errText, "index_big", "refused again: notice"); eq(space.state, "error", "nothing to show")
+    space.scan("/", true, function() end)
+    playScript(runs[#runs], "ok", big) -- ncdu version already known: no probe
+    drain(space)
+    eq(#space.index.d, 200, "a new scan reads the file again")
+    eq(space.errText, nil, "no notice")
+end
+
+-- A rescan whose new index is over INDEX_MAX_BYTES: old index stays, notice.
+do
+    local space = boot()
+    putIndex("/", smallIndex("/"), 60)
+    space.startLoad(DIR)
+    drain(space)
+    local old = space.index
+    space.scan("/", true, function() end)
+    playScript(passVersion(), "ok", smallIndex("/") .. string.rep("x", space.INDEX_MAX_BYTES))
+    drain(space)
+    eq(space.index, old, "old index stays shown")
+    eq(space.state, "ready", "still ready"); eq(space.errText, "index_big", "index_big notice")
+    eq(space.scanning, false, "scan ended")
 end
 
 print("space_scan_test OK")

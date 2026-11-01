@@ -33,6 +33,8 @@
 --                     "empty"     ncdu wrote no scan file
 --                     "reduce"    jq or the final mv failed
 --                     "index"     the new index file does not decode
+--                     "index_big" the index is over INDEX_MAX_BYTES, or the
+--                                 heap passed HEAP_SOFT_BYTES during its load
 --   space.root      the home path (the start) or "/"
 --   space.index     decoded index tree (see space_index.luau), nil = none
 --   space.scannedAt unix seconds of the index file (its mtime)
@@ -68,6 +70,18 @@
 -- the whole file is ~4.5 MB. space.index keeps the previous tree until the
 -- new one is complete.
 --
+-- Heap guard: the host refuses any allocation past 128 MiB of plugin heap.
+-- Measured (offline, real indexes): the decoded tree is ~4.2 bytes of heap
+-- per byte of JSON, the JSON string 1.0, and load garbage brings the peak
+-- of a load to ~6.2 per byte. The guard trips at HEAP_SOFT_BYTES = 72 MiB
+-- (56% of the ceiling). A first load of INDEX_MAX_BYTES = 9 MiB peaks at
+-- 10 MiB (rest of the plugin) + 6.2 x 9.4 MB = ~68 MiB, under the trip
+-- point; during a rescan the old tree (4.2 per byte) also counts, and the
+-- heap check stops the load instead. gcinfo() is the sandbox's heap count
+-- (Luau has no collectgarbage); it includes garbage, as the ceiling does.
+-- An index that tripped is not read again until a new scan, and is not
+-- rescanned by itself (see space.scan): the user must skip folders first.
+--
 -- The index file name carries space.settingsTag(): a changed exclusion
 -- setting points at another file, and space.onConfigChanged drops the index
 -- in memory. A completed scan removes the same root's files of other tags.
@@ -91,6 +105,9 @@ space.SLICE_MS = 8
 space.SCAN_DEADLINE_MS = 1800000
 -- Longest wait for the mount probe (lsblk has 10 s) before launching anyway.
 space.PROBE_WAIT_MS = 15000
+-- Heap guard, see the header.
+space.INDEX_MAX_BYTES = 9 * 1048576
+space.HEAP_SOFT_BYTES = 72 * 1048576
 
 -- Values recorded with their measurements in the header of space_index.luau.
 local DEPTH, TOP_N, MIN_BYTES, REL_MIN = 6, 10, 1048576, 0.002
@@ -138,7 +155,8 @@ space.elapsedMs = nil
 local scanCount = 0
 local ncduOld = nil -- nil = not probed yet
 local job = nil     -- { dir, done, probeUntil?, marker?, deadline, nextPoll, loading? }
-local loader = nil  -- { text, pos, nodes, tree, at }
+local loader = nil  -- { text, pos, nodes, tree, at, path, size }
+local tripped = nil -- { path, size } of the index that tripped the heap guard
 local deferred = nil -- done() of a scan waiting for the current load to end
 local generation = 0 -- bumped per loaded index, keys the chart cache
 local seenTag = nil -- settings tag of the index, load or scan in hand (nil = none yet)
@@ -271,9 +289,24 @@ end
 
 -- ── index load ───────────────────────────────────────────────────────────────
 
+-- An index the heap guard refuses (startLoad, sliceLoad): remembered so it is not read again. A
+-- scan load reports it through endScan; a cache load sets the notice here.
+local function tooBig(path, size)
+    tripped = { path = path, size = size }
+    if not (job ~= nil and job.loading) then
+        space.errText = "index_big"
+        if space.index == nil then
+            space.state = "error"
+        end
+        changed()
+    end
+    return false, "index_big"
+end
+
 -- Reads the index of space.root and checks its header; the records are
 -- decoded by step(). False (nothing loading) for a missing, corrupted or
--- other-version file: it is a cache, the caller rescans. The header's root is
+-- other-version file: it is a cache, the caller rescans. False, "index_big"
+-- for a file the heap guard refuses (see tooBig). The header's root is
 -- not compared: ncdu writes the resolved path (a symlinked home differs), and
 -- the file name is already per root. `tag` defaults to the current settings.
 function space.startLoad(dir, tag)
@@ -285,7 +318,15 @@ function space.startLoad(dir, tag)
         return false
     end
     local path = indexPath(dir, space.root, tag)
+    local info = noctalia.fileInfo(path)
+    local size = info and info.size
+    if size ~= nil and (size > space.INDEX_MAX_BYTES or (tripped and tripped.path == path and tripped.size == size)) then
+        return tooBig(path, size)
+    end
     local text = noctalia.readFile(path)
+    if type(text) == "string" and #text > space.INDEX_MAX_BYTES then
+        return tooBig(path, size or #text) -- the stat size, so the next stat matches
+    end
     local nl = type(text) == "string" and text:find("\n", 1, true)
     if not nl then
         return false
@@ -294,8 +335,7 @@ function space.startLoad(dir, tag)
     if not ok or type(head) ~= "table" or head.v ~= 3 then
         return false
     end
-    local info = noctalia.fileInfo(path)
-    loader = { text = text, pos = nl + 1, nodes = {}, tree = nil, at = info and info.mtime or 0 }
+    loader = { text = text, pos = nl + 1, nodes = {}, tree = nil, at = info and info.mtime or 0, path = path, size = size or #text }
     space.loading = true
     return true
 end
@@ -325,13 +365,14 @@ local function addRecord(l, line)
     return true
 end
 
-local function endLoad(tree, at)
+-- `why` names the failure of a nil tree for endScan ("index" when omitted).
+local function endLoad(tree, at, why)
     loader = nil
     space.loading = false
     local scanLoad = job ~= nil and job.loading
     if tree == nil then
         if scanLoad then
-            endScan("index")
+            endScan(why or "index")
         end
         return
     end
@@ -353,6 +394,11 @@ end
 -- slice of its own.
 local function sliceLoad(started)
     local l = loader
+    if gcinfo() * 1024 > space.HEAP_SOFT_BYTES then
+        local _, why = tooBig(l.path, l.size)
+        endLoad(nil, nil, why)
+        return
+    end
     repeat
         local text = l.text
         local nl = text:find("\n", l.pos, true)
@@ -506,8 +552,10 @@ local function poll(now)
     end
     noctalia.writeFile(job.timeFile, tostring(now - job.started))
     job.loading = true
-    if not space.startLoad(job.dir, job.tag) then
-        endScan("index")
+    tripped = nil -- a new index file
+    local ok, why = space.startLoad(job.dir, job.tag)
+    if not ok then
+        endScan(why or "index")
     end
 end
 
@@ -524,7 +572,9 @@ function space.scan(root, force, done)
         deferred = done
         return
     end
-    if not force and space.fresh() then
+    -- A too big index needs fewer folders, not the same scan again: only
+    -- refresh (force), a root switch or a settings change scans it again.
+    if not force and (space.fresh() or space.errText == "index_big") then
         done()
         return
     end

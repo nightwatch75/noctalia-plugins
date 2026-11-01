@@ -86,6 +86,7 @@
     "datadir": "No plugin data folder — cannot store the scan",
     "empty": "ncdu wrote no scan — the folder may be unreadable",
     "index": "The new disk usage index is damaged — press ↻ to scan again",
+    "index_big": "The disk index is too big for this plugin — skip more folders in the settings, then scan again",
     "jq": "jq not found — install jq to use this tab",
     "ncdu": "ncdu not found — install ncdu 2.0 or newer to use this tab",
     "ncdu_old": "ncdu is too old — this tab needs ncdu 2.0 or newer",

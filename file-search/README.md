@@ -276,6 +276,9 @@ folders are skipped.
   index: after a change, the Space tab starts a new scan when it opens.
 - Folders under 1 MiB, or under 0.2% of their parent folder, are counted in
   "(files and small folders)". Drill-down stops at depth 6.
+- If the disk index is too big for the plugin (very large disks), the tab
+  asks you to skip more folders in the settings. A normal index is about
+  4 MB and takes about 25 MB of plugin memory while it loads.
 - `ncdu`, `jq` and `nice` are searched in `/usr/bin`, `/usr/local/bin`, `/bin`
   and `~/.local/bin` only: a detached run has no login PATH. Tested with
   `jq` 1.8.
