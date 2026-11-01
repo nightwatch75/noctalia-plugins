@@ -982,7 +982,6 @@ function space.render()
                 controlSize = "sm", selected = mode == "types", onClick = function() space.setMode("types") end }),
         }),
     })
-    -- The end of a long path is the part that says where you are.
     local right = {}
     local left = {}
     if space.scanning then
