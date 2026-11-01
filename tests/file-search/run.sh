@@ -1,5 +1,6 @@
 #!/bin/sh
-# Runs every tests/*_test.lua. Each test is one chunk: this script prepends the
+# Runs every *_test.lua next to this script (tests/file-search/, outside the
+# plugin folder so the host does not install them). Run it from anywhere. Each test is one chunk: this script prepends the
 # unmodified panel source as the string PANEL_SRC, and the test stubs the host
 # globals and loads it with loadstring.
 #
@@ -11,22 +12,23 @@
 # MODULES (keyed by file name), for a test whose require stub loads the real
 # dependencies; MODULE_SRC is still the first one.
 #
-# Then it runs tests/space_jq_test.sh (shell + jq, not a *_test.lua): the jq
+# Then it runs space_jq_test.sh (shell + jq, not a *_test.lua): the jq
 # index reducer of space_index.luau on a real ncdu fixture, and
-# tests/space_script_test.sh: the real scan script under /bin/sh.
+# space_script_test.sh: the real scan script under /bin/sh.
 #
 # Interpreter: `luau` from PATH if present, else `luau-test` (a ~40-line C++
 # runner over the luau VM in the noctalia sources: compile + load + pcall, plus
 # a loadstring global; built with g++ into ~/.local/bin). Override with LUAU=.
 set -e
-cd "$(dirname "$0")/.."
+here=$(cd "$(dirname "$0")" && pwd)
+cd "$here/../../file-search" # modules are read from the plugin folder
 if [ -z "$LUAU" ]; then
     if command -v luau >/dev/null 2>&1; then LUAU=luau; else LUAU=luau-test; fi
 fi
 tmp="${TMPDIR:-/tmp}/file-search-tests.$$"
 mkdir -p "$tmp"
 trap 'rm -rf "$tmp"' EXIT
-for test in tests/*_test.lua; do
+for test in "$here"/*_test.lua; do
     out="$tmp/$(basename "$test" .lua).luau"
     {
         printf 'local PANEL_SRC = [==[\n'
@@ -46,5 +48,5 @@ for test in tests/*_test.lua; do
     } > "$out"
     "$LUAU" "$out"
 done
-LUAU="$LUAU" sh tests/space_jq_test.sh
-LUAU="$LUAU" sh tests/space_script_test.sh
+LUAU="$LUAU" sh "$here/space_jq_test.sh"
+LUAU="$LUAU" sh "$here/space_script_test.sh"

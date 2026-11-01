@@ -4,7 +4,7 @@
 -- writing its marker and index files, then drives space.step() with a fake
 -- clock. Files live in an in-memory table; json.decode maps known line texts
 -- to tables and returns nil, err for anything else, like the host. Run
--- through tests/run.sh, which splices the real modules.
+-- through tests/file-search/run.sh, which splices the real modules.
 
 local function eq(a, b, m) if a ~= b then error(m .. ": got " .. tostring(a) .. " want " .. tostring(b), 2) end end
 

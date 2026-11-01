@@ -1,5 +1,5 @@
 -- Tab bar of panel.luau: Search/Space buttons, selection and body swap, with
--- the host stubbed. Run through tests/run.sh, which prepends the unmodified
+-- the host stubbed. Run through tests/file-search/run.sh, which prepends the unmodified
 -- panel source as PANEL_SRC.
 
 local rendered, opened, frameTick

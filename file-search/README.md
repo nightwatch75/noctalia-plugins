@@ -322,8 +322,9 @@ folders are skipped.
 - Excluded entries match by folder/file name (`find -name`), not by path;
   entries containing `/` are skipped and logged. Unreadable subtrees are
   silently skipped.
-- `tests/run.sh` exercises the panel's keyboard model (selection, wrap,
-  hold-to-repeat, Enter) under the stock `luau` CLI with the host stubbed.
+- The tests are in the repository, `tests/file-search/run.sh`, outside the
+  plugin folder, so they are not installed with the plugin. They run under
+  the stock `luau` CLI with the host stubbed.
 
 ## License
 

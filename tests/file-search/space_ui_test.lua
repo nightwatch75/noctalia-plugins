@@ -1,7 +1,7 @@
 -- module: space.luau shared.luau usage.luau space_index.luau
 -- Space tab UI of space.luau (Folders mode), with the host stubbed: ui.* build
 -- plain tables, files live in memory, json.decode maps known line texts to
--- tables (see space_scan_test.lua). Run through tests/run.sh.
+-- tables (see space_scan_test.lua). Run through tests/file-search/run.sh.
 
 local function eq(a, b, m) if a ~= b then error(m .. ": got " .. tostring(a) .. " want " .. tostring(b), 2) end end
 

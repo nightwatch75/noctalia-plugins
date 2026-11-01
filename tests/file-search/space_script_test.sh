@@ -1,6 +1,6 @@
 #!/bin/sh
 # The real SCAN_SCRIPT of space.luau, run by /bin/sh with a stub ncdu (writes
-# tests/fixtures/small.ncdu.json to its -o file) and the real jq. Luau prints
+# fixtures/small.ncdu.json to its -o file) and the real jq. Luau prints
 # space.SCAN_SCRIPT and idx.jqProgram (modules spliced as in run.sh, host
 # stubbed). Every path sits under a folder with a hostile name, passed as
 # positional arguments like space.luau does: nothing in it may run.
@@ -8,7 +8,8 @@
 # nice "" (none). A jq wrapper checks that the phase file says "reduce" before
 # the marker exists; no case leaves the phase file.
 set -e
-cd "$(dirname "$0")/.."
+here=$(cd "$(dirname "$0")" && pwd)
+cd "$here/../../file-search"
 if [ -z "$LUAU" ]; then
     if command -v luau >/dev/null 2>&1; then LUAU=luau; else LUAU=luau-test; fi
 fi
@@ -48,7 +49,7 @@ sh -n "$tmp/script.sh" || fail "sh -n"
 hostile="$tmp/x \$(touch pwned) \`touch pwned\` 'q\" ;
 nl"
 mkdir -p "$hostile/root"
-fixture="$(pwd)/tests/fixtures/small.ncdu.json"
+fixture="$here/fixtures/small.ncdu.json"
 
 # Stub ncdu: $FAIL set = exit 1 with no output; else the fixture to the -o
 # file. It also records its oom_score_adj (inherited from the script).

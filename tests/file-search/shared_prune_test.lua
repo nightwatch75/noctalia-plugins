@@ -3,7 +3,7 @@
 -- Fixed paths and pseudo filesystems are always pruned; remote (network and
 -- any FUSE type) only with opts.network; removable disks (shared.mounts) only
 -- with opts.external; fuseblk is local and never pruned. Run through
--- tests/run.sh, which splices shared.luau as MODULE_SRC.
+-- tests/file-search/run.sh, which splices shared.luau as MODULE_SRC.
 
 local function eq(a, b, m) if a ~= b then error(m .. ": got " .. tostring(a) .. " want " .. tostring(b), 2) end end
 

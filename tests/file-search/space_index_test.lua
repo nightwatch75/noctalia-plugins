@@ -1,5 +1,5 @@
 -- module: space_index.luau
--- Pure logic of space_index.luau; run through tests/run.sh.
+-- Pure logic of space_index.luau; run through tests/file-search/run.sh.
 local idx = loadstring(MODULE_SRC)()
 local function eq(a, b, m) if a ~= b then error(m .. ": got " .. tostring(a) .. " want " .. tostring(b)) end end
 

@@ -1,7 +1,7 @@
 #!/bin/sh
 # jq index reducer of space_index.luau, run on a real ncdu 2.9 output.
 # Luau prints idx.jqProgram(2, 2, 8193, 0) (module spliced as MODULE_SRC, like
-# run.sh does), jq runs it on tests/fixtures/small.ncdu.json, and the result
+# run.sh does), jq runs it on fixtures/small.ncdu.json, and the result
 # must equal the JSON Lines index below (compared with jq -cS). A second run
 # with relMin 0.002 checks the fold relative to the parent.
 #
@@ -22,7 +22,8 @@
 # relMin 0.002 "under" is folded into big's f and "a" (57344 bytes, under 0.2%
 # of the root) into the root's f.
 set -e
-cd "$(dirname "$0")/.."
+here=$(cd "$(dirname "$0")" && pwd)
+cd "$here/../../file-search"
 if [ -z "$LUAU" ]; then
     if command -v luau >/dev/null 2>&1; then LUAU=luau; else LUAU=luau-test; fi
 fi
@@ -42,8 +43,8 @@ trap 'rm -rf "$tmp"' EXIT
 "$LUAU" "$tmp/prog.luau" > "$tmp/both.jq"
 sed '/^--$/,$d' "$tmp/both.jq" > "$tmp/prog.jq"
 sed '1,/^--$/d' "$tmp/both.jq" > "$tmp/rel.jq"
-jq -c -f "$tmp/prog.jq" tests/fixtures/small.ncdu.json > "$tmp/got.json"
-jq -c -f "$tmp/rel.jq" tests/fixtures/small.ncdu.json > "$tmp/rel.json"
+jq -c -f "$tmp/prog.jq" "$here/fixtures/small.ncdu.json" > "$tmp/got.json"
+jq -c -f "$tmp/rel.jq" "$here/fixtures/small.ncdu.json" > "$tmp/rel.json"
 
 # A stream of records (header, then one per kept folder in pre-order; id is
 # the child-index path, "0" = root). jq -cS puts each on one line, so the

@@ -1,5 +1,5 @@
 -- Keyboard model of panel.luau: the selection, wrap-around, hold-to-repeat
--- timing and Enter, with the host stubbed. Run through tests/run.sh, which
+-- timing and Enter, with the host stubbed. Run through tests/file-search/run.sh, which
 -- prepends the unmodified panel source as PANEL_SRC.
 
 local rendered, opened, frameTick
