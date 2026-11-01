@@ -501,7 +501,8 @@ end
 local LEFT_WIDTH = 340
 local DONUT_SIZE = 200
 local DONUT_THICKNESS = 28
-local LABEL_MAX = 34
+local LABEL_MAX = 34     -- legend, in the 340 px left column
+local ROW_LABEL_MAX = 52 -- list rows: a button wraps instead of eliding, so stay short
 local ROW_HEIGHT = 22
 local MAX_ROWS = 200 -- a render builds every row; a cache folder can hold thousands
 local SVG_NAMES = { "space-a.svg", "space-b.svg" }
@@ -551,14 +552,20 @@ local function absolute(rel)
 end
 
 -- Names come from the disk: control characters (a newline would break the
--- row) become spaces, and long ones are cut, unless the UTF-8 is invalid.
-local function display(name, max)
+-- row) become spaces, and long ones are cut to `max` characters with "…",
+-- unless the UTF-8 is invalid. keepEnd keeps the tail (a path: the file name
+-- is the useful part), from a "/" when the tail has one.
+local function display(name, max, keepEnd)
     local text = name:gsub("%c", " ")
     local len = utf8.len(text)
-    if len ~= nil and len > max then
-        text = text:sub(1, utf8.offset(text, max)) .. "…"
+    if len == nil or len <= max then
+        return text
     end
-    return text
+    if not keepEnd then
+        return text:sub(1, utf8.offset(text, max) - 1) .. "…"
+    end
+    local tail = text:sub(utf8.offset(text, len - max + 2))
+    return "…" .. (tail:match("^[^/]*(/.+)$") or tail)
 end
 
 function space.up()
@@ -705,7 +712,7 @@ local function entryLabel(entry)
     if entry.kind == "loose" then
         return shared.tr("space_loose")
     end
-    return display(entry.name, LABEL_MAX)
+    return display(entry.name, ROW_LABEL_MAX, entry.kind == "file")
 end
 
 -- The category with most bytes in a folder; nil for an empty one.
@@ -727,9 +734,10 @@ local function listRow(entry, i, node, colors, palette)
         onClick = function() revealFile(entry.name) end
     end
     local text = entryLabel(entry)
+    local full = entry.name:gsub("%c", " ")
     local name = onClick
         and ui.button({ key = "name-btn", text = text, fontSize = 12, variant = "ghost", contentAlign = "start",
-            flexGrow = 1, height = ROW_HEIGHT, onClick = onClick })
+            flexGrow = 1, height = ROW_HEIGHT, tooltip = text ~= full and full or nil, onClick = onClick })
         or ui.label({ key = "name-plain", text = text, fontSize = 12, color = "on_surface", flexGrow = 1 })
     local share = node.s > 0 and entry.bytes / node.s * 100 or 0
     local bar
@@ -822,17 +830,14 @@ function space.render()
         ui.button({ key = "space-refresh", glyph = "refresh", variant = "ghost", enabled = not space.scanning,
             tooltip = shared.tr("space_tip_refresh"), onClick = space.refresh }),
     })
+    -- Shown with or without an index: root and refresh must stay usable.
     -- The end of a long path is the part that says where you are.
-    local where = absolute():gsub("%c", " ")
-    local len = utf8.len(where)
-    if len ~= nil and len > LABEL_MAX + 6 then
-        where = "…" .. where:sub(utf8.offset(where, len - LABEL_MAX - 4))
-    end
-    local left = {
-        ui.label({ key = "space-path", text = where, fontSize = 13,
+    local right = {
+        ui.label({ key = "space-path", text = display(absolute(), ROW_LABEL_MAX + 6, true), fontSize = 13,
             fontWeight = "bold", color = "on_surface" }),
         controls,
     }
+    local left = {}
     local text, color = statusText()
     if text == nil and space.scanning then
         text = shared.tr("space_rescanning")
@@ -842,7 +847,6 @@ function space.render()
     if text ~= nil then
         table.insert(left, label("space-msg", text, color))
     end
-    local right = {}
     if node ~= nil then
         local slices = paint(idx.slices(node, mode, usage.MAX_SLICES))
         local image = writeSvg(node, slices)

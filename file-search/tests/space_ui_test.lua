@@ -159,6 +159,14 @@ do
     end
     eq(find(tree, "space-path").props.text, "/", "path at root")
     eq(find(tree, "space-up").props.enabled, false, "up disabled at the root")
+    -- right column, top down: path, buttons, sort, list; left: donut and legend only
+    local right, left = find(tree, "space-right"), find(tree, "space-left")
+    local order = {}
+    for _, child in ipairs(right.children) do table.insert(order, child.props.key) end
+    eq(table.concat(order, " "), "space-path space-buttons space-sort space-list", "right column order")
+    eq(find(left, "space-path"), nil, "no path in the left column")
+    eq(find(left, "space-buttons"), nil, "no buttons in the left column")
+    assert(find(left, "space-img") and find(left, "space-legend"), "donut and legend on the left")
     -- slices: usr, weird, home, loose = 4 rows, all fit under MAX_SLICES
     for i = 1, 4 do assert(find(tree, "space-legend-" .. i), "legend row " .. i) end
     assert(not find(tree, "space-legend-5"), "one legend row per slice")
@@ -226,7 +234,14 @@ do
     space.onOpen(function() redraws += 1 end)
     drain(space)
     eq(space.state, "error", "missing ncdu")
-    assert(findText(space.render(), "space_err.ncdu"), "error text per code")
+    local tree = space.render()
+    assert(findText(find(tree, "space-left"), "space_err.ncdu"), "error text per code, left column")
+    -- no index: the controls stay usable on the right, no sort or list
+    local right = find(tree, "space-right")
+    assert(find(right, "space-path") and find(right, "space-root") and find(right, "space-refresh"), "controls without an index")
+    eq(find(right, "space-root").props.enabled, true, "root button usable after an error")
+    eq(find(tree, "space-sort"), nil, "no sort row without an index")
+    eq(find(tree, "space-list"), nil, "no list without an index")
 
     space = ready()
     find(space.render(), "space-refresh").props.onClick()
@@ -457,9 +472,54 @@ do
     local realTr = noctalia.tr
     noctalia.tr = function(k, v) return k == "space_unreadable" and k .. ":" .. v.count or k end
     eq(find(space.render(), "space-unreadable").props.text, "space_unreadable:66", "count shown")
+    local order = {}
+    for _, child in ipairs(find(space.render(), "space-right").children) do table.insert(order, child.props.key) end
+    eq(table.concat(order, " "), "space-path space-buttons space-unreadable space-sort space-list", "line under the controls")
     space.enter("ok")
     eq(find(space.render(), "space-unreadable"), nil, "u = 0: no line")
     noctalia.tr = realTr
+end
+
+-- ── long names: files keep their end, folders their start, tooltip on cut ──
+do
+    local LONG_FILE = "Videos/Recordings/2026/ottobre/05-chiusura-impastato-finale.mkv" -- 63 chars
+    local LONG_DIR = string.rep("d", 60) .. "-end"
+    local SHORT_FILE = "Videos/Recordings/clip-within-the-limit.mkv"
+    local space = boot()
+    putIndex("/", jsonl("/", {
+        { id = "0", n = "/", s = 100, c = { 30, 0, 0, 0, 0, 0, 0, 70 },
+          t = { { n = LONG_FILE, s = 20, k = 1 }, { n = SHORT_FILE, s = 10, k = 1 } } },
+        { id = "0/0", n = LONG_DIR, s = 70 },
+        { id = "0/0/0", n = "x", s = 70, leaf = true },
+    }), 60)
+    space.onOpen(function() end)
+    drain(space)
+    local dir = find(find(space.render(), "space-row-1"), "name-btn").props
+    eq(utf8.len(dir.text), 52, "folder name cut to 52")
+    eq(dir.text, string.rep("d", 51) .. "…", "folder keeps its start, trailing …")
+    eq(dir.tooltip, LONG_DIR, "tooltip with the full folder name")
+    space.enter(LONG_DIR)
+    local where = find(space.render(), "space-path").props.text
+    assert(where:sub(1, 3) == "…" and where:sub(-4) == "-end" and utf8.len(where) == 58, "path keeps its end: " .. where)
+    space.up()
+    space.setMode("types")
+    space.setTypeFilter(1)
+    local tree = space.render()
+    local long = find(find(tree, "space-row-1"), "name-btn").props
+    eq(long.text, "…/2026/ottobre/05-chiusura-impastato-finale.mkv", "file keeps its tail from a / boundary")
+    eq(long.tooltip, LONG_FILE, "tooltip with the full path")
+    local short = find(find(tree, "space-row-2"), "name-btn").props
+    eq(short.text, SHORT_FILE, "name within the limit unchanged")
+    eq(short.tooltip, nil, "no tooltip when nothing is cut")
+end
+
+-- ── hostile file names in a list row: plain text, one line, no tooltip ──────
+do
+    local space = typesReady()
+    space.setTypeFilter(3)
+    local props = find(find(space.render(), "space-row-1"), "name-btn").props
+    eq(props.text, ((WEIRD .. ".mp3"):gsub("%c", " ")), "quote, < and & kept as text, newline as space")
+    eq(props.tooltip, nil, "short hostile name: no tooltip")
 end
 
 print("space_ui_test OK")
