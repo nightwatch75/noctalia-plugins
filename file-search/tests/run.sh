@@ -8,6 +8,9 @@
 # test loads it with loadstring (after stubbing host globals if it needs any). Native relative require() is not
 # used: the runner below has no require, and the panel stubs it anyway.
 #
+# Then it runs tests/space_jq_test.sh (shell + jq, not a *_test.lua): the jq
+# index reducer of space_index.luau on a real ncdu fixture.
+#
 # Interpreter: `luau` from PATH if present, else `luau-test` (a ~40-line C++
 # runner over the luau VM in the noctalia sources: compile + load + pcall, plus
 # a loadstring global; built with g++ into ~/.local/bin). Override with LUAU=.
@@ -35,3 +38,4 @@ for test in tests/*_test.lua; do
     } > "$out"
     "$LUAU" "$out"
 done
+LUAU="$LUAU" sh tests/space_jq_test.sh

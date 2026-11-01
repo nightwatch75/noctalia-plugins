@@ -12,6 +12,12 @@
   (Task 3) is generated from this same table, so the Luau side and the jq side
   cannot drift apart. Any extension not listed is category 8 (other).
 
+  Index build: jqProgram(6, 5, 1048576) = depth 6, top 5 files per category,
+  folders under 1 MiB folded. Measured on a real `/` scan (ncdu 2.9.2, 127 MB,
+  1.88M entries, jq 1.8.2): index 2.5 MB, ~29 s, jq peak RSS ~1.5 GB (jq alone
+  needs ~1.3 GB to parse that file). Depth 8 gives 4.3 MB for the same time.
+  Tested by tests/space_jq_test.sh on tests/fixtures/small.ncdu.json.
+
   Slice colour index: in folders mode it is the position in the unsorted
   node.d (a folder keeps its colour when the sort changes); in types mode it
   is the category number.
@@ -97,6 +103,41 @@ function idx.sort(entries, key, descending)
         return pos[a] < pos[b] -- table.sort is not stable: original order breaks full ties
     end)
     return out
+end
+
+-- jq program: `ncdu -o` JSON in, `{"v":1,"root":<name>,"tree":<Node>}` out.
+-- ncdu: a folder is an array whose first item is its info object, a file is
+-- an object; "excluded" entries carry no size and are skipped. c and t cover
+-- the whole subtree (t names are paths relative to the node, top topN per
+-- category, ties by name). A folder's own dsize counts as a loose "other" byte.
+-- Folders deeper than depth, or under minBytes, go into the parent's f.
+-- shortcut: a hard link counts dsize/nlink per name (exact when every link is
+-- inside the scan); dedupe by dev+ino if links outside the scan matter.
+function idx.jqProgram(depth, topN, minBytes)
+    local ext = {}
+    for cat, list in ipairs(idx.EXT) do
+        for _, e in ipairs(list) do table.insert(ext, string.format('"%s":%d', e, cat)) end
+    end
+    return string.format([=[
+{%s} as $E
+| def cat: split(".") as $p
+    | if ($p | length) < 2 or (($p | length) == 2 and $p[0] == "") then 8
+      else ($E[$p[-1] | ascii_downcase] // 8) end;
+  def size: (.dsize // 0) as $d | if .hlnkc and (.nlink // 1) > 1 then ($d / .nlink | floor) else $d end;
+  def node($lvl):
+    (.[0] | size) as $own
+    | [.[1:][] | select(type == "array") | node($lvl + 1)] as $kids
+    | [.[1:][] | select(type == "object" and (.excluded | not)) | {n: .name, s: size, k: (.name | cat)}] as $files
+    | (if $lvl < %d then [$kids[] | select(.s >= %d)] else [] end) as $keep
+    | ($own + ([$files[].s, $kids[].s] | add // 0)) as $s
+    | {n: .[0].name, s: $s, f: ($s - ([$keep[].s] | add // 0)), d: $keep,
+       c: (reduce $kids[].c as $x (reduce $files[] as $x ([0, 0, 0, 0, 0, 0, 0, $own]; setpath([$x.k - 1]; .[$x.k - 1] + $x.s));
+             [range(8) as $j | .[$j] + $x[$j]])),
+       t: ([$files[] | select(.s > 0)] + [$kids[] | .n as $p | .t[] | .n = $p + "/" + .n]
+           | group_by(.k) | map(sort_by(-.s, .n) | .[:%d]) | add // [])}
+    | if $lvl == %d then .leaf = true else . end;
+  .[3] | node(0) | {v: 1, root: .n, tree: .}
+]=], table.concat(ext, ","), depth, minBytes, topN, depth)
 end
 
 -- Donut rows. folders: one per entry, colour index = position in the unsorted

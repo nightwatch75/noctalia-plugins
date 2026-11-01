@@ -1,0 +1,63 @@
+#!/bin/sh
+# jq index reducer of space_index.luau, run on a real ncdu 2.9 output.
+# Luau prints idx.jqProgram(2, 2, 8193) (module spliced as MODULE_SRC, like
+# run.sh does), jq runs it on tests/fixtures/small.ncdu.json, and the result
+# must equal the index below (compared with jq -S).
+#
+# Fixture: `ncdu -0 -o` of a tiny tmpfs tree, root renamed to "/fixture". The
+# "skip" folder was dropped by an absolute `--exclude`. pic.png and
+# b/pic-link.jpg are one inode (nlink 2): each counts half. tmpfs reports no
+# folder dsize, so 4096 was added by hand to folder "a" (ext4 reports one).
+# Checks: totals, category sums, top files per category (topN 2, ties by name),
+# "deep" is the depth-2 leaf with "deeper" folded in, "b" (8192 < 8193) is
+# folded into the root, names with a newline and a quote stay JSON strings.
+set -e
+cd "$(dirname "$0")/.."
+if [ -z "$LUAU" ]; then
+    if command -v luau >/dev/null 2>&1; then LUAU=luau; else LUAU=luau-test; fi
+fi
+tmp="${TMPDIR:-/tmp}/file-search-jq.$$"
+mkdir -p "$tmp"
+trap 'rm -rf "$tmp"' EXIT
+
+{
+    printf 'local MODULE_SRC = [==[\n'
+    cat space_index.luau
+    printf '\n]==]\n'
+    printf 'print(loadstring(MODULE_SRC)().jqProgram(2, 2, 8193))\n'
+} > "$tmp/prog.luau"
+"$LUAU" "$tmp/prog.luau" > "$tmp/prog.jq"
+jq -c -f "$tmp/prog.jq" tests/fixtures/small.ncdu.json > "$tmp/got.json"
+
+cat > "$tmp/want.json" <<'EOF'
+{"v":1,"root":"/fixture","tree":{
+  "n":"/fixture","s":86016,"f":28672,
+  "c":[28672,8192,4096,20480,4096,4096,8192,8192],
+  "t":[{"n":"c.mkv","s":16384,"k":1},{"n":"a/movie.mkv","s":12288,"k":1},
+       {"n":"a/pic.png","s":4096,"k":2},{"n":"b/pic-link.jpg","s":4096,"k":2},
+       {"n":"a/quo\"te.mp3","s":4096,"k":3},
+       {"n":"a/deep/big.zip","s":20480,"k":4},
+       {"n":"a/new\nline.txt","s":4096,"k":5},
+       {"n":"b/tiny.lua","s":4096,"k":6},
+       {"n":"a/deep/deeper/core.iso","s":8192,"k":7},
+       {"n":"README","s":4096,"k":8}],
+  "d":[{
+    "n":"a","s":57344,"f":28672,
+    "c":[12288,4096,4096,20480,4096,0,8192,4096],
+    "t":[{"n":"movie.mkv","s":12288,"k":1},{"n":"pic.png","s":4096,"k":2},
+         {"n":"quo\"te.mp3","s":4096,"k":3},{"n":"deep/big.zip","s":20480,"k":4},
+         {"n":"new\nline.txt","s":4096,"k":5},{"n":"deep/deeper/core.iso","s":8192,"k":7}],
+    "d":[{
+      "n":"deep","s":28672,"f":28672,"leaf":true,
+      "c":[0,0,0,20480,0,0,8192,0],
+      "t":[{"n":"big.zip","s":20480,"k":4},{"n":"deeper/core.iso","s":8192,"k":7}],
+      "d":[]}]}]}}
+EOF
+
+if [ "$(jq -S . "$tmp/got.json")" != "$(jq -S . "$tmp/want.json")" ]; then
+    echo "space_jq_test: FAIL" >&2
+    diff -u "$tmp/want.json" "$tmp/got.json" || true
+    jq -S . "$tmp/got.json" >&2
+    exit 1
+fi
+echo "space_jq_test: ok"
