@@ -283,4 +283,121 @@ do
     assert(last and last.scanning and last.tick, "last redraw sees the rescan running")
 end
 
+-- ── Types mode ───────────────────────────────────────────────────────────────
+local function typesFixture(root)
+    return jsonl(root, {
+        { id = "0", n = root, s = 1000, f = 40, c = { 400, 200, 100, 80, 60, 50, 40, 70 },
+          t = { { n = "big.mkv", s = 300, k = 1 }, { n = "usr/clip.mp4", s = 100, k = 1 },
+                { n = "usr/pic.png", s = 200, k = 2 }, { n = "gone.mkv", s = 5, k = 1 },
+                { n = WEIRD .. ".mp3", s = 100, k = 3 } } },
+        { id = "0/0", n = "usr", s = 600, f = 0, c = { 100, 200, 0, 0, 0, 0, 0, 300 },
+          t = { { n = "clip.mp4", s = 100, k = 1 }, { n = "pic.png", s = 200, k = 2 } } },
+        { id = "0/1", n = "home", s = 300, f = 0, c = { 300, 0, 0, 0, 0, 0, 0, 0 },
+          t = { { n = "a.mkv", s = 300, k = 1 } } },
+    })
+end
+local function typesReady()
+    local space = boot()
+    putIndex("/", typesFixture("/"), 60)
+    space.onOpen(function() redraws += 1 end)
+    drain(space)
+    find(space.render(), "space-mode").children[2].props.onClick()
+    return space
+end
+local function rowNames(tree)
+    local out = {}
+    for i = 1, 50 do
+        local row = find(tree, "space-row-" .. i)
+        if not row then break end
+        table.insert(out, (find(row, "name-btn") or find(row, "name-plain")).props.text)
+    end
+    return out
+end
+do
+    local space = typesReady()
+    local tree = space.render()
+    for i = 1, 8 do
+        local row = find(tree, "space-legend-" .. i)
+        assert(row, "category legend row " .. i)
+    end
+    assert(rowOf(tree, "space-legend-", "cat_video"), "category names from translations")
+    assert(not find(tree, "space-legend-9"), "8 rows")
+    -- no filter: same list as Folders mode, every row has a type bar
+    local names = rowNames(tree)
+    eq(table.concat(names, "|"), "usr|home|space_loose", "unfiltered list = folders list")
+    for i = 1, 3 do assert(find(find(tree, "space-row-" .. i), "typebar"), "type bar on row " .. i) end
+    -- filter: files of the category below the folder, biggest first
+    click(rowOf(tree, "space-legend-", "cat_video"), "video legend")
+    names = rowNames(space.render())
+    eq(table.concat(names, "|"), "big.mkv|usr/clip.mp4|gone.mkv", "video files below the folder")
+    click(rowOf(space.render(), "space-legend-", "cat_video"), "video again")
+    eq(#rowNames(space.render()), 3, "second click clears the filter")
+    -- entering a folder keeps the mode and clears the filter
+    click(rowOf(space.render(), "space-legend-", "cat_video"), "video")
+    space.enter("usr")
+    tree = space.render()
+    assert(find(tree, "space-legend-1") and rowOf(tree, "space-legend-", "cat_images"), "still types mode")
+    eq(space.typeFilter, nil, "filter cleared on enter")
+    space.setTypeFilter(2)
+    eq(rowNames(space.render())[1], "pic.png", "setTypeFilter(2)")
+    space.setTypeFilter(nil)
+end
+
+-- ── file reveal (Types rows) ─────────────────────────────────────────────────
+do
+    local space = typesReady()
+    files["/big.mkv"] = { text = "x", mtime = 1 }
+    space.setTypeFilter(1)
+    local tree = space.render()
+    click(rowOf(tree, "space-row-", "big.mkv"), "big.mkv row")
+    eq(#notes, 0, "existing file: no notice")
+    eq(runs[#runs].argv[1], "gdbus", "reveal through gdbus")
+    assert(runs[#runs].argv[10]:find("file:///big.mkv", 1, true), "uri of the file")
+    local before = #runs
+    click(rowOf(tree, "space-row-", "gone.mkv"), "missing row")
+    eq(#runs, before, "missing file: no reveal")
+    eq(#notes, 1, "missing file: one notice")
+    -- hostile name: file exists, argv stays one element, no crash
+    space.setTypeFilter(3)
+    tree = space.render()
+    files["/" .. WEIRD .. ".mp3"] = { text = "x", mtime = 1 }
+    click(rowOf(tree, "space-row-", (WEIRD .. ".mp3"):gsub("%c", " ")), "hostile row")
+    eq(runs[#runs].argv[1], "gdbus", "hostile name revealed")
+    local lit = runs[#runs].argv[10]
+    assert(lit:find("%0A", 1, true), "newline percent-encoded")
+    assert(not lit:sub(3, -3):find('[\n"<&]'), "no raw newline, quote or markup in the literal")
+end
+
+-- ── slice colours: never shared, legend == svg == list ───────────────────────
+do
+    local recs = { { id = "0", n = "/", s = 0, f = 0 } }
+    local total = 0
+    for i = 1, 13 do
+        recs[#recs + 1] = { id = "0/" .. (i - 1), n = "d" .. i, s = 100 + i, leaf = true }
+        total += 100 + i
+    end
+    recs[1].s = total
+    local space = boot()
+    putIndex("/", jsonl("/", recs), 60)
+    space.onOpen(function() redraws += 1 end)
+    drain(space)
+    local tree = space.render()
+    local svg, seen, shown = svgText(), {}, 0
+    for i = 1, 8 do
+        local row = find(tree, "space-legend-" .. i)
+        local name = findText(row, "d" .. (14 - i)) and "d" .. (14 - i)
+        local fill = find(row, "swatch").props.fill
+        if name then
+            shown += 1
+            eq(seen[fill], nil, "legend colours differ")
+            seen[fill] = true
+            assert(svg:find('stroke="' .. fill .. '"', 1, true), "svg uses the legend colour " .. fill)
+            eq(find(rowOf(tree, "space-row-", name), "swatch").props.fill, fill, "list swatch == legend " .. name)
+        end
+    end
+    eq(shown, 7, "7 folder slices")
+    local grey = find(rowOf(tree, "space-row-", "d1"), "swatch").props.fill
+    eq(seen[grey], nil, "folder outside the slices: neutral swatch")
+end
+
 print("space_ui_test OK")

@@ -11,7 +11,9 @@
 --
 -- UI state (file-locals): path (node stack from space.index down to the
 -- current folder; re-walked by name when a new index lands), sortKey
--- ("size" | "name"), sortDesc, mode ("folders"; Types arrives later).
+-- ("size" | "name"), sortDesc, mode ("folders" | "types"), typeFilter (a
+-- category number in Types mode, nil = none; cleared by entering a folder, going
+-- up or switching mode).
 --
 -- State (module fields, read by the panel):
 --   space.state     "idle" | "scanning" | "ready" | "error". A stale index
@@ -478,6 +480,7 @@ local path = {}       -- nodes from space.index down to the current folder
 local sortKey = "size"
 local sortDesc = true
 local mode = "folders"
+local typeFilter = nil -- category number, Types mode only
 local svg = { slot = 0, path = nil, key = nil } -- written image and what it shows
 
 -- The current folder. A new index (rescan, root switch) is walked again by
@@ -530,6 +533,7 @@ end
 function space.up()
     if #path > 1 then
         table.remove(path)
+        typeFilter, space.typeFilter = nil, nil
         changed()
     end
 end
@@ -539,6 +543,7 @@ function space.enter(name)
     local child = node and idx.child(node, name)
     if child ~= nil and not child.leaf then
         table.insert(path, child)
+        typeFilter, space.typeFilter = nil, nil
         changed()
     end
 end
@@ -555,6 +560,13 @@ end
 
 function space.setMode(value)
     mode = value
+    typeFilter, space.typeFilter = nil, nil
+    changed()
+end
+
+function space.setTypeFilter(category)
+    typeFilter = category
+    space.typeFilter = category -- read-only mirror for tests
     changed()
 end
 
@@ -653,9 +665,18 @@ local function entryLabel(entry)
     return display(entry.name, LABEL_MAX)
 end
 
+-- The category with most bytes in a folder; nil for an empty one.
+local function categoryOfNode(node)
+    local best, cat = 0, nil
+    for k, b in ipairs(node and node.c or {}) do
+        if b > best then best, cat = b, k end
+    end
+    return cat
+end
+
 -- One list row: swatch, name (a button only when a click does something),
 -- size and share of the current folder.
-local function listRow(entry, i, node, colors)
+local function listRow(entry, i, node, colors, palette)
     local onClick = nil
     if entry.kind == "dir" and not entry.node.leaf then
         onClick = function() space.enter(entry.name) end
@@ -668,8 +689,15 @@ local function listRow(entry, i, node, colors)
             flexGrow = 1, height = ROW_HEIGHT, onClick = onClick })
         or ui.label({ key = "name-plain", text = text, fontSize = 12, color = "on_surface", flexGrow = 1 })
     local share = node.s > 0 and entry.bytes / node.s * 100 or 0
+    local bar
+    if palette then -- Types mode: a bar in the colour of the row's category (a folder: its biggest)
+        local cat = entry.category or categoryOfNode(entry.node)
+        bar = ui.box({ key = "typebar", fill = cat and palette[cat] or colors.loose, radius = 2, width = 4, height = 14 })
+    else
+        bar = ui.box({ key = "swatch", fill = colors[entry.node or entry.kind] or colors.other, radius = 2, width = 9, height = 9 })
+    end
     return ui.row({ key = "space-row-" .. i, gap = 6, align = "center", height = ROW_HEIGHT }, {
-        ui.box({ key = "swatch", fill = colors[entry.node or entry.kind] or colors.other, radius = 2, width = 9, height = 9 }),
+        bar,
         name,
         label("size", shared.tr("usage_amount", {
             size = shared.formatBytes(entry.bytes), share = string.format("%.0f", share),
@@ -683,7 +711,12 @@ local function legendRow(slice, i, node)
         or display(slice.label, LABEL_MAX)
     local child = slice.kind == "dir" and idx.child(node, slice.label)
     local name
-    if child and not child.leaf then
+    if slice.kind == "category" then
+        local cat = slice.index
+        name = ui.button({ key = "name-btn", text = shared.tr("cat_" .. slice.label), fontSize = 11, variant = "ghost",
+            contentAlign = "start", selected = typeFilter == cat, flexGrow = 1, height = 20,
+            onClick = function() space.setTypeFilter(typeFilter ~= cat and cat or nil) end })
+    elseif child and not child.leaf then
         name = ui.button({ key = "name-btn", text = text, fontSize = 11, variant = "ghost", contentAlign = "start",
             flexGrow = 1, height = 20, onClick = function() space.enter(slice.label) end })
     else
@@ -736,6 +769,8 @@ function space.render()
         ui.row({ key = "space-mode", gap = 2 }, {
             ui.button({ key = "folders", text = shared.tr("space_mode_folders"), variant = "ghost",
                 controlSize = "sm", selected = mode == "folders", onClick = function() space.setMode("folders") end }),
+            ui.button({ key = "types", text = shared.tr("space_mode_types"), variant = "ghost",
+                controlSize = "sm", selected = mode == "types", onClick = function() space.setMode("types") end }),
         }),
         ui.spacer({ key = "gap", flexGrow = 1 }),
         ui.button({ key = "space-refresh", glyph = "refresh", variant = "ghost", enabled = not space.scanning,
@@ -774,16 +809,17 @@ function space.render()
         end
         table.insert(left, ui.column({ key = "space-legend", gap = 1 }, legend))
 
-        -- Swatch colours: a folder by its position in node.d, like its slice.
+        -- Swatch colours: a shown folder takes its slice's colour; the rest stay grey.
         local dark = noctalia.isDarkMode()
-        local palette = dark and idx.COLORS_DARK or idx.COLORS_LIGHT
         local colors = table.clone(dark and GREY.dark or GREY.light)
-        for j, d in ipairs(node.d) do
-            colors[d] = palette[(j - 1) % #palette + 1]
+        for _, slice in ipairs(slices) do
+            if slice.node then
+                colors[slice.node] = slice.color
+            end
         end
         local rows = {}
-        for i, entry in ipairs(idx.sort(idx.entries(node, mode, nil), sortKey, sortDesc)) do
-            table.insert(rows, listRow(entry, i, node, colors))
+        for i, entry in ipairs(idx.sort(idx.entries(node, mode, typeFilter), sortKey, sortDesc)) do
+            table.insert(rows, listRow(entry, i, node, colors, mode == "types" and (dark and idx.COLORS_DARK or idx.COLORS_LIGHT) or nil))
         end
         table.insert(right, ui.row({ key = "space-sort", gap = 4, align = "center" }, {
             sortButton("size"), sortButton("name"),

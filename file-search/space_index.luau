@@ -22,9 +22,11 @@
   needs ~1.3 GB to parse that file). Depth 8 gives 4.3 MB for the same time.
   Tested by tests/space_jq_test.sh on tests/fixtures/small.ncdu.json.
 
-  Slice colour index: in folders mode it is the position in the unsorted
-  node.d (a folder keeps its colour when the sort changes); in types mode it
-  is the category number.
+  Slice colour index: in folders mode it is the rank of the folder among the
+  shown slices (biggest first), so two shown slices never share a colour; in
+  types mode it is the category number. Loose and "other" slices have none
+  (the panel paints them grey). A slice carries its node, so the list can
+  give its row the same colour.
 ]]
 
 local idx = {}
@@ -151,7 +153,8 @@ function idx.jqProgram(depth, topN, minBytes)
 end
 
 -- Donut rows. folders: one per entry, colour index = position in the unsorted
--- node.d. types: one per non-empty category, colour index = category number.
+-- the shown rank (set by idx.slices). types: one per non-empty category,
+-- colour index = category number.
 local function sliceRows(node, mode)
     local rows = {}
     if mode == "types" then
@@ -163,15 +166,7 @@ local function sliceRows(node, mode)
         end
         return idx.sort(rows, "size", true)
     end
-    for _, e in ipairs(idx.entries(node, "folders")) do
-        if e.node then
-            for j, d in ipairs(node.d) do
-                if d == e.node then e.index = j break end
-            end
-        end
-        table.insert(rows, e)
-    end
-    return rows
+    return idx.entries(node, "folders")
 end
 
 -- Top maxSlices-1 rows plus one "other" holding the rest, so the bytes sum to node.s.
@@ -184,9 +179,10 @@ function idx.slices(node, mode, maxSlices)
     for i = 1, kept do
         local e = list[i]
         sum += e.bytes
+        local index = e.index or (e.kind == "dir" and i or nil) -- i <= maxSlices <= 8
         table.insert(out, {
-            label = e.name, bytes = e.bytes, kind = e.kind, index = e.index,
-            color = e.index and idx.COLORS_DARK[(e.index - 1) % 8 + 1] or nil,
+            label = e.name, bytes = e.bytes, kind = e.kind, index = index, node = e.node,
+            color = index and idx.COLORS_DARK[(index - 1) % 8 + 1] or nil,
         })
     end
     if node.s > sum then

@@ -71,4 +71,19 @@ local hn = { n = "/", s = 5, f = 0, c = { 5, 0, 0, 0, 0, 0, 0, 0 }, d = { { n = 
 eq(idx.entries(hn, "folders")[1].name, bad, "hostile entries")
 eq(idx.sort(idx.entries(hn, "folders"), "name", false)[1].name, bad, "hostile sort")
 eq(idx.slices(hn, "folders", 8)[1].label, bad, "hostile slices")
+
+-- 13 children: the 8 shown slices never share a colour; the dir slice carries its node
+do
+    local shown, seen, dirs = idx.slices(root, "folders", 8), {}, 0
+    for _, x in ipairs(shown) do
+        if x.kind == "dir" then
+            dirs += 1
+            eq(seen[x.color], nil, "unique slice colour " .. tostring(x.color))
+            seen[x.color] = true
+            eq(x.node, idx.child(root, x.label), "slice carries its node")
+        end
+    end
+    eq(dirs, 7, "7 dir slices + other")
+    eq(shown[1].color, idx.COLORS_DARK[1], "biggest folder gets colour 1")
+end
 print("space_index_test OK")
