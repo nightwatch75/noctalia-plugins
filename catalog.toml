@@ -220,15 +220,21 @@ rev = "2dc2ebdc9ff5642368204b1f9c76e72233c0fe9e"
 [[plugin]]
 id = "nightwatch75/claude-cockpit"
 name = "Claude Cockpit"
-version = "1.1.3"
-updated_at = 1792768991
+version = "1.1.4"
+updated_at = 1793642120
 added_at = 1788949531
 author = "nightwatch75"
 license = "MIT"
 icon = "robot"
 description = "Live Claude Code sessions and usage on the bar; manage sessions, skills and mods, edit CLAUDE.md files."
-plugin_api = 33
+plugin_api = 43
 tags = ["ai", "development", "bar", "panel", "service", "productivity"]
+
+[[plugin.release]]
+plugin_api = 33
+version = "1.1.3"
+updated_at = 1792768991
+rev = "161a390c102d1e57c3332b00f563ef985e492058"
 
 [[plugin.release]]
 plugin_api = 31
