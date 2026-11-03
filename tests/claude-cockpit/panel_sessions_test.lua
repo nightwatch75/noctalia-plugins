@@ -57,6 +57,7 @@ local projects = {
 }
 
 local refreshes, renames, deletes = 0, {}, {}
+local repairs, repairResult, repairCode = {}, true, nil
 local lastInProject, memoryKept = true, true
 local orphanResult, checkedIds, removed
 local sessionsStub = {
@@ -64,6 +65,7 @@ local sessionsStub = {
     isLastInProject = function() return lastInProject end,
     memoryKept = function() return memoryKept end,
     deleteSession = function(s, done) table.insert(deletes, s.id); done(true) end,
+    repairSession = function(s, done) table.insert(repairs, s.id); done(repairResult, repairCode) end,
     renameSession = function(s, title, done) table.insert(renames, { s.id, title }); done(true) end,
     checkOrphans = function(ids, done) checkedIds = ids; done(orphanResult, nil) end,
     removeOrphans = function(list, done) removed = list; done(true) end,
@@ -136,6 +138,50 @@ eq(notes[#notes], "copied_resume", "copy notice")
 assert(find(rendered, "copy-bbb2"), "broken session with real cwd can copy")
 assert(find(rendered, "copy-ccc3") == nil, "no copy without a real cwd")
 assert(find(rendered, "copy-fff6") == nil, "no copy for a guessed cwd")
+
+-- Icons per status.
+local function glyphOf(key)
+    local row = find(rendered, key)
+    for _, c in ipairs(row.children) do if c.kind == "glyph" then return c.props end end
+end
+eq(glyphOf("broken-ccc3").name, "folder-off", "cwd_missing glyph"); eq(glyphOf("broken-ccc3").color, "error", "cwd_missing color")
+eq(glyphOf("broken-bbb2").name, "alert-triangle", "mismatch glyph"); eq(glyphOf("broken-bbb2").color, "tertiary", "mismatch color")
+
+-- Repair: only dir_mismatch, never a live session; inline strip; confirm repairs then reloads.
+assert(find(rendered, "repair-bbb2"), "repair button on dir_mismatch")
+eq(find(rendered, "repair-bbb2").props.glyph, "arrows-exchange", "repair glyph")
+eq(find(rendered, "repair-bbb2").props.tooltip, "tip_repair_session", "repair tooltip")
+assert(find(rendered, "repair-ccc3") == nil and find(rendered, "repair-aaa1") == nil, "no repair for other statuses")
+LIVE.status = "dir_mismatch"
+watchers.live({ groups = { count = 1, waiting = {}, idle = {}, busy = { { id = "beef" } } } })
+assert(find(rendered, "repair-beef") == nil, "no repair for a live session")
+LIVE.status = "ok"
+click("repair-bbb2")
+assert(find(rendered, "sess-wrap-bbb2-rep"), "wrapper key changes while the strip is open")
+assert(has(find(rendered, "confirm-repair-bbb2"), function(n) return n.props.text == "repair_confirm(cwd=/p)" end), "strip text")
+click("repair-no-bbb2")
+assert(find(rendered, "confirm-repair-bbb2") == nil, "cancel closes")
+noctalia.fileExists = function(p) return p ~= "/p" end
+click("repair-bbb2")
+assert(has(find(rendered, "confirm-repair-bbb2"), function(n) return n.props.text == "repair_confirm_create(cwd=/p)" end), "strip text with create")
+click("repair-no-bbb2")
+noctalia.fileExists = function() return true end
+click("repair-bbb2")
+click("sess-refresh")
+assert(find(rendered, "confirm-repair-bbb2") == nil, "refresh closes the strip")
+click("repair-bbb2")
+local r0 = refreshes
+click("repair-ok-bbb2")
+eq(repairs[1], "bbb2", "repairSession called"); assert(refreshes > r0, "repair reloads")
+eq(notes[#notes], "repair_done", "done notice")
+assert(find(rendered, "confirm-repair-bbb2") == nil, "strip closed after repair")
+repairResult, repairCode = false, "exists"
+click("repair-bbb2"); click("repair-ok-bbb2")
+eq(errors[#errors], "err_repair_failed(reason=err_repair_exists)", "failure notice")
+repairCode = "weird"
+click("repair-bbb2"); click("repair-ok-bbb2")
+eq(errors[#errors], "err_repair_failed", "unknown code falls back")
+repairResult, repairCode = true, nil
 
 -- Rename.
 assert(find(rendered, "ren-beef") == nil, "no pencil on a live session")

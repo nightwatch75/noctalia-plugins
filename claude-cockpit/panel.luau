@@ -80,6 +80,8 @@ local sortAsc = false
 local emptyOnly = false -- only sessions that never got a prompt
 local brokenOnly = false -- only sessions whose status is not "ok"
 local renamingId = nil -- session with the inline rename strip open
+local repairingId = nil -- session with the inline repair strip open
+local repairCreates = false -- the open repair strip: its cwd will be created
 local renamingSession = nil -- its session record, for the Return key
 local renameDraft = ""
 local renameRev = 0 -- bumped on each open to reseed the uncontrolled input
@@ -157,6 +159,7 @@ local function loadSessions(force)
     sessionsState.loading = true
     sessionsState.error = nil
     if force then
+        repairingId = nil
         orphanState = { scanning = false, list = nil, confirming = false, showing = false }
     end
     render()
@@ -677,6 +680,36 @@ local function confirmRename(session)
     end)
 end
 
+local REPAIR_ERRORS = {
+    not_absolute = "err_repair_not_absolute", exists = "err_repair_exists",
+    move = "err_repair_move", unsafe = "err_repair_unsafe",
+}
+
+local function openRepair(session)
+    repairingId = session.id
+    repairCreates = not noctalia.fileExists(session.cwd) -- once here, never per render
+    render()
+end
+
+local function closeRepair()
+    repairingId = nil
+    render()
+end
+
+local function confirmRepair(session)
+    sessions.repairSession(session, function(ok, code)
+        repairingId = nil
+        if ok then
+            noctalia.notify(tr("title"), tr("repair_done"))
+        elseif REPAIR_ERRORS[code] then
+            noctalia.notifyError(tr("title"), tr("err_repair_failed", { reason = tr(REPAIR_ERRORS[code]) }))
+        else
+            noctalia.notifyError(tr("title"), tr("err_repair_failed"))
+        end
+        loadSessions(true)
+    end)
+end
+
 local function toggleGroup(cwd)
     expandedGroups[cwd] = not expandedGroups[cwd]
     render()
@@ -728,6 +761,7 @@ local function sessionWrapKey(session)
         .. (expandedSessionId == session.id and "-prev" or "")
         .. (confirmingDeleteId == session.id and "-del" or "")
         .. (renamingId == session.id and "-ren" or "")
+        .. (repairingId == session.id and "-rep" or "")
 end
 
 local function sessionRow(session, selected, isLive)
@@ -753,7 +787,9 @@ local function sessionRow(session, selected, isLive)
     end
     if session.status ~= "ok" then
         table.insert(rowButtons, ui.row({ key = "broken-" .. id, tooltip = tr("status_" .. session.status) }, {
-            ui.glyph({ name = "alert-triangle", size = 14, color = "error" }),
+            session.status == "cwd_missing"
+                and ui.glyph({ name = "folder-off", size = 14, color = "error" })
+                or ui.glyph({ name = "alert-triangle", size = 14, color = "tertiary" }),
         }))
     end
     table.insert(rowButtons, ui.button({
@@ -796,6 +832,13 @@ local function sessionRow(session, selected, isLive)
             onClick = function() openRename(session) end,
         }))
     end
+    if session.status == "dir_mismatch" and not isLive then
+        table.insert(rowButtons, ui.button({
+            key = "repair-" .. id, glyph = "arrows-exchange", variant = "ghost", controlSize = "sm",
+            tooltip = tr("tip_repair_session"),
+            onClick = function() openRepair(session) end,
+        }))
+    end
     table.insert(rowButtons, ui.button({
         key = "del-" .. id,
         glyph = "trash", variant = "ghost", controlSize = "sm", tooltip = tr("tip_delete_session"),
@@ -814,6 +857,17 @@ local function sessionRow(session, selected, isLive)
             ui.label({ text = tr("delete_session_confirm"), fontSize = 12, color = "on_surface", flexGrow = 1 }),
             ui.button({ key = "del-ok-" .. id, text = tr("yes"), variant = "destructive", controlSize = "sm", onClick = function() confirmDelete(session) end }),
             ui.button({ text = tr("no"), variant = "ghost", controlSize = "sm", onClick = function() cancelDelete() end }),
+        }))
+    end
+
+    if repairingId == id then
+        table.insert(blocks, ui.row({ key = "confirm-repair-" .. id, gap = 8, align = "center" }, {
+            ui.label({
+                text = tr(repairCreates and "repair_confirm_create" or "repair_confirm", { cwd = session.cwd }),
+                fontSize = 12, color = "on_surface", flexGrow = 1,
+            }),
+            ui.button({ key = "repair-ok-" .. id, text = tr("yes"), variant = "primary", controlSize = "sm", onClick = function() confirmRepair(session) end }),
+            ui.button({ key = "repair-no-" .. id, text = tr("no"), variant = "ghost", controlSize = "sm", onClick = closeRepair }),
         }))
     end
 
@@ -1800,6 +1854,7 @@ function onClose()
     confirmingClean = false
     renamingId = nil
     renamingSession = nil
+    repairingId = nil
     orphanState.confirming = false
     confirmingSkillKey = nil
     panel.setWantsSecondTicks(false)

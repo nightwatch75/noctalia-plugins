@@ -146,8 +146,8 @@
   "sort_count": "Count",
   "sort_date": "Date",
   "sort_name": "Name",
-  "status_cwd_missing": "The session folder does not exist",
-  "status_dir_mismatch": "The transcript is stored under a different project dir than its folder",
+  "status_cwd_missing": "The session folder no longer exists. Restore it, or move the project back, to resume.",
+  "status_dir_mismatch": "The transcript is stored in a folder that does not match its working directory. The repair button moves it.",
   "tab_claudemd": "CLAUDE.md",
   "tab_live": "Live",
   "tab_sessions": "Sessions",
@@ -202,5 +202,14 @@
     "session": "Session (5h)",
     "weekly": "Weekly (7d)"
   },
-  "yes": "Delete"
+  "yes": "Delete",
+  "err_repair_exists": "a transcript with this id already exists in the target folder",
+  "err_repair_failed": "Could not repair the session: {reason}",
+  "err_repair_move": "the transcript could not be moved",
+  "err_repair_not_absolute": "the recorded folder is not an absolute path",
+  "err_repair_unsafe": "the recorded folder cannot be used safely",
+  "repair_confirm": "Move this transcript to the project folder of {cwd}?",
+  "repair_confirm_create": "Create {cwd} and move this transcript to its project folder?",
+  "repair_done": "Session repaired",
+  "tip_repair_session": "Move the transcript to the folder it was run from"
 }

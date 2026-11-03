@@ -217,6 +217,87 @@ function M.renameSession(session, title, done)
     end
 end
 
+-- ── Repair a moved transcript ────────────────────────────────────────────
+-- A dir_mismatch transcript resumes once it sits in the project folder its
+-- recorded cwd encodes to; the cwd text inside the file is not used, so the
+-- repair is a move and nothing is rewritten.
+
+-- Claude Code's folder name: one "-" per character that is not a letter or
+-- digit. Only ASCII counts as letter/digit, a multibyte character is one dash.
+local function encodeCwd(cwd)
+    local out = {}
+    for _, code in utf8.codes(cwd) do
+        local c = string.char(code < 128 and code or 0)
+        table.insert(out, c:match("^%w$") and c or "-")
+    end
+    return table.concat(out)
+end
+
+-- The cwd to move the transcript to, or nil and an error code.
+function M.repairTarget(session)
+    local cwd = session.cwd
+    if session.status ~= "dir_mismatch" or not validId(session.id) or type(cwd) ~= "string" then
+        return nil, "unsafe"
+    end
+    if cwd:sub(1, 1) ~= "/" then
+        return nil, "not_absolute"
+    end
+    if cwd:find("%c") or utf8.len(cwd) == nil or ("/" .. cwd .. "/"):find("/../", 1, true) then
+        return nil, "unsafe"
+    end
+    local encoded = encodeCwd(cwd)
+    if #encoded > 200 then
+        return nil, "unsafe"
+    end
+    if encoded == session.projectDir then
+        return nil, "same_dir"
+    end
+    return cwd, nil
+end
+
+-- Moves the transcript and its sidecar into the cwd's project folder as
+-- direct argv steps, each after the previous one, stopping at the first
+-- failure. mv -n never overwrites; an existing target is refused up front.
+function M.repairSession(session, done)
+    local cwd, code = M.repairTarget(session)
+    if not cwd then
+        done(false, code)
+        return
+    end
+    local target = PROJECTS_DIR .. "/" .. encodeCwd(cwd)
+    if noctalia.fileExists(`{target}/{session.id}.jsonl`) then
+        done(false, "exists")
+        return
+    end
+    local steps = {}
+    if not noctalia.fileExists(cwd) then
+        table.insert(steps, { argv = { "mkdir", "-p", "--", cwd }, code = "mkdir" })
+    end
+    table.insert(steps, { argv = { "mkdir", "-p", "--", target }, code = "mkdir" })
+    table.insert(steps, { argv = { "mv", "-n", "--", session.jsonlPath, target .. "/" }, code = "move" })
+    if noctalia.fileExists(session.sidecarDir) then
+        table.insert(steps, { argv = { "mv", "-n", "--", session.sidecarDir, target .. "/" }, code = "move" })
+    end
+    local function run(i)
+        local step = steps[i]
+        if step == nil then
+            done(true)
+            return
+        end
+        local started = noctalia.runAsync(step.argv, function(result)
+            if type(result) == "table" and result.exitCode == 0 then
+                run(i + 1)
+            else
+                done(false, step.code)
+            end
+        end)
+        if not started then
+            done(false, step.code)
+        end
+    end
+    run(1)
+end
+
 -- ── Orphan leftovers ─────────────────────────────────────────────────────
 -- list-claude-orphans is read-only; removal happens here, after every path
 -- is re-validated in Lua, as direct argv execs (no shell).
