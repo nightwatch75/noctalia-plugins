@@ -34,6 +34,9 @@ shopt -s nullglob
 #               folder that encodes to the project dir;
 #   "relocated" a folder on disk encodes to the project dir ("resolvedCwd"):
 #               the project was renamed or moved, resume works from there;
+#   "unknown"   the search for that folder was incomplete (walk budget,
+#               deadline, an unreadable directory, project dir "-" or over
+#               200 characters): we cannot tell;
 #   "misplaced" no folder encodes to the project dir, but the cwd exists;
 #   "orphan"    neither exists.
 # "resolvedCwd" is "" unless the status is "relocated". "hasMemory" is true
@@ -90,37 +93,73 @@ session_status() {
 # from /: only directories whose encoded name, followed by "-", starts the
 # rest of the name are entered, so the walk stays small. First match wins.
 # The remainder shrinks at every level, so a symlink loop cannot recur
-# forever; WALK_LEFT and WALK_DEADLINE still cap all walks together.
-WALK_LEFT=20000
+# forever. Each walk may list WALK_MAX entries; directory listings are
+# cached for the whole scan, so a shared parent is listed once. A walk that
+# hits its budget or an unreadable directory is incomplete: "not found"
+# would be a guess.
+WALK_MAX=20000
+WALK_LEFT=0
 WALK_DEADLINE=""
-walk_dir() { # <dir> <rest> -> sets RESOLVED
-    local dir="$1" rest="$2" entry ENCODED
+declare -A LIST_CACHE
+
+# list_dir <dir> -> LISTING: its subdirectory names, each followed by "/"
+# (a name cannot hold "/"). Fails when the dir cannot be read or the budget
+# runs out; only a full listing is cached.
+list_dir() {
+    local dir="$1" entry
+    if [ -n "${LIST_CACHE["$dir/"]+x}" ]; then
+        LISTING="${LIST_CACHE["$dir/"]}"
+        return 0
+    fi
+    [ -r "$dir/" ] && [ -x "$dir/" ] || return 1
+    LISTING=""
     for entry in "$dir"/*; do
         WALK_LEFT=$((WALK_LEFT - 1))
         [ "$WALK_LEFT" -le 0 ] && return 1
-        [ -d "$entry" ] || continue
-        encode_name "${entry##*/}"
+        [ -d "$entry" ] && LISTING+="${entry##*/}/"
+    done
+    LIST_CACHE["$dir/"]="$LISTING"
+}
+
+walk_dir() { # <dir> <rest> -> 0 found (RESOLVED), 1 not found, 2 incomplete
+    local dir="$1" rest="$2" names name ENCODED result=1 rc
+    list_dir "$dir" || return 2
+    names="$LISTING"
+    while [ -n "$names" ]; do
+        name="${names%%/*}"
+        names="${names#*/}"
+        encode_name "$name"
         if [ "$ENCODED" = "$rest" ]; then
-            RESOLVED="$entry"
+            RESOLVED="$dir/$name"
             return 0
         fi
         if [ "${rest#"$ENCODED"-}" != "$rest" ]; then
-            (( ${EPOCHREALTIME/[.,]/} > WALK_DEADLINE )) && return 1
-            walk_dir "$entry" "${rest#"$ENCODED"-}" && return 0
-            [ "$WALK_LEFT" -le 0 ] && return 1
+            rc=0
+            walk_dir "$dir/$name" "${rest#"$ENCODED"-}" || rc=$?
+            [ "$rc" = 0 ] && return 0
+            [ "$rc" = 2 ] && result=2
         fi
     done
-    return 1
+    return "$result"
 }
 
-resolve_project_dir() { # <project dir> -> sets RESOLVED ("" when none)
+# <project dir> -> sets RESOLVED; returns as walk_dir. "-" is / itself and
+# over 200 characters Claude shortens the name with a hash: both unknown, as
+# is a walk the deadline stops before it starts.
+resolve_project_dir() {
     RESOLVED=""
-    local name="$1"
-    [ "${name:0:1}" = "-" ] && [ "${#name}" -gt 1 ] && [ "${#name}" -le 200 ] || return 0
+    local name="$1" rc=0
+    [ "${#name}" -gt 1 ] && [ "${#name}" -le 200 ] || return 2
+    [ "${name:0:1}" = "-" ] || return 1
+    (( ${EPOCHREALTIME/[.,]/} > WALK_DEADLINE )) && return 2
+    WALK_LEFT=$WALK_MAX
     shopt -s dotglob
-    walk_dir "" "${name:1}" || RESOLVED=""
+    walk_dir "" "${name:1}" || rc=$?
     shopt -u dotglob
+    [ "$rc" = 0 ] || RESOLVED=""
+    return "$rc"
 }
+
 # ai-title (last occurrence) and the last assistant turn are found in one
 # backward scan; last-prompt uses its first occurrence (the opening
 # message) via a forward scan. All three go to jq over stdin, not as args.
@@ -232,22 +271,29 @@ jq -s '{ generatedAt: (now | floor), sessions: (group_by(.id) | map(max_by(.mtim
 WALK_DEADLINE=$(( ${EPOCHREALTIME/[.,]/} + 3000000 ))
 while IFS= read -r -d '' dir; do
     RESOLVED=""
-    [ "${dir:0:1}" = "+" ] && resolve_project_dir "${dir:1}"
+    rc=1
+    if [ "${dir:0:1}" = "+" ]; then
+        rc=0
+        resolve_project_dir "${dir:1}" || rc=$?
+    fi
     dir="${dir:1}"
     memory=("$PROJECTS_DIR/$dir/memory"/* "$PROJECTS_DIR/$dir/memory"/.[!.]* "$PROJECTS_DIR/$dir/memory"/..?*)
-    printf '%s\0%s\0%s\0' "$dir" "$RESOLVED" "$([ ${#memory[@]} -gt 0 ] && echo true || echo false)"
+    printf '%s\0%s\0%s\0%s\0' "$dir" "$RESOLVED" "$([ ${#memory[@]} -gt 0 ] && echo true || echo false)" \
+        "$([ "$rc" = 2 ] && echo true || echo false)"
 done < <(jq -j '.sessions | group_by(.projectDir)[]
     | (if any(.status | startswith("pending")) then "+" else "-" end) + .[0].projectDir + "\u0000"' "$WORKDIR/merged") \
     > "$WORKDIR/dirs"
 
 jq --rawfile dirs "$WORKDIR/dirs" '
-    ($dirs | split("\u0000") | [range(0; length - 2; 3) as $i | .[$i:$i + 3]]
-        | map({ key: .[0], value: { resolvedCwd: .[1], hasMemory: (.[2] == "true") } }) | from_entries) as $d
+    ($dirs | split("\u0000") | [range(0; length - 3; 4) as $i | .[$i:$i + 4]]
+        | map({ key: .[0], value: { resolvedCwd: .[1], hasMemory: (.[2] == "true"), incomplete: (.[3] == "true") } })
+        | from_entries) as $d
     | .sessions |= map(
-        ($d[.projectDir] // { resolvedCwd: "", hasMemory: false }) as $p
+        ($d[.projectDir] // { resolvedCwd: "", hasMemory: false, incomplete: false }) as $p
         | . + { hasMemory: $p.hasMemory, resolvedCwd: "" }
         | if (.status | startswith("pending")) | not then .
           elif $p.resolvedCwd != "" then .status = "relocated" | .resolvedCwd = $p.resolvedCwd
+          elif $p.incomplete then .status = "unknown"
           elif .status == "pending_dir" then .status = "misplaced"
           else .status = "orphan" end)
 ' "$WORKDIR/merged"

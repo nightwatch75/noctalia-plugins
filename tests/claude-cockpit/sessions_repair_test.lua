@@ -32,8 +32,13 @@ end
 -- repairTarget
 local t, e = sessions.repairTarget(mk())
 eq(t, "/w/x", "target is the recorded cwd"); eq(e, nil, "no error")
-for _, st in ipairs({ "ok", "relocated", "orphan" }) do
+for _, st in ipairs({ "ok", "relocated", "orphan", "unknown" }) do
     t, e = sessions.repairTarget(mk({ status = st })); eq(t, nil, st .. " refused"); eq(e, "status", st .. " code")
+end
+do
+    local o, r
+    sessions.repairSession(mk({ status = "unknown" }), function(a, b) o, r = a, b end)
+    eq(o, false, "unknown not repaired"); eq(r, "status", "unknown repair code"); eq(#calls, 0, "unknown runs nothing")
 end
 t, e = sessions.repairTarget(mk({ id = "../x" })); eq(t, nil, "bad id refused")
 t, e = sessions.repairTarget(mk({ cwd = "rel/dir" })); eq(t, nil, "relative"); eq(e, "not_absolute", "relative code")

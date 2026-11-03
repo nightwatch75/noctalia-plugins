@@ -113,13 +113,15 @@ A glyph marks a session with a problem. Its tooltip gives the reason:
   project folder still has memory files, the tooltip says so.
 - **Misplaced** (warning glyph): the transcript is in a project folder that
   matches no folder, but its recorded working directory exists.
+- **Unknown** (question mark glyph): the scan could not check if the folder
+  still exists. For example, a folder on the path is not readable.
 
-You cannot resume an orphan or misplaced session from the panel.
+You cannot resume an orphan, misplaced or unknown session from the panel.
 
 Buttons on a session row:
 
 - Copy puts `cd <dir> && claude --resume <id>` on the clipboard. Only for a
-  session with a known working directory, not for an orphan. For a moved
+  session that you can resume (not orphan, misplaced or unknown). For a moved
   session, `<dir>` is the new folder.
 - The pencil renames the session. Type the title and push `Return` or
   **Save**. The title is the same one `/rename` gives. Not for a running

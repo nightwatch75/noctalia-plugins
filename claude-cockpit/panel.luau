@@ -592,6 +592,7 @@ local function matchesSearch(session, cwd, needle)
     return session.label:lower():find(needle, 1, true) ~= nil
         or session.firstPrompt:lower():find(needle, 1, true) ~= nil
         or cwd:lower():find(needle, 1, true) ~= nil
+        or session.cwd:lower():find(needle, 1, true) ~= nil -- the old folder of a relocated session
 end
 
 -- The opening prompt in full, untruncated — the label already shows the
@@ -615,7 +616,7 @@ local function liveIds()
 end
 
 local function resumeSession(session)
-    if session.status == "orphan" or session.status == "misplaced" then
+    if session.status == "orphan" or session.status == "misplaced" or session.status == "unknown" then
         noctalia.notifyError(tr("title"), tr("err_resume_refused", { reason = tr("resume_reason_" .. session.status) }))
         return
     end
@@ -780,6 +781,7 @@ local STATUS_MARK = {
     relocated = { glyph = "folder-symlink", color = "on_surface_variant" },
     orphan = { glyph = "folder-off", color = "error" },
     misplaced = { glyph = "alert-triangle", color = "tertiary" },
+    unknown = { glyph = "help-circle", color = "on_surface_variant" },
 }
 
 local function sessionWrapKey(session)
@@ -818,6 +820,8 @@ local function sessionRow(session, selected, isLive)
             tip = tr("status_relocated", { path = session.resolvedCwd })
         elseif session.status == "orphan" then
             tip = tr(session.hasMemory and "status_orphan_memory" or "status_orphan")
+        elseif session.status == "unknown" then
+            tip = tr("status_unknown")
         end
         table.insert(rowButtons, ui.row({ key = "status-" .. id, tooltip = tip }, {
             ui.glyph({ name = mark.glyph, size = 14, color = mark.color }),
@@ -831,20 +835,21 @@ local function sessionRow(session, selected, isLive)
     }))
 
     -- Only a real cwd has a CLAUDE.md path worth opening — "unknown project"
-    -- sessions (no recorded cwd) skip this button entirely.
-    if session.cwd:sub(1, 1) == "/" then
-        -- An orphan has no folder to cd into.
-        if session.cwdKnown and session.status ~= "orphan" and session.runCwd:sub(1, 1) == "/" and id:match("^[%x-]+$") then
-            table.insert(rowButtons, ui.button({
-                key = "copy-" .. id, glyph = "copy", variant = "ghost", controlSize = "sm",
-                tooltip = tr("tip_copy_resume"),
-                onClick = function() copyResume(session) end,
-            }))
-        end
+    -- sessions (no recorded cwd) skip both buttons. Copy only where the
+    -- command works; no CLAUDE.md where no folder is known to exist.
+    local resumable = session.status == "ok" or session.status == "relocated"
+    if resumable and session.cwd:sub(1, 1) == "/" and session.cwdKnown and session.runCwd:sub(1, 1) == "/" and id:match("^[%x-]+$") then
+        table.insert(rowButtons, ui.button({
+            key = "copy-" .. id, glyph = "copy", variant = "ghost", controlSize = "sm",
+            tooltip = tr("tip_copy_resume"),
+            onClick = function() copyResume(session) end,
+        }))
+    end
+    if session.cwd:sub(1, 1) == "/" and session.status ~= "orphan" and session.status ~= "unknown" then
         local claudeMdPath = session.cwd .. "/CLAUDE.md"
         local exists = noctalia.fileExists(claudeMdPath)
         table.insert(rowButtons, ui.button({
-            glyph = "brain", variant = "ghost", controlSize = "sm",
+            key = "md-" .. id, glyph = "brain", variant = "ghost", controlSize = "sm",
             tooltip = tr(exists and "tip_open_editor" or "tip_create_editor"),
             onClick = function() shared.openInEditor(claudeMdPath) end,
         }))

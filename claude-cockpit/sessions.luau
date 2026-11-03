@@ -66,7 +66,7 @@ local function shapeSession(raw, cwd)
         model = (type(raw.model) == "string") and raw.model or "",
         contextTokens = tonumber(raw.contextTokens) or 0,
         projectDir = dir,
-        -- ok | relocated | misplaced | orphan, see list-claude-sessions.
+        -- ok | relocated | misplaced | orphan | unknown, see list-claude-sessions.
         status = (type(raw.status) == "string" and raw.status ~= "") and raw.status or "ok",
         resolvedCwd = resolved,
         hasMemory = raw.hasMemory == true,

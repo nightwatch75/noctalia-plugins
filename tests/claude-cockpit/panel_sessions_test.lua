@@ -56,8 +56,9 @@ local D = session("ddd4", { status = "relocated", resolvedCwd = "/real", runCwd 
 local E = session("eee5", { status = "orphan", cwd = "/gone2" })
 local LIVE = session("beef")
 local GUESS = session("fff6", { cwdKnown = false })
+local U = session("ab12", { status = "unknown", cwd = "/maybe" })
 local projects = {
-    { cwd = "/p", lastActivity = 100, sessions = { A, B, C, D, E, LIVE, GUESS } },
+    { cwd = "/p", lastActivity = 100, sessions = { A, B, C, D, E, LIVE, GUESS, U } },
 }
 
 local refreshes, renames, deletes = 0, {}, {}
@@ -133,6 +134,11 @@ eq(errors[1], "err_resume_refused(reason=resume_reason_misplaced)", "misplaced r
 click("resume-ccc3")
 eq(#launched, 0, "orphan resume launches nothing")
 eq(errors[2], "err_resume_refused(reason=resume_reason_orphan)", "orphan resume error")
+eq(find(rendered, "status-ab12").props.tooltip, "status_unknown", "unknown tooltip")
+eq(glyphOf("status-ab12").name, "help-circle", "unknown glyph"); eq(glyphOf("status-ab12").color, "on_surface_variant", "unknown color")
+click("resume-ab12")
+eq(#launched, 0, "unknown resume launches nothing")
+eq(errors[3], "err_resume_refused(reason=resume_reason_unknown)", "unknown resume error")
 click("resume-aaa1")
 eq(#launched, 1, "ok row resumes")
 eq(launched[1], "cd '/tmp/o'\\''neil' && exec claude --resume 'aaa1'", "ok resume cwd")
@@ -154,6 +160,7 @@ click("sort-orphan")
 assert(not find(rendered, "sort-moved").props.selected, "orphan replaces moved")
 assert(find(rendered, "resume-bbb2") and find(rendered, "resume-ccc3") and find(rendered, "resume-eee5"), "orphan + misplaced shown")
 assert(find(rendered, "resume-ddd4") == nil and find(rendered, "resume-aaa1") == nil, "others hidden")
+assert(find(rendered, "resume-ab12") == nil, "unknown is not an orphan")
 click("sort-empty")
 assert(find(rendered, "resume-bbb2") == nil, "combined with Empty")
 click("sort-empty")
@@ -167,7 +174,8 @@ eq(clips[1][2], "text/plain", "copied mime")
 eq(notes[#notes], "copied_resume", "copy notice")
 click("copy-ddd4")
 eq(clips[2][1], "cd '/real' && claude --resume ddd4", "relocated copy uses the real folder")
-assert(find(rendered, "copy-bbb2"), "misplaced session with real cwd can copy")
+assert(find(rendered, "copy-bbb2") == nil, "no copy for misplaced until repaired")
+assert(find(rendered, "copy-ab12") == nil, "no copy for unknown")
 assert(find(rendered, "copy-ccc3") == nil, "no copy for an orphan")
 assert(find(rendered, "copy-fff6") == nil, "no copy for a guessed cwd")
 
@@ -175,7 +183,18 @@ assert(find(rendered, "copy-fff6") == nil, "no copy for a guessed cwd")
 assert(find(rendered, "repair-bbb2"), "repair button on misplaced")
 eq(find(rendered, "repair-bbb2").props.glyph, "arrows-exchange", "repair glyph")
 eq(find(rendered, "repair-bbb2").props.tooltip, "tip_repair_session", "repair tooltip")
-for _, k in ipairs({ "repair-ccc3", "repair-ddd4", "repair-aaa1", "repair-eee5" }) do
+-- CLAUDE.md button: not on orphan or unknown rows (no folder to create it in).
+assert(find(rendered, "md-aaa1") and find(rendered, "md-ddd4") and find(rendered, "md-bbb2"), "CLAUDE.md on ok/relocated/misplaced")
+assert(find(rendered, "md-ccc3") == nil and find(rendered, "md-ab12") == nil, "no CLAUDE.md on orphan/unknown")
+
+-- Search: a relocated session also matches its old recorded cwd.
+D.cwd = "/old/place"
+find(rendered, "sess-search").props.onChange("old/pl")
+assert(find(rendered, "resume-ddd4") and find(rendered, "resume-aaa1") == nil, "search matches the old cwd")
+find(rendered, "sess-search").props.onChange("")
+assert(find(rendered, "resume-aaa1"), "search cleared")
+
+for _, k in ipairs({ "repair-ccc3", "repair-ddd4", "repair-aaa1", "repair-eee5", "repair-ab12" }) do
     assert(find(rendered, k) == nil, "no repair: " .. k)
 end
 LIVE.status = "misplaced"
