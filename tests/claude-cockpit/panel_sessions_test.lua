@@ -97,6 +97,10 @@ local function find(n, key)
         if hit then return hit end
     end
 end
+local YELLOW = "#e8b923"
+local function gl(n) -- glyph child of an icon button / filter row
+    for _, c in ipairs(n.children) do if c.kind == "glyph" then return c.props end end
+end
 local function has(n, pred)
     if pred(n) then return true end
     for _, child in ipairs(n.children or {}) do
@@ -124,7 +128,7 @@ end
 assert(find(rendered, "status-aaa1") == nil, "ok row has no status glyph")
 eq(find(rendered, "status-ddd4").props.tooltip, "status_relocated(path=/real)", "relocated tooltip")
 eq(glyphOf("status-ddd4").name, "folder-symlink", "relocated glyph")
-eq(glyphOf("status-ddd4").color, "on_surface_variant", "relocated color")
+eq(glyphOf("status-ddd4").color, YELLOW, "relocated color")
 eq(find(rendered, "status-ccc3").props.tooltip, "status_orphan_memory", "orphan tooltip with memory")
 eq(find(rendered, "status-eee5").props.tooltip, "status_orphan", "orphan tooltip")
 eq(glyphOf("status-ccc3").name, "folder-off", "orphan glyph"); eq(glyphOf("status-ccc3").color, "error", "orphan color")
@@ -149,17 +153,25 @@ eq(#launched, 2, "relocated row resumes")
 eq(launched[2], "cd '/real' && exec claude --resume 'ddd4'", "relocated resumes from the real folder")
 
 -- Moved / Orphan filters: one at a time, combined with Empty and search.
-eq(find(rendered, "sort-moved").props.text, "1", "moved count")
-eq(find(rendered, "sort-moved").props.glyph, "folder-symlink", "moved glyph")
-eq(find(rendered, "sort-orphan").props.text, "3", "orphan count (orphan + misplaced)")
-eq(find(rendered, "sort-orphan").props.glyph, "folder-off", "orphan filter glyph")
+local function countOf(key)
+    for _, c in ipairs(find(rendered, key).children) do if c.kind == "label" then return c.props.text end end
+end
+eq(countOf("sort-moved"), "1", "moved count")
+eq(gl(find(rendered, "sort-moved")).name, "folder-symlink", "moved glyph")
+eq(gl(find(rendered, "sort-moved")).color, YELLOW, "moved glyph is yellow")
+eq(countOf("sort-orphan"), "3", "orphan count (orphan + misplaced)")
+eq(gl(find(rendered, "sort-orphan")).name, "folder-off", "orphan filter glyph")
+assert(find(rendered, "sort-moved").props.fill == nil, "moved not selected")
 eq(find(rendered, "sort-moved").props.tooltip, "tip_filter_moved", "moved tooltip")
 eq(find(rendered, "sort-orphan").props.tooltip, "tip_filter_orphan", "orphan tooltip")
 click("sort-moved")
-assert(find(rendered, "sort-moved").props.selected, "moved selected")
+eq(find(rendered, "sort-moved").props.fill, "primary", "moved selected fill")
+eq(gl(find(rendered, "sort-moved")).color, YELLOW, "moved glyph stays yellow when selected")
 assert(find(rendered, "resume-ddd4") and find(rendered, "resume-aaa1") == nil and find(rendered, "resume-bbb2") == nil, "moved only")
 click("sort-orphan")
-assert(not find(rendered, "sort-moved").props.selected, "orphan replaces moved")
+assert(find(rendered, "sort-moved").props.fill == nil, "orphan replaces moved")
+eq(find(rendered, "sort-orphan").props.fill, "primary", "orphan selected fill")
+eq(gl(find(rendered, "sort-orphan")).color, "on_primary", "orphan glyph on primary")
 assert(find(rendered, "resume-bbb2") and find(rendered, "resume-ccc3") and find(rendered, "resume-eee5"), "orphan + misplaced shown")
 assert(find(rendered, "resume-ddd4") == nil and find(rendered, "resume-aaa1") == nil, "others hidden")
 assert(find(rendered, "resume-ab12") == nil, "unknown is not an orphan")
@@ -170,6 +182,8 @@ click("sort-orphan")
 assert(find(rendered, "resume-aaa1") and find(rendered, "resume-ddd4"), "filter off shows all")
 
 -- Copy resume command: from runCwd, never for an orphan.
+eq(gl(find(rendered, "copy-aaa1")).name, "copy", "copy glyph")
+eq(gl(find(rendered, "copy-aaa1")).color, "on_surface_variant", "copy role")
 click("copy-aaa1")
 eq(clips[1][1], "cd '/tmp/o'\\''neil' && claude --resume aaa1", "copied text")
 eq(clips[1][2], "text/plain", "copied mime")
@@ -183,14 +197,36 @@ assert(find(rendered, "copy-fff6") == nil, "no copy for a guessed cwd")
 
 -- Repair: only misplaced, never a live session; inline strip; confirm repairs then reloads.
 assert(find(rendered, "repair-bbb2"), "repair button on misplaced")
-eq(find(rendered, "repair-bbb2").props.glyph, "arrows-exchange", "repair glyph")
+eq(gl(find(rendered, "repair-bbb2")).name, "arrows-exchange", "repair glyph")
+eq(gl(find(rendered, "repair-bbb2")).color, "tertiary", "repair role")
 eq(find(rendered, "repair-bbb2").props.tooltip, "tip_repair_session", "repair tooltip")
 -- CLAUDE.md button: not on orphan or unknown rows (no folder to create it in).
 assert(find(rendered, "md-aaa1") and find(rendered, "md-ddd4") and find(rendered, "md-bbb2"), "CLAUDE.md on ok/relocated/misplaced")
 assert(find(rendered, "md-ccc3") == nil and find(rendered, "md-ab12") == nil, "no CLAUDE.md on orphan/unknown")
+eq(gl(find(rendered, "md-aaa1")).name, "brain", "CLAUDE.md glyph")
+eq(gl(find(rendered, "md-aaa1")).color, "tertiary", "CLAUDE.md role")
 -- A relocated row opens the CLAUDE.md of the real folder, not of the old recorded one.
-find(rendered, "md-ddd4").props.onClick()
+click("md-ddd4")
 eq(edited[#edited], "/real/CLAUDE.md", "relocated CLAUDE.md path")
+
+-- Live glyph is yellow on the row and on the group header; trash is red; roles of the rest.
+assert(has(find(rendered, "sess-beef"), function(n) return n.kind == "glyph" and n.props.name == "activity" and n.props.color == YELLOW end), "live row glyph is yellow")
+assert(has(find(rendered, "grp-/p"), function(n) return n.kind == "glyph" and n.props.name == "activity" and n.props.color == YELLOW end), "group live glyph is yellow")
+eq(gl(find(rendered, "del-aaa1")).name, "trash", "trash glyph"); eq(gl(find(rendered, "del-aaa1")).color, "error", "trash is error")
+eq(gl(find(rendered, "ren-aaa1")).name, "pencil", "rename glyph"); eq(gl(find(rendered, "ren-aaa1")).color, "primary", "rename role")
+eq(gl(find(rendered, "prev-aaa1")).name, "eye", "preview glyph"); eq(gl(find(rendered, "prev-aaa1")).color, "secondary", "preview role")
+click("prev-aaa1")
+eq(gl(find(rendered, "prev-aaa1")).name, "eye-off", "preview toggled")
+click("prev-aaa1")
+eq(gl(find(rendered, "prev-aaa1")).name, "eye", "preview toggled back")
+
+-- Hover fill appears only on the hovered icon.
+local hov = find(rendered, "copy-aaa1")
+assert(hov.props.fill == nil, "no fill before hover")
+hov.props.onHover("true", "copy-aaa1")
+eq(find(rendered, "copy-aaa1").props.fill, "on_surface/0.08", "hover fill")
+find(rendered, "copy-aaa1").props.onHover("false", "copy-aaa1")
+assert(find(rendered, "copy-aaa1").props.fill == nil, "hover fill cleared")
 
 -- Search: a relocated session also matches its old recorded cwd.
 D.cwd = "/old/place"

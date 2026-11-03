@@ -776,13 +776,46 @@ local function contextRow(session)
     })
 end
 
+-- Theme roles have no yellow; a hex that reads on dark and light themes.
+local YELLOW = "#e8b923"
+
 -- Row glyph per status; "ok" has none.
 local STATUS_MARK = {
-    relocated = { glyph = "folder-symlink", color = "on_surface_variant" },
+    relocated = { glyph = "folder-symlink", color = YELLOW },
     orphan = { glyph = "folder-off", color = "error" },
     misplaced = { glyph = "alert-triangle", color = "tertiary" },
     unknown = { glyph = "help-circle", color = "on_surface_variant" },
 }
+
+-- ui.button cannot colour its glyph, so the row actions are clickable rows.
+-- Hover fill is driven by onHover; render() runs only when the hovered key changes.
+local hoveredIcon = nil
+local HOVER_FILL = "on_surface/0.08"
+
+local function onIconHover(key)
+    return function(state)
+        local nextKey = hoveredIcon
+        if state == "true" then
+            nextKey = key
+        elseif hoveredIcon == key then
+            nextKey = nil
+        end
+        if nextKey ~= hoveredIcon then
+            hoveredIcon = nextKey
+            render()
+        end
+    end
+end
+
+local function iconButton(key, glyph, color, tooltip, onClick)
+    return ui.row({
+        key = key, tooltip = tooltip, onClick = onClick, onHover = onIconHover(key),
+        align = "center", justify = "center", padding = 8, radius = 6,
+        fill = hoveredIcon == key and HOVER_FILL or nil,
+    }, {
+        ui.glyph({ name = glyph, size = 16, color = color }),
+    })
+end
 
 local function sessionWrapKey(session)
     return "sess-wrap-" .. session.id
@@ -811,7 +844,7 @@ local function sessionRow(session, selected, isLive)
 
     local rowButtons = {}
     if isLive then
-        table.insert(rowButtons, ui.glyph({ name = "activity", size = 14, color = "primary" }))
+        table.insert(rowButtons, ui.glyph({ name = "activity", size = 14, color = YELLOW }))
     end
     local mark = STATUS_MARK[session.status]
     if mark then
@@ -839,48 +872,43 @@ local function sessionRow(session, selected, isLive)
     -- command works; no CLAUDE.md where no folder is known to exist.
     local resumable = session.status == "ok" or session.status == "relocated"
     if resumable and session.cwd:sub(1, 1) == "/" and session.cwdKnown and session.runCwd:sub(1, 1) == "/" and id:match("^[%x-]+$") then
-        table.insert(rowButtons, ui.button({
-            key = "copy-" .. id, glyph = "copy", variant = "ghost", controlSize = "sm",
-            tooltip = tr("tip_copy_resume"),
-            onClick = function() copyResume(session) end,
-        }))
+        table.insert(rowButtons, iconButton(
+            "copy-" .. id, "copy", "on_surface_variant", tr("tip_copy_resume"),
+            function() copyResume(session) end
+        ))
     end
     if session.runCwd:sub(1, 1) == "/" and session.status ~= "orphan" and session.status ~= "unknown" then
         local claudeMdPath = session.runCwd .. "/CLAUDE.md"
         local exists = noctalia.fileExists(claudeMdPath)
-        table.insert(rowButtons, ui.button({
-            key = "md-" .. id, glyph = "brain", variant = "ghost", controlSize = "sm",
-            tooltip = tr(exists and "tip_open_editor" or "tip_create_editor"),
-            onClick = function() shared.openInEditor(claudeMdPath) end,
-        }))
+        table.insert(rowButtons, iconButton(
+            "md-" .. id, "brain", "tertiary", tr(exists and "tip_open_editor" or "tip_create_editor"),
+            function() shared.openInEditor(claudeMdPath) end
+        ))
     end
 
-    table.insert(rowButtons, ui.button({
+    table.insert(rowButtons, iconButton(
         -- Glyph flips eye/eye-off with the toggle state.
-        glyph = previewOpen and "eye-off" or "eye", variant = "ghost", controlSize = "sm",
-        tooltip = tr(previewOpen and "tip_hide_preview" or "tip_preview"),
-        onClick = function() togglePreview(id) end,
-    }))
+        "prev-" .. id, previewOpen and "eye-off" or "eye", "secondary",
+        tr(previewOpen and "tip_hide_preview" or "tip_preview"),
+        function() togglePreview(id) end
+    ))
     -- A running session would write over the custom title on its next turn.
     if not isLive then
-        table.insert(rowButtons, ui.button({
-            key = "ren-" .. id, glyph = "pencil", variant = "ghost", controlSize = "sm",
-            tooltip = tr("tip_rename_session"),
-            onClick = function() openRename(session) end,
-        }))
+        table.insert(rowButtons, iconButton(
+            "ren-" .. id, "pencil", "primary", tr("tip_rename_session"),
+            function() openRename(session) end
+        ))
     end
     if session.status == "misplaced" and not isLive then
-        table.insert(rowButtons, ui.button({
-            key = "repair-" .. id, glyph = "arrows-exchange", variant = "ghost", controlSize = "sm",
-            tooltip = tr("tip_repair_session"),
-            onClick = function() openRepair(session) end,
-        }))
+        table.insert(rowButtons, iconButton(
+            "repair-" .. id, "arrows-exchange", "tertiary", tr("tip_repair_session"),
+            function() openRepair(session) end
+        ))
     end
-    table.insert(rowButtons, ui.button({
-        key = "del-" .. id,
-        glyph = "trash", variant = "ghost", controlSize = "sm", tooltip = tr("tip_delete_session"),
-        onClick = function() requestDelete(id) end,
-    }))
+    table.insert(rowButtons, iconButton(
+        "del-" .. id, "trash", "error", tr("tip_delete_session"),
+        function() requestDelete(id) end
+    ))
 
     local blocks = {
         ui.column({ key = "sess-" .. id, gap = 2, align = "stretch" }, {
@@ -949,7 +977,7 @@ local function groupHeader(group, count, selected, hasLive)
     }, compact(
         ui.glyph({ name = expanded and "chevron-down" or "chevron-right", size = 14, color = "on_surface_variant" }),
         ui.glyph({ name = "folder", size = 14, color = "on_surface_variant" }),
-        hasLive and ui.glyph({ name = "activity", size = 14, color = "primary" }) or nil,
+        hasLive and ui.glyph({ name = "activity", size = 14, color = YELLOW }) or nil,
         ui.button({
             text = basename, variant = "ghost", contentAlign = "start", flexGrow = 1,
             controlSize = "sm", fontSize = 13, tooltip = group.cwd, selected = selected,
@@ -1026,15 +1054,23 @@ end
 local STATUS_FILTERS = { moved = isMoved, orphan = isOrphan }
 
 -- Moved and Orphan show a glyph and the count only, so the toolbar keeps its width.
-local function statusFilterButton(name, glyph, test)
-    return ui.button({
-        key = "sort-" .. name, glyph = glyph, text = tostring(countSessions(test)),
-        variant = "ghost", controlSize = "sm", selected = statusFilter == name, tooltip = tr("tip_filter_" .. name),
+-- A clickable row, so the glyph can be coloured; the selected fill is the
+-- host's selected ghost button look (primary fill, on_primary text).
+local function statusFilterButton(name, glyph, glyphColor, test)
+    local key = "sort-" .. name
+    local selected = statusFilter == name
+    return ui.row({
+        key = key, tooltip = tr("tip_filter_" .. name), gap = 6, align = "center", padding = 8, radius = 6,
+        fill = selected and "primary" or (hoveredIcon == key and HOVER_FILL or nil),
+        onHover = onIconHover(key),
         onClick = function()
             statusFilter = (statusFilter ~= name) and name or nil
             sel = 1
             render()
         end,
+    }, {
+        ui.glyph({ name = glyph, size = 16, color = selected and glyphColor == "on_surface" and "on_primary" or glyphColor }),
+        ui.label({ text = tostring(countSessions(test)), fontSize = 13, color = selected and "on_primary" or "on_surface" }),
     })
 end
 
@@ -1259,8 +1295,8 @@ local function renderSessionsTab()
                     render()
                 end,
             }),
-            statusFilterButton("moved", "folder-symlink", isMoved),
-            statusFilterButton("orphan", "folder-off", isOrphan),
+            statusFilterButton("moved", "folder-symlink", YELLOW, isMoved),
+            statusFilterButton("orphan", "folder-off", "on_surface", isOrphan),
             ui.label({ key = "sort-spacer", text = "", flexGrow = 1 }),
             ui.button({
                 key = "sess-refresh", glyph = sessionsState.loading and "loader-2" or "refresh",
