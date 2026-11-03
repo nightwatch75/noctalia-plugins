@@ -1,0 +1,68 @@
+-- module: sessions.luau
+-- Session shape, delete argv, rename validation. The real rename shell
+-- snippet runs in rename_append_test.sh.
+
+local function eq(a, b, m) if a ~= b then error(m .. ": got " .. tostring(a) .. " want " .. tostring(b), 2) end end
+
+local calls = {}
+local encoded
+noctalia = {
+    expandPath = function(p) return (p:gsub("^~", "/h")) end,
+    tr = function(k, a) return k .. (a and a.id or "") end,
+    fileExists = function(p) return p == "/h/.claude/projects/-p/memory" end,
+    pluginDir = function() return "/plug" end,
+    runAsync = function(argv, cb) table.insert(calls, argv); cb({ exitCode = 0 }); return true end,
+    json = { encode = function(t) encoded = t; return "LINE" end },
+}
+local sessions = loadstring(MODULE_SRC)()
+
+local function group(raw) return sessions.groupByProject({ raw })[1].sessions[1] end
+local base = { id = "abcdef12-1", projectDir = "-p", cwd = "/w", mtime = 1 }
+local function with(t) local r = {} for k, v in pairs(base) do r[k] = v end for k, v in pairs(t) do r[k] = v end return r end
+
+eq(group(with({ customTitle = "C", title = "A", firstPrompt = "P" })).label, "C", "custom wins")
+eq(group(with({ title = "A", firstPrompt = "P" })).label, "A", "ai second")
+eq(group(with({ customTitle = "", title = "", firstPrompt = "P" })).label, "P", "prompt third")
+eq(group(with({})).label, "session_untitledabcdef12", "id last")
+
+local s = group(with({ status = "dir_mismatch" }))
+eq(s.projectDir, "-p", "projectDir")
+eq(s.status, "dir_mismatch", "status")
+eq(group(base).status, "ok", "status default")
+eq(s.sessionEnvDir, "/h/.claude/session-env/abcdef12-1", "env")
+eq(s.fileHistoryDir, "/h/.claude/file-history/abcdef12-1", "history")
+eq(s.memoryDir, "/h/.claude/projects/-p/memory", "memory")
+eq(s.projectPath, "/h/.claude/projects/-p", "projectPath")
+eq(sessions.memoryKept(s), true, "memoryKept")
+
+local okv
+sessions.deleteSession(s, function(ok) okv = ok end)
+eq(okv, true, "delete done")
+eq(#calls, 2, "two execs")
+eq(table.concat(calls[1], " "), "rm -rf -- /h/.claude/projects/-p/abcdef12-1.jsonl /h/.claude/projects/-p/abcdef12-1 /h/.claude/session-env/abcdef12-1 /h/.claude/file-history/abcdef12-1", "rm argv")
+eq(table.concat(calls[2], " "), "rmdir -- /h/.claude/projects/-p/memory /h/.claude/projects/-p", "rmdir argv")
+
+local projects = sessions.groupByProject({ with({}), with({ id = "b2" }), with({ id = "c3", projectDir = "-q", cwd = "/o" }) })
+local function find(id) for _, g in ipairs(projects) do for _, x in ipairs(g.sessions) do if x.id == id then return x end end end end
+eq(sessions.isLastInProject(projects, find("c3")), true, "last")
+eq(sessions.isLastInProject(projects, find("b2")), false, "not last")
+
+for _, bad in ipairs({ "", "  \n ", string.rep("x", 121) }) do
+    calls = {}
+    local r
+    sessions.renameSession(s, bad, function(ok) r = ok end)
+    eq(r, false, "reject")
+    eq(#calls, 0, "no exec")
+end
+calls = {}
+sessions.renameSession(s, " a\nb ", function() end)
+eq(encoded.customTitle, "a b", "newline to space")
+eq(encoded.type, "custom-title", "type")
+eq(encoded.sessionId, "abcdef12-1", "sessionId")
+eq(calls[1][1], "sh", "sh")
+eq(calls[1][5], "/h/.claude/projects/-p/abcdef12-1.jsonl", "jsonl arg")
+eq(calls[1][6], "LINE", "line arg")
+calls = {}
+sessions.renameSession(s, string.rep("x", 120), function() end)
+eq(#calls, 1, "120 ok")
+print("sessions_test ok")

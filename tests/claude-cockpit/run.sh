@@ -2,7 +2,8 @@
 # Runs every *_test.lua next to this script (tests/claude-cockpit/, outside the
 # plugin folder so the host does not install them). Run it from anywhere. Each
 # test is one chunk: this script prepends the unmodified panel source as the
-# string PANEL_SRC, and the test stubs the host globals and loads it with
+# string PANEL_SRC (a test whose first line is `-- module: <file>` also gets that
+# plugin file as MODULE_SRC), and the test stubs the host globals and loads it with
 # loadstring.
 #
 # Interpreter: `luau` from PATH if present, else `luau-test` (a small C++
@@ -22,9 +23,16 @@ for test in "$here"/*_test.lua; do
         printf 'local PANEL_SRC = [==[\n'
         cat panel.luau
         printf '\n]==]\n'
+        mod=$(sed -n '1s/^-- module: //p' "$test")
+        if [ -n "$mod" ]; then
+            printf 'local MODULE_SRC = [==[\n'
+            cat "$mod"
+            printf '\n]==]\n'
+        fi
         cat "$test"
     } > "$out"
     "$LUAU" "$out"
 done
 
 sh "$here/list_sessions_test.sh"
+LUAU="$LUAU" sh "$here/rename_append_test.sh"

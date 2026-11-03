@@ -14,6 +14,8 @@ local M = {}
 
 local HOME = noctalia.expandPath("~")
 local PROJECTS_DIR = noctalia.expandPath("~/.claude/projects")
+local SESSION_ENV_DIR = noctalia.expandPath("~/.claude/session-env")
+local FILE_HISTORY_DIR = noctalia.expandPath("~/.claude/file-history")
 M.GLOBAL_CLAUDE_MD = noctalia.expandPath("~/.claude/CLAUDE.md")
 
 local scriptPath = `{noctalia.pluginDir()}/list-claude-sessions`
@@ -37,8 +39,9 @@ end
 local function shapeSession(raw, cwd)
     local id = raw.id
     local aiTitle = (type(raw.title) == "string") and raw.title or ""
+    local customTitle = (type(raw.customTitle) == "string") and raw.customTitle or ""
     local firstPrompt = (type(raw.firstPrompt) == "string") and raw.firstPrompt or ""
-    local label = aiTitle
+    local label = (customTitle ~= "") and customTitle or aiTitle
     if label == "" then
         if firstPrompt ~= "" then
             label = (#firstPrompt > 72) and (firstPrompt:sub(1, 72) .. "…") or firstPrompt
@@ -60,8 +63,14 @@ local function shapeSession(raw, cwd)
         -- for a session with no assistant turn yet.
         model = (type(raw.model) == "string") and raw.model or "",
         contextTokens = tonumber(raw.contextTokens) or 0,
+        projectDir = dir,
+        status = (type(raw.status) == "string" and raw.status ~= "") and raw.status or "ok",
         jsonlPath = PROJECTS_DIR .. "/" .. dir .. "/" .. id .. ".jsonl",
         sidecarDir = PROJECTS_DIR .. "/" .. dir .. "/" .. id,
+        sessionEnvDir = SESSION_ENV_DIR .. "/" .. id,
+        fileHistoryDir = FILE_HISTORY_DIR .. "/" .. id,
+        memoryDir = PROJECTS_DIR .. "/" .. dir .. "/memory",
+        projectPath = PROJECTS_DIR .. "/" .. dir,
     }
 end
 
@@ -118,11 +127,57 @@ function M.refresh(done)
     end
 end
 
--- Deletes one session's transcript and its subagent sidecar dir (if any), as
--- a direct argv exec — no shell in the way, so no shellQuote is needed and
--- `rm` needs no commandExists guard (it ships on every Linux install).
+-- True when no other session shares this session's ~/.claude/projects dir,
+-- i.e. deleting it leaves the project dir empty apart from memory/.
+function M.isLastInProject(projects, session)
+    for _, group in ipairs(projects) do
+        for _, other in ipairs(group.sessions) do
+            if other.id ~= session.id and other.projectDir == session.projectDir then
+                return false
+            end
+        end
+    end
+    return true
+end
+
+function M.memoryKept(session)
+    return noctalia.fileExists(session.memoryDir) == true
+end
+
+-- Deletes one session's transcript, subagent sidecar, session-env and
+-- file-history, as a direct argv exec — no shell in the way, so no
+-- shellQuote is needed. The follow-up rmdir only removes the (now empty)
+-- memory and project dirs and fails harmlessly when they hold anything, so
+-- its result is ignored and `done` reports the rm alone.
 function M.deleteSession(session, done)
-    local ok = noctalia.runAsync({ "rm", "-rf", "--", session.jsonlPath, session.sidecarDir }, function(result)
+    local ok = noctalia.runAsync({
+        "rm", "-rf", "--", session.jsonlPath, session.sidecarDir, session.sessionEnvDir, session.fileHistoryDir,
+    }, function(result)
+        local success = type(result) == "table" and result.exitCode == 0
+        if success then
+            noctalia.runAsync({ "rmdir", "--", session.memoryDir, session.projectPath }, function() end)
+        end
+        done(success)
+    end)
+    if not ok then
+        done(false)
+    end
+end
+
+-- Appends a custom-title record, the same line /rename writes, so Claude
+-- Code and list-claude-sessions both pick it up. The snippet first adds a
+-- newline if the transcript lacks a final one, so the record never glues
+-- onto the last line.
+M.RENAME_SH = 'f="$1"; [ -s "$f" ] && [ -n "$(tail -c1 "$f")" ] && printf "\\n" >> "$f"; printf "%s\\n" "$2" >> "$f"'
+
+function M.renameSession(session, title, done)
+    title = title:gsub("[\r\n]+", " "):match("^%s*(.-)%s*$")
+    if title == "" or utf8.len(title) == nil or utf8.len(title) > 120 then
+        done(false)
+        return
+    end
+    local line = noctalia.json.encode({ type = "custom-title", customTitle = title, sessionId = session.id })
+    local ok = noctalia.runAsync({ "sh", "-c", M.RENAME_SH, "sh", session.jsonlPath, line }, function(result)
         done(type(result) == "table" and result.exitCode == 0)
     end)
     if not ok then
