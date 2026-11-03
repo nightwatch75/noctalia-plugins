@@ -144,12 +144,21 @@ function M.memoryKept(session)
     return noctalia.fileExists(session.memoryDir) == true
 end
 
+-- Ids become path parts under rm -rf: only hex and dashes, never "." or "/".
+local function validId(id)
+    return type(id) == "string" and id:match("^[%x-]+$") ~= nil
+end
+
 -- Deletes one session's transcript, subagent sidecar, session-env and
 -- file-history, as a direct argv exec — no shell in the way, so no
 -- shellQuote is needed. The follow-up rmdir only removes the (now empty)
 -- memory and project dirs and fails harmlessly when they hold anything, so
 -- its result is ignored and `done` reports the rm alone.
 function M.deleteSession(session, done)
+    if not validId(session.id) then
+        done(false)
+        return
+    end
     local ok = noctalia.runAsync({
         "rm", "-rf", "--", session.jsonlPath, session.sidecarDir, session.sessionEnvDir, session.fileHistoryDir,
     }, function(result)
@@ -171,6 +180,10 @@ end
 M.RENAME_SH = 'f="$1"; [ -s "$f" ] && [ -n "$(tail -c1 "$f")" ] && printf "\\n" >> "$f"; printf "%s\\n" "$2" >> "$f"'
 
 function M.renameSession(session, title, done)
+    if not validId(session.id) then
+        done(false)
+        return
+    end
     title = title:gsub("[\r\n]+", " "):match("^%s*(.-)%s*$")
     if title == "" or utf8.len(title) == nil or utf8.len(title) > 120 then
         done(false)
@@ -179,6 +192,124 @@ function M.renameSession(session, title, done)
     local line = noctalia.json.encode({ type = "custom-title", customTitle = title, sessionId = session.id })
     local ok = noctalia.runAsync({ "sh", "-c", M.RENAME_SH, "sh", session.jsonlPath, line }, function(result)
         done(type(result) == "table" and result.exitCode == 0)
+    end)
+    if not ok then
+        done(false)
+    end
+end
+
+-- ── Orphan leftovers ─────────────────────────────────────────────────────
+-- list-claude-orphans is read-only; removal happens here, after every path
+-- is re-validated in Lua, as direct argv execs (no shell).
+
+local orphansPath = `{noctalia.pluginDir()}/list-claude-orphans`
+local UUID_PAT = ("%x"):rep(8) .. ("%-" .. ("%x"):rep(4)):rep(3) .. "%-" .. ("%x"):rep(12)
+
+-- Scans for orphans, keeping every id in liveIds. done(orphans, err).
+function M.checkOrphans(liveIds, done)
+    local argv = { "bash", orphansPath }
+    for _, id in ipairs(liveIds) do
+        if validId(id) then
+            table.insert(argv, "--exclude")
+            table.insert(argv, id)
+        end
+    end
+    local ok = noctalia.runAsync(argv, function(result)
+        if type(result) ~= "table" or result.success == false or result.exitCode ~= 0 then
+            done(nil, noctalia.tr("err_sessions_fetch"))
+            return
+        end
+        local data = noctalia.json.decode(result.stdout or "")
+        if type(data) ~= "table" or type(data.orphans) ~= "table" then
+            done(nil, noctalia.tr("err_sessions_data"))
+            return
+        end
+        done(data.orphans, nil)
+    end)
+    if not ok then
+        done(nil, noctalia.tr("err_sessions_launch"))
+    end
+end
+
+-- The orphan's own name when its path is exactly <parent>/<name> with a
+-- clean name, else nil.
+local function childName(path, parent)
+    if type(path) ~= "string" or path:sub(1, #parent + 1) ~= parent .. "/" then
+        return nil
+    end
+    local name = path:sub(#parent + 2)
+    if name == "" or name == "." or name == ".." or name:find("/", 1, true) or name:find("%c") then
+        return nil
+    end
+    return name
+end
+
+-- Removes the orphans checkOrphans returned. All-or-nothing validation first:
+-- one bad entry refuses the whole batch and nothing runs.
+function M.removeOrphans(orphans, done)
+    local idPaths, projects = {}, {}
+    for _, o in ipairs(orphans) do
+        local kind = type(o) == "table" and o.kind
+        if kind == "session-env" or kind == "file-history" then
+            local name = childName(o.path, kind == "session-env" and SESSION_ENV_DIR or FILE_HISTORY_DIR)
+            if not name or not name:match("^" .. UUID_PAT .. "$") then
+                done(false)
+                return
+            end
+            table.insert(idPaths, o.path)
+        elseif kind == "project" then
+            if not childName(o.path, PROJECTS_DIR) then
+                done(false)
+                return
+            end
+            table.insert(projects, o.path)
+        else
+            done(false)
+            return
+        end
+    end
+    -- Sequential: id folders, then each project's (empty) memory dir, then the project dir.
+    local function removeProjects()
+        if #projects == 0 then
+            done(true)
+            return
+        end
+        local memories = {}
+        for _, p in ipairs(projects) do
+            table.insert(memories, p .. "/memory")
+        end
+        table.insert(memories, 1, "--")
+        table.insert(memories, 1, "rmdir")
+        -- A project without memory/ makes this rmdir fail harmlessly: ignored.
+        local started = noctalia.runAsync(memories, function()
+            local argv = { "rmdir", "--" }
+            for _, p in ipairs(projects) do
+                table.insert(argv, p)
+            end
+            if not noctalia.runAsync(argv, function(result)
+                done(type(result) == "table" and result.exitCode == 0)
+            end) then
+                done(false)
+            end
+        end)
+        if not started then
+            done(false)
+        end
+    end
+    if #idPaths == 0 then
+        removeProjects()
+        return
+    end
+    local argv = { "rm", "-rf", "--" }
+    for _, p in ipairs(idPaths) do
+        table.insert(argv, p)
+    end
+    local ok = noctalia.runAsync(argv, function(result)
+        if type(result) == "table" and result.exitCode == 0 then
+            removeProjects()
+        else
+            done(false)
+        end
     end)
     if not ok then
         done(false)

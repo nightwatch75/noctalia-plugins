@@ -36,3 +36,4 @@ done
 
 sh "$here/list_sessions_test.sh"
 LUAU="$LUAU" sh "$here/rename_append_test.sh"
+sh "$here/orphans_test.sh"
