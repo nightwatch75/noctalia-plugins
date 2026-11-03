@@ -59,6 +59,37 @@ pending, doneCalled = {}, false
 sessions.deleteSession(s, function(ok) doneCalled = ok == false end)
 pending[1][2]({ exitCode = 1 })
 eq(doneCalled, true, "failed rm: done(false) at once"); eq(#pending, 1, "failed rm: no rmdir")
+
+-- deleteSessions: same per-session sequence, an invalid id counts as failed,
+-- never more than 4 commands in flight (host limit is 8).
+pending = {}
+local inFlight, peak = 0, 0
+noctalia.runAsync = function(argv, cb)
+    inFlight += 1
+    peak = math.max(peak, inFlight)
+    table.insert(pending, { argv, function(r) inFlight -= 1; cb(r) end })
+    return true
+end
+local list = {}
+for i = 1, 9 do
+    table.insert(list, group(with({ id = "abcdef12-" .. i })))
+end
+table.insert(list, 5, group(with({ id = "../x" })))
+local failedN
+sessions.deleteSessions(list, function(n) failedN = n end)
+local ran = 0
+while #pending > 0 do
+    local p = table.remove(pending, 1)
+    ran += 1
+    -- rm of session 3 fails: its cleanup/rmdir must not run
+    p[2]({ exitCode = (p[1][1] == "rm" and p[1][4]:find("abcdef12%-3%.jsonl")) and 1 or 0 })
+end
+eq(failedN, 2, "bad id + failed rm counted")
+eq(ran, 8 * 3 + 1, "three execs per deleted session, one for the failed rm")
+eq(peak <= 4, true, "at most 4 in flight")
+failedN = nil
+sessions.deleteSessions({}, function(n) failedN = n end)
+eq(failedN, 0, "empty list")
 noctalia.runAsync = saved
 
 local projects = sessions.groupByProject({ with({}), with({ id = "b2" }), with({ id = "c3", projectDir = "-q", cwd = "/o" }) })

@@ -110,6 +110,12 @@ end
 
 -- Runs list-claude-sessions and hands the grouped project list to
 -- done(projects, err) — err is nil on success.
+-- The scan reads every transcript under ~/.claude/projects (about 30 s for
+-- ~300 sessions, 400 MB), so it needs a longer timeout than runAsync's
+-- default of a few seconds, which kills it (exit 143) and leaves the tab empty.
+-- 60 s is the most runAsync accepts (it clamps timeoutMs to [50, 60000]).
+local SCAN_TIMEOUT_MS = 60000
+
 function M.refresh(done)
     local ok = noctalia.runAsync(`bash '{scriptPath}'`, function(result)
         if type(result) ~= "table" or result.success == false or result.exitCode ~= 0 then
@@ -122,7 +128,7 @@ function M.refresh(done)
             return
         end
         done(M.groupByProject(data.sessions), nil)
-    end)
+    end, SCAN_TIMEOUT_MS)
     if not ok then
         done(nil, noctalia.tr("err_sessions_launch"))
     end
@@ -156,10 +162,13 @@ end
 M.CLEANUP_SH = 'for p in "$1"/*/"$2".jsonl; do [ -e "$p" ] && exit 0; done; rm -rf -- "$3" "$4"'
 
 -- Deletes one session's transcript and subagent sidecar, then the shared id
--- folders (see CLEANUP_SH), as direct argv execs. The final rmdir only removes
--- the (now empty) memory and project dirs and fails harmlessly when they hold
--- anything, so `done` reports the first rm alone.
-function M.deleteSession(session, done)
+-- folders (see CLEANUP_SH), as direct argv execs, one after the other (one
+-- command at a time). The final rmdir only removes the (now empty) memory and
+-- project dirs and fails harmlessly when they hold anything, so `done`
+-- reports the first rm alone.
+local DELETE_TIMEOUT_MS = 30000
+
+local function deleteOne(session, done)
     if not validId(session.id) then
         done(false)
         return
@@ -185,10 +194,48 @@ function M.deleteSession(session, done)
         if not cleaning then
             removeDirs()
         end
-    end)
+    end, DELETE_TIMEOUT_MS)
     if not ok then
         done(false)
     end
+end
+
+function M.deleteSession(session, done)
+    deleteOne(session, done)
+end
+
+-- Deletes several sessions (cleanEmpty), each with deleteOne's sequence.
+-- The host runs at most 8 commands per plugin at once and a refused runAsync
+-- returns false without calling back, so only DELETE_LANES sessions run at
+-- a time (one command each), leaving room for the rest of the plugin.
+-- done(failed) gets the number of sessions that were not deleted.
+local DELETE_LANES = 4
+
+function M.deleteSessions(list, done)
+    local failed, index, running = 0, 1, 0
+    if #list == 0 then
+        done(0)
+        return
+    end
+    local function startNext()
+        while running < DELETE_LANES and index <= #list do
+            local session = list[index]
+            index += 1
+            running += 1
+            deleteOne(session, function(success)
+                if not success then
+                    failed += 1
+                end
+                running -= 1
+                if index > #list and running == 0 then
+                    done(failed)
+                else
+                    startNext()
+                end
+            end)
+        end
+    end
+    startNext()
 end
 
 -- Appends a custom-title record, the same line /rename writes, so Claude

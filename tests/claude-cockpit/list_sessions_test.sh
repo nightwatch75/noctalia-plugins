@@ -49,5 +49,10 @@ check aaaa0005 status ok
 check aaaa0006 status ok
 check aaaa0007 customTitle mine
 check aaaa0001 customTitle ""
+# The scan runs each file in an xargs -P child: a function missing from
+# `export -f` gives an empty status, which the panel would read as "ok".
+n=$(printf '%s' "$out" | jq '.sessions | length')
+blank=$(printf '%s' "$out" | jq '[.sessions[] | select((.status // "") == "")] | length')
+[ "$n" -ge 3 ] && [ "$blank" = 0 ] || { echo "FAIL status empty in $blank of $n sessions"; fail=1; }
 [ "$fail" = 0 ] && echo "list_sessions_test: ok"
 exit "$fail"

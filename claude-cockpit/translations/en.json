@@ -144,6 +144,7 @@
   "skill_action_done": "{name}: done.",
   "skill_action_failed": "{name}: failed",
   "sort_count": "Count",
+  "show_more": "Show {n} more ({total} left)",
   "sort_date": "Date",
   "sort_name": "Name",
   "status_cwd_missing": "The session folder no longer exists. Restore it, or move the project back, to resume.",
