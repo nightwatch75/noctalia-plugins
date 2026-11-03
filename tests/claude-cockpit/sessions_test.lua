@@ -42,6 +42,21 @@ eq(#calls, 2, "two execs")
 eq(table.concat(calls[1], " "), "rm -rf -- /h/.claude/projects/-p/abcdef12-1.jsonl /h/.claude/projects/-p/abcdef12-1 /h/.claude/session-env/abcdef12-1 /h/.claude/file-history/abcdef12-1", "rm argv")
 eq(table.concat(calls[2], " "), "rmdir -- /h/.claude/projects/-p/memory /h/.claude/projects/-p", "rmdir argv")
 
+-- done waits for rmdir; a failed rm skips rmdir
+local saved = noctalia.runAsync
+local pending, doneCalled = {}, false
+noctalia.runAsync = function(argv, cb) table.insert(pending, { argv, cb }); return true end
+sessions.deleteSession(s, function() doneCalled = true end)
+pending[1][2]({ exitCode = 0 })
+eq(doneCalled, false, "done waits for rmdir")
+pending[2][2]({ exitCode = 1 })
+eq(doneCalled, true, "done after rmdir")
+pending, doneCalled = {}, false
+sessions.deleteSession(s, function(ok) doneCalled = ok == false end)
+pending[1][2]({ exitCode = 1 })
+eq(doneCalled, true, "failed rm: done(false) at once"); eq(#pending, 1, "failed rm: no rmdir")
+noctalia.runAsync = saved
+
 local projects = sessions.groupByProject({ with({}), with({ id = "b2" }), with({ id = "c3", projectDir = "-q", cwd = "/o" }) })
 local function find(id) for _, g in ipairs(projects) do for _, x in ipairs(g.sessions) do if x.id == id then return x end end end end
 eq(sessions.isLastInProject(projects, find("c3")), true, "last")

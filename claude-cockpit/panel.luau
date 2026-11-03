@@ -137,6 +137,15 @@ end
 
 -- ── sessions/CLAUDE.md data loading ─────────────────────────────────────────
 
+-- utf8.offset is only safe on valid UTF-8; invalid text is left as is.
+local function capDraft(value)
+    local n = utf8.len(value)
+    if n ~= nil and n > 120 then
+        return value:sub(1, utf8.offset(value, 121) - 1)
+    end
+    return value
+end
+
 local function loadSessions(force)
     if sessionsState.loading then
         return
@@ -146,6 +155,9 @@ local function loadSessions(force)
     end
     sessionsState.loading = true
     sessionsState.error = nil
+    if force then
+        orphanState = { scanning = false, list = nil, confirming = false }
+    end
     render()
     sessions.refresh(function(projects, err)
         sessionsState.loading = false
@@ -809,7 +821,7 @@ local function sessionRow(session, selected, isLive)
                 placeholder = tr("rename_placeholder"),
                 flexGrow = 1,
                 onChange = function(value)
-                    renameDraft = value
+                    renameDraft = capDraft(value)
                     render()
                 end,
                 onSubmit = function(value)
@@ -924,6 +936,9 @@ local function checkOrphans()
         table.insert(ids, id)
     end
     sessions.checkOrphans(ids, function(list, err)
+        if not isOpen then
+            return
+        end
         orphanState = { scanning = false, list = list, confirming = list ~= nil and #list > 0 }
         if err ~= nil then
             noctalia.notifyError(tr("title"), err)

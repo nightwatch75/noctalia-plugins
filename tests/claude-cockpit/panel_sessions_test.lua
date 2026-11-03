@@ -156,6 +156,14 @@ assert(find(rendered, "ren-input-aaa1-2"), "reopen reseeds the input")
 click("ren-no-aaa1")
 assert(find(rendered, "sess-wrap-aaa1"), "cancel closes the strip")
 
+-- Draft cap: 130 characters (multibyte) are stored as 120.
+click("ren-aaa1")
+find(rendered, "ren-input-aaa1-3").props.onChange(string.rep("é", 130))
+local capped = find(rendered, "ren-input-aaa1-3").props.value
+eq(utf8.len(capped), 120, "draft capped at 120 characters")
+find(rendered, "ren-input-aaa1-3").props.onChange("\255\254bad")
+click("ren-no-aaa1")
+
 -- Delete: memory notice only for the last session of its project dir.
 local n0 = #notes
 lastInProject, memoryKept = false, true
@@ -179,6 +187,10 @@ orphanResult = {
 click("sess-orphans")
 local strip = find(rendered, "confirm-orphans")
 assert(strip, "orphan strip")
+click("sess-refresh")
+assert(find(rendered, "confirm-orphans") == nil, "refresh drops the orphan strip")
+click("sess-orphans")
+strip = find(rendered, "confirm-orphans")
 assert(has(strip, function(n) return n.props.text == "orphans_confirm(mb=2.0,n=2)" end), "count and size")
 before = refreshes
 click("orphans-ok")

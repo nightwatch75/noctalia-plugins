@@ -28,7 +28,7 @@ UUID_RE='^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F
 declare -A KEEP=()
 while [ $# -gt 0 ]; do
     case "$1" in
-        --exclude) [ $# -ge 2 ] || exit 2; KEEP["$2"]=1; shift 2 ;;
+        --exclude) [ $# -ge 2 ] || exit 2; [ -z "$2" ] || KEEP["$2"]=1; shift 2 ;;
         *) exit 2 ;;
     esac
 done
@@ -37,7 +37,7 @@ done
 if [ -d "$PROJECTS_DIR" ]; then
     while IFS= read -r -d '' file; do
         f="${file##*/}"
-        KEEP["${f%.jsonl}"]=1
+        [ "$f" = ".jsonl" ] || KEEP["${f%.jsonl}"]=1
     done < <(find "$PROJECTS_DIR" -mindepth 2 -maxdepth 2 -name '*.jsonl' -print0 2>/dev/null)
 fi
 

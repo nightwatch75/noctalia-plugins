@@ -163,10 +163,17 @@ function M.deleteSession(session, done)
         "rm", "-rf", "--", session.jsonlPath, session.sidecarDir, session.sessionEnvDir, session.fileHistoryDir,
     }, function(result)
         local success = type(result) == "table" and result.exitCode == 0
-        if success then
-            noctalia.runAsync({ "rmdir", "--", session.memoryDir, session.projectPath }, function() end)
+        if not success then
+            done(false)
+            return
         end
-        done(success)
+        -- done waits for rmdir so memoryKept never sees a memory/ about to go.
+        local started = noctalia.runAsync({ "rmdir", "--", session.memoryDir, session.projectPath }, function()
+            done(true)
+        end)
+        if not started then
+            done(true)
+        end
     end)
     if not ok then
         done(false)

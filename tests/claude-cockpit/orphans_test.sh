@@ -26,6 +26,7 @@ mkid "$c/session-env/not-a-uuid" "$old"
 mkid "$c/file-history/$U5" "$old"
 mkdir -p "$c/projects/-has"; : > "$c/projects/-has/$U3.jsonl"
 
+mkdir -p "$c/projects/-has"; : > "$c/projects/-has/.jsonl"
 mkp() { mkdir -p "$c/projects/$1"; }
 mkp -empty; mkp -emptymem; mkdir "$c/projects/-emptymem/memory"
 mkp -mem; mkdir "$c/projects/-mem/memory"; echo x > "$c/projects/-mem/memory/x.md"
@@ -33,7 +34,7 @@ mkp -file; echo x > "$c/projects/-file/other.txt"
 mkp -young
 for p in -empty -emptymem -mem -file; do touch -d "$old" "$c/projects/$p"; done
 
-out=$(HOME="$home" "$script" --exclude "$U4" --exclude zzz)
+out=$(HOME="$home" "$script" --exclude "$U4" --exclude zzz --exclude "")
 got=$(printf '%s' "$out" | jq -r '.orphans[] | .kind + " " + (.path | split("/") | last)' | sort)
 want=$(printf '%s\n' "file-history $U5" "project -empty" "project -emptymem" "session-env $U1" | sort)
 if [ "$got" != "$want" ]; then
