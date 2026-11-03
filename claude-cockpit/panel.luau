@@ -10,13 +10,18 @@
 --   Usage     jrohland/claudecode's panel.luau, trimmed port (MIT, see
 --             README Notes) — a thin client of service.luau's "usage"/
 --             "status" state.
---   Sessions  every local session, grouped by project, sortable by date or
---             name, filterable to empty ones (no prompt ever sent). Up/Down
---             select a row, Enter opens it; a glyph marks the running ones
---             (the service's "live" state). Click to resume in
---             a terminal, eye toggles a preview, trash deletes after an
---             inline confirm. Fetched on-demand via sessions.luau, never
---             polled.
+--   Sessions  every local session, grouped by project, sortable by date,
+--             name or session count, filterable to empty ones (no prompt
+--             ever sent) or broken ones (cwd gone, or transcript stored
+--             under another project dir; a warning glyph gives the reason).
+--             Up/Down select a row, Enter opens it; a glyph marks the
+--             running ones (the service's "live" state). Click to resume in
+--             a terminal (refused for a broken one), copy puts the resume
+--             command on the clipboard, pencil renames (custom title, not
+--             for a running session), eye toggles a preview, trash deletes
+--             after an inline confirm. "Orphans" scans for leftovers of
+--             deleted sessions and removes them after an inline confirm.
+--             Fetched on-demand via sessions.luau, never polled.
 --   CLAUDE.md Global file + one row per known project, each opening in an
 --             external editor. Reuses the Sessions tab's project list.
 --   Skills    installed Claude Code plugins (skills and mods) grouped by
@@ -24,9 +29,6 @@
 --             uninstall per row (uninstall behind an inline confirm), refresh/
 --             remove per marketplace, an install box at the bottom. Fetched
 --             on-demand via skills.luau, never polled.
---
--- No rename: Claude Code has no command to rename a session after it is
--- created, so the label is the AI title (or the opening prompt, cut short).
 
 local shared = require("./shared.luau")
 local sessions = require("./sessions.luau")
@@ -76,6 +78,11 @@ local confirmingClean = false -- inline confirm strip for "delete all empty sess
 local sortBy = "date" -- "date" | "name" | "count"
 local sortAsc = false
 local emptyOnly = false -- only sessions that never got a prompt
+local brokenOnly = false -- only sessions whose status is not "ok"
+local renamingId = nil -- session with the inline rename strip open
+local renameDraft = ""
+local renameRev = 0 -- bumped on each open to reseed the uncontrolled input
+local orphanState = { scanning = false, list = nil, confirming = false }
 
 -- Keyboard selection on the Sessions tab: Up/Down walk `navItems` (the rows
 -- the last render drew: project headers and sessions), Enter runs the
@@ -574,6 +581,10 @@ local function liveIds()
 end
 
 local function resumeSession(session)
+    if session.status ~= "ok" then
+        noctalia.notifyError(tr("title"), tr("err_resume_broken", { reason = tr("status_" .. session.status) }))
+        return
+    end
     if session.empty then
         return -- `claude --resume` finds nothing and the terminal closes at once
     end
@@ -603,10 +614,48 @@ local function cancelDelete()
 end
 
 local function confirmDelete(session)
+    -- Decided before the delete: the reload afterwards drops the session.
+    local last = sessions.isLastInProject(sessionsState.projects or {}, session)
     sessions.deleteSession(session, function(ok)
         confirmingDeleteId = nil
         if not ok then
             noctalia.notifyError(tr("title"), tr("err_delete_failed"))
+        elseif last and sessions.memoryKept(session) then
+            -- The project vanishes from the list, but its memory/ stays on disk.
+            noctalia.notify(tr("title"), tr("memory_kept", { dir = session.projectDir }))
+        end
+        loadSessions(true)
+    end)
+end
+
+-- Only a real cwd and a plain hex id: the text gets pasted into a shell.
+local function copyResume(session)
+    local text = "cd " .. shared.shellQuote(session.cwd) .. " && claude --resume " .. session.id
+    if noctalia.copyToClipboard(text, "text/plain") then
+        noctalia.notify(tr("title"), tr("copied_resume"))
+    end
+end
+
+local function openRename(id)
+    renamingId = id
+    renameDraft = ""
+    renameRev += 1
+    render()
+end
+
+local function closeRename()
+    renamingId = nil
+    render()
+end
+
+local function confirmRename(session)
+    if shared.trim(renameDraft) == "" then
+        return
+    end
+    sessions.renameSession(session, renameDraft, function(ok)
+        renamingId = nil
+        if not ok then
+            noctalia.notifyError(tr("title"), tr("err_rename_failed"))
         end
         loadSessions(true)
     end)
@@ -662,6 +711,7 @@ local function sessionWrapKey(session)
     return "sess-wrap-" .. session.id
         .. (expandedSessionId == session.id and "-prev" or "")
         .. (confirmingDeleteId == session.id and "-del" or "")
+        .. (renamingId == session.id and "-ren" or "")
 end
 
 local function sessionRow(session, selected, isLive)
@@ -685,7 +735,13 @@ local function sessionRow(session, selected, isLive)
     if isLive then
         table.insert(rowButtons, ui.glyph({ name = "activity", size = 14, color = "primary" }))
     end
+    if session.status ~= "ok" then
+        table.insert(rowButtons, ui.row({ key = "broken-" .. id, tooltip = tr("status_" .. session.status) }, {
+            ui.glyph({ name = "alert-triangle", size = 14, color = "error" }),
+        }))
+    end
     table.insert(rowButtons, ui.button({
+        key = "resume-" .. id,
         text = session.label, variant = "ghost", contentAlign = "start", flexGrow = 1,
         controlSize = "sm", tooltip = tr(session.empty and "tip_resume_empty" or "tip_resume"), selected = selected,
         onClick = function() resumeSession(session) end,
@@ -694,6 +750,13 @@ local function sessionRow(session, selected, isLive)
     -- Only a real cwd has a CLAUDE.md path worth opening — "unknown project"
     -- sessions (no recorded cwd) skip this button entirely.
     if session.cwd:sub(1, 1) == "/" then
+        if id:match("^[%x-]+$") then
+            table.insert(rowButtons, ui.button({
+                key = "copy-" .. id, glyph = "copy", variant = "ghost", controlSize = "sm",
+                tooltip = tr("tip_copy_resume"),
+                onClick = function() copyResume(session) end,
+            }))
+        end
         local claudeMdPath = session.cwd .. "/CLAUDE.md"
         local exists = noctalia.fileExists(claudeMdPath)
         table.insert(rowButtons, ui.button({
@@ -709,7 +772,16 @@ local function sessionRow(session, selected, isLive)
         tooltip = tr(previewOpen and "tip_hide_preview" or "tip_preview"),
         onClick = function() togglePreview(id) end,
     }))
+    -- A running session would write over the custom title on its next turn.
+    if not isLive then
+        table.insert(rowButtons, ui.button({
+            key = "ren-" .. id, glyph = "pencil", variant = "ghost", controlSize = "sm",
+            tooltip = tr("tip_rename_session"),
+            onClick = function() openRename(id) end,
+        }))
+    end
     table.insert(rowButtons, ui.button({
+        key = "del-" .. id,
         glyph = "trash", variant = "ghost", controlSize = "sm", tooltip = tr("tip_delete_session"),
         onClick = function() requestDelete(id) end,
     }))
@@ -724,8 +796,33 @@ local function sessionRow(session, selected, isLive)
     if confirmingDeleteId == id then
         table.insert(blocks, ui.row({ key = "confirm-del-" .. id, gap = 8, align = "center" }, {
             ui.label({ text = tr("delete_session_confirm"), fontSize = 12, color = "on_surface", flexGrow = 1 }),
-            ui.button({ text = tr("yes"), variant = "destructive", controlSize = "sm", onClick = function() confirmDelete(session) end }),
+            ui.button({ key = "del-ok-" .. id, text = tr("yes"), variant = "destructive", controlSize = "sm", onClick = function() confirmDelete(session) end }),
             ui.button({ text = tr("no"), variant = "ghost", controlSize = "sm", onClick = function() cancelDelete() end }),
+        }))
+    end
+
+    if renamingId == id then
+        table.insert(blocks, ui.row({ key = "rename-" .. id, gap = 8, align = "center" }, {
+            ui.input({
+                key = "ren-input-" .. id .. "-" .. renameRev,
+                value = renameDraft,
+                placeholder = tr("rename_placeholder"),
+                flexGrow = 1,
+                onChange = function(value)
+                    renameDraft = value
+                    render()
+                end,
+                onSubmit = function(value)
+                    renameDraft = value
+                    confirmRename(session)
+                end,
+            }),
+            ui.button({
+                key = "ren-ok-" .. id, text = tr("rename_save"), variant = "primary", controlSize = "sm",
+                enabled = shared.trim(renameDraft) ~= "",
+                onClick = function() confirmRename(session) end,
+            }),
+            ui.button({ key = "ren-no-" .. id, text = tr("no"), variant = "ghost", controlSize = "sm", onClick = closeRename }),
         }))
     end
 
@@ -799,16 +896,61 @@ local function setSort(key)
     render()
 end
 
-local function countEmpty()
+local function countSessions(pred)
     local n = 0
     for _, group in ipairs(sessionsState.projects or {}) do
         for _, session in ipairs(group.sessions) do
-            if session.empty then
+            if pred(session) then
                 n += 1
             end
         end
     end
     return n
+end
+
+local function isEmpty(session)
+    return session.empty
+end
+
+local function isBroken(session)
+    return session.status ~= "ok"
+end
+
+local function checkOrphans()
+    orphanState = { scanning = true, list = nil, confirming = false }
+    render()
+    local ids = {}
+    for id in pairs(liveIds()) do
+        table.insert(ids, id)
+    end
+    sessions.checkOrphans(ids, function(list, err)
+        orphanState = { scanning = false, list = list, confirming = list ~= nil and #list > 0 }
+        if err ~= nil then
+            noctalia.notifyError(tr("title"), err)
+        elseif #list == 0 then
+            noctalia.notify(tr("title"), tr("orphans_none"))
+        end
+        render()
+    end)
+end
+
+local function removeOrphans()
+    local list = orphanState.list or {}
+    orphanState = { scanning = false, list = nil, confirming = false }
+    sessions.removeOrphans(list, function(ok)
+        if not ok then
+            noctalia.notifyError(tr("title"), tr("err_orphans_failed"))
+        end
+        loadSessions(true)
+    end)
+end
+
+local function orphansMb(list)
+    local bytes = 0
+    for _, o in ipairs(list) do
+        bytes += tonumber(o.bytes) or 0
+    end
+    return string.format("%.1f", bytes / 1048576)
 end
 
 -- Empty sessions that are safe to delete: one that is running right now has
@@ -926,10 +1068,19 @@ local function renderSessionsTab()
             sortButton("name", "sort_name"),
             sortButton("count", "sort_count"),
             ui.button({
-                key = "sort-empty", text = tr("filter_empty", { n = countEmpty() }),
+                key = "sort-empty", text = tr("filter_empty", { n = countSessions(isEmpty) }),
                 variant = "ghost", controlSize = "sm", selected = emptyOnly, tooltip = tr("tip_filter_empty"),
                 onClick = function()
                     emptyOnly = not emptyOnly
+                    sel = 1
+                    render()
+                end,
+            }),
+            ui.button({
+                key = "sort-broken", text = tr("filter_broken", { n = countSessions(isBroken) }),
+                variant = "ghost", controlSize = "sm", selected = brokenOnly, tooltip = tr("tip_filter_broken"),
+                onClick = function()
+                    brokenOnly = not brokenOnly
                     sel = 1
                     render()
                 end,
@@ -952,8 +1103,32 @@ local function renderSessionsTab()
                     render()
                 end,
             }),
+            ui.button({
+                key = "sess-orphans", text = tr("orphans_button"),
+                glyph = orphanState.scanning and "loader-2" or "search",
+                variant = "ghost", controlSize = "sm", enabled = not orphanState.scanning,
+                tooltip = tr("tip_orphans"),
+                onClick = checkOrphans,
+            }),
         }),
     }
+    if orphanState.confirming then
+        local list = orphanState.list or {}
+        table.insert(rows, ui.row({ key = "confirm-orphans", gap = 8, align = "center" }, {
+            ui.label({
+                text = tr("orphans_confirm", { n = #list, mb = orphansMb(list) }),
+                fontSize = 12, color = "on_surface", flexGrow = 1,
+            }),
+            ui.button({ key = "orphans-ok", text = tr("yes"), variant = "destructive", controlSize = "sm", onClick = removeOrphans }),
+            ui.button({
+                text = tr("no"), variant = "ghost", controlSize = "sm",
+                onClick = function()
+                    orphanState = { scanning = false, list = nil, confirming = false }
+                    render()
+                end,
+            }),
+        }))
+    end
     if confirmingClean then
         table.insert(rows, ui.row({ key = "confirm-clean", gap = 8, align = "center" }, {
             ui.label({ text = tr("clean_empty_confirm", { n = #deletableEmpty() }), fontSize = 12, color = "on_surface", flexGrow = 1 }),
@@ -979,7 +1154,8 @@ local function renderSessionsTab()
         for _, group in ipairs(sessionsState.projects) do
             local matches = {}
             for _, session in ipairs(group.sessions) do
-                if (needle == "" or matchesSearch(session, group.cwd, needle)) and (not emptyOnly or session.empty) then
+                if (needle == "" or matchesSearch(session, group.cwd, needle)) and (not emptyOnly or session.empty)
+                    and (not brokenOnly or isBroken(session)) then
                     table.insert(matches, session)
                 end
             end
@@ -1539,6 +1715,8 @@ function onClose()
     stopKeyRepeat() -- a key held while the panel closes never reports its release
     confirmingDeleteId = nil
     confirmingClean = false
+    renamingId = nil
+    orphanState.confirming = false
     confirmingSkillKey = nil
     panel.setWantsSecondTicks(false)
     noctalia.state.set("claude_cockpit_open", false)
