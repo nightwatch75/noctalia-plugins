@@ -26,3 +26,5 @@ for test in "$here"/*_test.lua; do
     } > "$out"
     "$LUAU" "$out"
 done
+
+sh "$here/list_sessions_test.sh"

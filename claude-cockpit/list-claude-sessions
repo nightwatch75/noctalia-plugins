@@ -19,7 +19,8 @@ shopt -s nullglob
 # Output:
 #   { "generatedAt": <epoch>, "sessions": [
 #       { "id", "cwd", "projectDir", "gitBranch", "version",
-#         "mtime", "size", "title", "firstPrompt", "model", "contextTokens" }, ... ] }
+#         "mtime", "size", "title", "customTitle", "firstPrompt", "model",
+#         "contextTokens", "status" }, ... ] }
 # "cwd" is the real path Claude Code recorded for the session; "projectDir"
 # is the basename of the project dir the file was found in (the encoded
 # path), used as a fallback when a session states no cwd at all. "firstPrompt"
@@ -27,6 +28,10 @@ shopt -s nullglob
 # "title" yet. "model"/"contextTokens" come from the session's last
 # "assistant" turn: message.model, and input_tokens + cache_read_input_tokens
 # + cache_creation_input_tokens (how full the context window was at that turn).
+# "customTitle" is the last /rename title ("" when none). "status" audits the
+# session: "dir_mismatch" when the file sits in a project dir other than the
+# one its cwd encodes to, else "cwd_missing" when that cwd no longer exists,
+# else "ok".
 # "empty" is true when the file holds no "user" turn.
 
 CLAUDE_DIR="${HOME}/.claude"
@@ -47,12 +52,31 @@ write_head_json() {
     ' > "$out"
 }
 
+# Claude Code names a project dir after the cwd with every character that is
+# not a letter or digit replaced by one "-". jq counts characters, not bytes.
+# Over 200 characters Claude shortens the name with a hash we cannot
+# reproduce, so such a name is never reported as a mismatch.
+session_status() {
+    local cwd="$1" project_dir="$2" enc
+    [ -z "$cwd" ] && { echo ok; return; }
+    enc=$(printf '%s' "$cwd" | jq -Rr 'gsub("[^A-Za-z0-9]"; "-")')
+    # Mismatch wins over missing: a moved project is both, and the dir name
+    # is the more telling fact.
+    if [ "${#enc}" -le 200 ] && [ "$enc" != "$project_dir" ]; then
+        echo dir_mismatch
+    elif [ ! -d "$cwd" ]; then
+        echo cwd_missing
+    else
+        echo ok
+    fi
+}
+
 # ai-title (last occurrence) and the last assistant turn are found in one
 # backward scan; last-prompt uses its first occurrence (the opening
 # message) via a forward scan. All three go to jq over stdin, not as args.
 write_meta_json() {
     local file="$1" out="$2"
-    local title_line="" assistant_line="" prompt_line=""
+    local title_line="" assistant_line="" prompt_line="" custom_line=""
     while IFS= read -r line; do
         case "$line" in
             *'"type":"ai-title"'*) [ -z "$title_line" ] && title_line="$line" ;;
@@ -62,15 +86,19 @@ write_meta_json() {
     done < <(tac -- "$file" 2>/dev/null || true)
     prompt_line=$(grep -m1 -F '"type":"last-prompt"' -- "$file" 2>/dev/null || true)
 
-    printf '%s\n%s\n%s\n' "$title_line" "$prompt_line" "$assistant_line" | jq -R -s -c '
+    custom_line=$(grep -F '"type":"custom-title"' -- "$file" 2>/dev/null | tail -n 1 || true)
+
+    printf '%s\n%s\n%s\n%s\n' "$title_line" "$prompt_line" "$assistant_line" "$custom_line" | jq -R -s -c '
         (split("\n")) as $l
         | ($l[0] // "") as $t
         | ($l[1] // "") as $p
         | ($l[2] // "") as $a
+        | ($l[3] // "") as $c
         | ($a | if . == "" then {} else (try fromjson catch {}) end) as $aObj
         | ($aObj.message.usage // {}) as $u
         | {
             title: ($t | if . == "" then "" else ((try fromjson catch {}).aiTitle // "") end),
+            customTitle: ($c | if . == "" then "" else ((try fromjson catch {}).customTitle // "") end),
             firstPrompt: ($p | if . == "" then "" else ((try fromjson catch {}).lastPrompt // "") end),
             model: ($aObj.message.model // ""),
             contextTokens: (
@@ -100,14 +128,16 @@ if [ -d "$PROJECTS_DIR" ]; then
         empty=true
         grep -q -F '"type":"user"' -- "$file" 2>/dev/null && empty=false
 
+        write_head_json "$file" "$sess_dir/head.json"
+        status=$(session_status "$(jq -r '.cwd' "$sess_dir/head.json")" "$project_dir")
+
         # Base fields are always short: safe as --arg regardless of file size.
-        jq -n \
+        jq -n --arg status "$status" \
             --arg id "$id" --arg projectDir "$project_dir" \
             --arg mtime "$mtime" --arg size "$size" --argjson empty "$empty" \
-            '{ id: $id, projectDir: $projectDir, empty: $empty,
+            '{ id: $id, projectDir: $projectDir, empty: $empty, status: $status,
                mtime: ($mtime | tonumber? // 0), size: ($size | tonumber? // 0) }' \
             > "$sess_dir/base.json"
-        write_head_json "$file" "$sess_dir/head.json"
         write_meta_json "$file" "$sess_dir/meta.json"
 
         jq -s 'add' "$sess_dir/base.json" "$sess_dir/head.json" "$sess_dir/meta.json" \
