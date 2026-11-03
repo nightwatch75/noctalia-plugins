@@ -1296,7 +1296,7 @@ local function renderSessionsTab()
                 end,
             }),
             statusFilterButton("moved", "folder-symlink", YELLOW, isMoved),
-            statusFilterButton("orphan", "folder-off", "on_surface", isOrphan),
+            statusFilterButton("orphan", "folder-off", "error", isOrphan),
             ui.label({ key = "sort-spacer", text = "", flexGrow = 1 }),
             ui.button({
                 key = "sess-refresh", glyph = sessionsState.loading and "loader-2" or "refresh",
