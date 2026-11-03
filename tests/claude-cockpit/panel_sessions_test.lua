@@ -75,10 +75,12 @@ local sessionsStub = {
     checkOrphans = function(ids, done) checkedIds = ids; done(orphanResult, nil) end,
     removeOrphans = function(list, done) removed = list; done(true) end,
 }
+local edited = {}
 local shared = {
     trim = function(v) return v:match("^%s*(.-)%s*$") end,
     shellQuote = function(v) return "'" .. v:gsub("'", "'\\''") .. "'" end,
     launchTerminal = function(cmd) table.insert(launched, cmd); return true end,
+    openInEditor = function(path) table.insert(edited, path) end,
 }
 require = function(path)
     if path == "./sessions.luau" then return sessionsStub end
@@ -186,6 +188,9 @@ eq(find(rendered, "repair-bbb2").props.tooltip, "tip_repair_session", "repair to
 -- CLAUDE.md button: not on orphan or unknown rows (no folder to create it in).
 assert(find(rendered, "md-aaa1") and find(rendered, "md-ddd4") and find(rendered, "md-bbb2"), "CLAUDE.md on ok/relocated/misplaced")
 assert(find(rendered, "md-ccc3") == nil and find(rendered, "md-ab12") == nil, "no CLAUDE.md on orphan/unknown")
+-- A relocated row opens the CLAUDE.md of the real folder, not of the old recorded one.
+find(rendered, "md-ddd4").props.onClick()
+eq(edited[#edited], "/real/CLAUDE.md", "relocated CLAUDE.md path")
 
 -- Search: a relocated session also matches its old recorded cwd.
 D.cwd = "/old/place"

@@ -845,8 +845,8 @@ local function sessionRow(session, selected, isLive)
             onClick = function() copyResume(session) end,
         }))
     end
-    if session.cwd:sub(1, 1) == "/" and session.status ~= "orphan" and session.status ~= "unknown" then
-        local claudeMdPath = session.cwd .. "/CLAUDE.md"
+    if session.runCwd:sub(1, 1) == "/" and session.status ~= "orphan" and session.status ~= "unknown" then
+        local claudeMdPath = session.runCwd .. "/CLAUDE.md"
         local exists = noctalia.fileExists(claudeMdPath)
         table.insert(rowButtons, ui.button({
             key = "md-" .. id, glyph = "brain", variant = "ghost", controlSize = "sm",
