@@ -83,7 +83,7 @@ local renamingId = nil -- session with the inline rename strip open
 local renamingSession = nil -- its session record, for the Return key
 local renameDraft = ""
 local renameRev = 0 -- bumped on each open to reseed the uncontrolled input
-local orphanState = { scanning = false, list = nil, confirming = false }
+local orphanState = { scanning = false, list = nil, confirming = false, showing = false }
 
 -- Keyboard selection on the Sessions tab: Up/Down walk `navItems` (the rows
 -- the last render drew: project headers and sessions), Enter runs the
@@ -157,7 +157,7 @@ local function loadSessions(force)
     sessionsState.loading = true
     sessionsState.error = nil
     if force then
-        orphanState = { scanning = false, list = nil, confirming = false }
+        orphanState = { scanning = false, list = nil, confirming = false, showing = false }
     end
     render()
     sessions.refresh(function(projects, err)
@@ -929,7 +929,7 @@ local function isBroken(session)
 end
 
 local function checkOrphans()
-    orphanState = { scanning = true, list = nil, confirming = false }
+    orphanState = { scanning = true, list = nil, confirming = false, showing = false }
     render()
     local ids = {}
     for id in pairs(liveIds()) do
@@ -939,7 +939,7 @@ local function checkOrphans()
         if not isOpen then
             return
         end
-        orphanState = { scanning = false, list = list, confirming = list ~= nil and #list > 0 }
+        orphanState = { scanning = false, list = list, confirming = list ~= nil and #list > 0, showing = false }
         if err ~= nil then
             noctalia.notifyError(tr("title"), err)
         elseif #list == 0 then
@@ -951,7 +951,7 @@ end
 
 local function removeOrphans()
     local list = orphanState.list or {}
-    orphanState = { scanning = false, list = nil, confirming = false }
+    orphanState = { scanning = false, list = nil, confirming = false, showing = false }
     sessions.removeOrphans(list, function(ok)
         if not ok then
             noctalia.notifyError(tr("title"), tr("err_orphans_failed"))
@@ -966,6 +966,45 @@ local function orphansMb(list)
         bytes += tonumber(o.bytes) or 0
     end
     return string.format("%.1f", bytes / 1048576)
+end
+
+local ORPHAN_MAX_ROWS = 100
+local ORPHAN_KINDS = { ["session-env"] = "session_env", ["file-history"] = "file_history", project = "project" }
+local ORPHAN_REASONS = { no_transcript = true, project_empty = true }
+
+-- Detail rows for the confirm strip, biggest first, from the list in memory.
+local function orphanDetails(list)
+    local sorted = {}
+    for _, o in ipairs(list) do
+        table.insert(sorted, o)
+    end
+    table.sort(sorted, function(a, b) return (tonumber(a.bytes) or 0) > (tonumber(b.bytes) or 0) end)
+    local rows = {}
+    for i = 1, math.min(#sorted, ORPHAN_MAX_ROWS) do
+        local o = sorted[i]
+        local path = tostring(o.path)
+        local name = path:match("([^/]+)$") or path
+        if name:match("^%x%x%x%x%x%x%x%x%-%x%x%x%x%-%x%x%x%x%-%x%x%x%x%-%x%x%x%x%x%x%x%x%x%x%x%x$") then
+            name = name:sub(1, 8) .. "…"
+        end
+        local kind = ORPHAN_KINDS[o.kind]
+        local lines = {
+            ui.row({ gap = 8, align = "center", tooltip = path }, {
+                muted(kind and tr("orphan_kind_" .. kind) or tostring(o.kind), 10),
+                ui.label({ text = name, fontSize = 12, color = "on_surface", flexGrow = 1 }),
+                muted(string.format("%.1f MB", (tonumber(o.bytes) or 0) / 1048576), 11),
+                muted(relativeTime(o.mtime), 11),
+            }),
+        }
+        if ORPHAN_REASONS[o.reason] then
+            table.insert(lines, muted(tr("orphan_reason_" .. o.reason), 11))
+        end
+        table.insert(rows, ui.column({ key = "orph-row-" .. path, gap = 2 }, lines))
+    end
+    if #sorted > ORPHAN_MAX_ROWS then
+        table.insert(rows, muted(tr("orphans_more", { n = #sorted - ORPHAN_MAX_ROWS }), 11))
+    end
+    return rows
 end
 
 -- Empty sessions that are safe to delete: one that is running right now has
@@ -1134,15 +1173,27 @@ local function renderSessionsTab()
                 text = tr("orphans_confirm", { n = #list, mb = orphansMb(list) }),
                 fontSize = 12, color = "on_surface", flexGrow = 1,
             }),
+            ui.button({
+                key = "orphans-toggle", text = tr(orphanState.showing and "orphans_hide" or "orphans_show"),
+                variant = "ghost", controlSize = "sm",
+                onClick = function()
+                    orphanState.showing = not orphanState.showing
+                    render()
+                end,
+            }),
             ui.button({ key = "orphans-ok", text = tr("yes"), variant = "destructive", controlSize = "sm", onClick = removeOrphans }),
             ui.button({
                 text = tr("no"), variant = "ghost", controlSize = "sm",
                 onClick = function()
-                    orphanState = { scanning = false, list = nil, confirming = false }
+                    orphanState = { scanning = false, list = nil, confirming = false, showing = false }
                     render()
                 end,
             }),
         }))
+        table.insert(rows, muted(tr("orphans_rule"), 11))
+        if orphanState.showing then
+            table.insert(rows, ui.scroll({ key = "orph-list", height = 220, gap = 6, align = "stretch" }, orphanDetails(list)))
+        end
     end
     if confirmingClean then
         table.insert(rows, ui.row({ key = "confirm-clean", gap = 8, align = "center" }, {

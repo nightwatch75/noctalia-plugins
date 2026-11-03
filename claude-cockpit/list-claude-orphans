@@ -9,7 +9,11 @@ set -eu
 #
 # Output:
 #   { "orphans": [ { "kind": "session-env" | "file-history" | "project",
-#                    "path": <absolute>, "bytes": <number> }, ... ] }
+#                    "path": <absolute>, "bytes": <number>,
+#                    "mtime": <folder epoch seconds>,
+#                    "reason": "no_transcript" | "project_empty" }, ... ] }
+#   reason: no_transcript for session-env / file-history, project_empty for
+#   project.
 #
 # Usage: list-claude-orphans [--exclude <session-id>]...   (live ids to keep)
 #
@@ -44,11 +48,14 @@ fi
 ROWS=$(mktemp)
 trap 'rm -f "$ROWS"' EXIT
 
-emit() { # <kind> <path>
-    local bytes
+emit() { # <kind> <path> <reason>
+    local bytes mtime
+    mtime=$(stat -c %Y -- "$2" 2>/dev/null) || mtime=0
     bytes=$(du -sb -- "$2" 2>/dev/null | cut -f1) || bytes=0
     jq -n -c --arg kind "$1" --arg path "$2" --arg bytes "${bytes:-0}" \
-        '{ kind: $kind, path: $path, bytes: ($bytes | tonumber? // 0) }' >> "$ROWS"
+        --arg mtime "$mtime" --arg reason "$3" \
+        '{ kind: $kind, path: $path, bytes: ($bytes | tonumber? // 0),
+           mtime: ($mtime | tonumber? // 0), reason: $reason }' >> "$ROWS"
 }
 
 for kind in session-env file-history; do
@@ -59,7 +66,7 @@ for kind in session-env file-history; do
         id="${path##*/}"
         [[ "$id" =~ $UUID_RE ]] || continue
         [ -z "${KEEP[$id]:-}" ] || continue
-        emit "$kind" "$path"
+        emit "$kind" "$path" no_transcript
     done < <(find "$dir" -mindepth 1 -maxdepth 1 -type d -mmin +1440 -print0 2>/dev/null)
 done
 
@@ -71,7 +78,7 @@ if [ -d "$PROJECTS_DIR" ]; then
             [ -d "$path/memory" ] && [ ! -L "$path/memory" ] || continue
             [ -z "$(find "$path/memory" -mindepth 1 -print -quit 2>/dev/null)" ] || continue
         fi
-        emit project "$path"
+        emit project "$path" project_empty
     done < <(find "$PROJECTS_DIR" -mindepth 1 -maxdepth 1 -type d -mmin +1440 -print0 2>/dev/null)
 fi
 

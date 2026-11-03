@@ -42,6 +42,12 @@ if [ "$got" != "$want" ]; then
     exit 1
 fi
 printf '%s' "$out" | jq -e '[.orphans[] | .bytes | type == "number"] | all' >/dev/null || { echo "FAIL bytes"; exit 1; }
+# mtime (epoch seconds) and reason per kind
+printf '%s' "$out" | jq -e '[.orphans[] | .mtime | type == "number" and . > 0] | all' >/dev/null || { echo "FAIL mtime"; exit 1; }
+printf '%s' "$out" | jq -e '[.orphans[] | select(.kind != "project") | .reason == "no_transcript"] | all' >/dev/null || { echo "FAIL reason id"; exit 1; }
+printf '%s' "$out" | jq -e '[.orphans[] | select(.kind == "project") | .reason == "project_empty"] | all' >/dev/null || { echo "FAIL reason project"; exit 1; }
+want_m=$(stat -c %Y "$c/session-env/$U1")
+printf '%s' "$out" | jq -e --argjson m "$want_m" '[.orphans[] | select(.kind == "session-env") | .mtime == $m] | all' >/dev/null || { echo "FAIL mtime value"; exit 1; }
 # read-only
 [ -d "$c/session-env/$U1" ] || { echo "FAIL removed something"; exit 1; }
 echo "orphans_test ok"

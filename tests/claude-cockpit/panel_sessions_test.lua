@@ -213,4 +213,65 @@ eq(removed, orphanResult, "removeOrphans gets the list")
 assert(refreshes > before, "orphan removal reloads")
 assert(find(rendered, "confirm-orphans") == nil, "strip closed")
 
+-- Orphan details list.
+local function texts(n, out)
+    out = out or {}
+    if n.props and n.props.text then table.insert(out, n.props.text) end
+    for _, c in ipairs(n.children or {}) do texts(c, out) end
+    return out
+end
+local function orphRows()
+    local list = find(rendered, "orph-list")
+    local rows = {}
+    if list then
+        for _, c in ipairs(list.children or {}) do
+            if c.props.key and c.props.key:find("^orph%-row%-") then table.insert(rows, c) end
+        end
+    end
+    return rows
+end
+orphanResult = {
+    { kind = "session-env", path = "/x/small", bytes = 10, mtime = 1, reason = "no_transcript" },
+    { kind = "project", path = "/x/big", bytes = 5000, mtime = 1, reason = "weird_code" },
+    { kind = "file-history", path = "/x/11111111-1111-1111-1111-111111111111", bytes = 900, mtime = 1, reason = "no_transcript" },
+}
+click("sess-orphans")
+assert(find(rendered, "orph-list") == nil, "list hidden at first")
+click("orphans-toggle")
+local rows = orphRows()
+eq(#rows, 3, "three rows")
+eq(#find(rendered, "orph-list").children, 3, "no more row")
+assert(has(rows[1], function(n) return n.props.text == "big" end), "bytes desc: big first")
+assert(has(rows[2], function(n) return n.props.text == "11111111…" end), "uuid truncated")
+assert(has(rows[2], function(n) return n.props.tooltip == "/x/11111111-1111-1111-1111-111111111111" end), "full path tooltip")
+assert(has(rows[3], function(n) return n.props.text == "small" end), "small last")
+assert(has(rows[2], function(n) return n.props.text == "orphan_reason_no_transcript" end), "known reason shown")
+assert(has(rows[3], function(n) return n.props.text == "orphan_kind_session_env" end), "kind label")
+for _, t in ipairs(texts(rows[1])) do assert(not t:find("^orphan_reason_"), "unknown reason shows no line") end
+click("orphans-toggle")
+assert(find(rendered, "orph-list") == nil, "toggle hides")
+click("orphans-toggle")
+assert(find(rendered, "orph-list"), "toggle shows again")
+click("sess-refresh")
+click("sess-orphans")
+assert(find(rendered, "orph-list") == nil, "refresh then rescan hides the list")
+click("orphans-toggle")
+click("sess-refresh")
+assert(find(rendered, "orph-list") == nil and find(rendered, "confirm-orphans") == nil, "refresh resets")
+
+orphanResult = {}
+for i = 1, 150 do
+    table.insert(orphanResult, { kind = "project", path = "/x/p" .. i, bytes = i, mtime = 1, reason = "project_empty" })
+end
+click("sess-orphans")
+click("orphans-toggle")
+eq(#orphRows(), 100, "100 rows")
+local lst = find(rendered, "orph-list")
+eq(#lst.children, 101, "100 rows plus more")
+assert(has(lst.children[101], function(n) return n.props.text == "orphans_more(n=50)" end), "more row")
+assert(has(lst.children[1], function(n) return n.props.text == "p150" end), "largest first")
+eq(#orphanResult, 150, "input list not reordered or cut")
+click("orphans-ok")
+eq(#removed, 150, "all 150 removed, not only the shown ones")
+
 print("panel_sessions_test ok")

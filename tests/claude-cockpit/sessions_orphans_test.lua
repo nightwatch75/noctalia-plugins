@@ -10,7 +10,7 @@ noctalia = {
     tr = function(k) return k end, pluginDir = function() return "/plug" end,
     fileExists = function() return false end,
     runAsync = function(argv, cb) table.insert(calls, argv); cb({ exitCode = rcode, stdout = stdout }); return true end,
-    json = { encode = function() return "LINE" end, decode = function(s) if s == "bad" then return nil end return { orphans = { { kind = "project", path = "/h/.claude/projects/-a", bytes = 0 } } } end },
+    json = { encode = function() return "LINE" end, decode = function(s) if s == "bad" then return nil end return { orphans = { { kind = "project", path = "/h/.claude/projects/-a", bytes = 0, mtime = 123, reason = "project_empty" } } } end },
 }
 local sessions = loadstring(MODULE_SRC)()
 local function join(a) return table.concat(a, " ") end
@@ -24,6 +24,7 @@ local got, err
 sessions.checkOrphans({ "a1", "b2" }, function(o, e) got, err = o, e end)
 eq(join(calls[1]), "bash /plug/list-claude-orphans --exclude a1 --exclude b2", "check argv")
 eq(got[1].path, "/h/.claude/projects/-a", "orphans decoded")
+eq(got[1].mtime, 123, "mtime carried"); eq(got[1].reason, "project_empty", "reason carried")
 -- a live id that is not hex is dropped, never passed to the script
 calls = {}
 sessions.checkOrphans({ "a1; rm" }, function() end)
@@ -52,6 +53,13 @@ refuse({ { kind = "session-env", path = F .. U } }, "kind/parent mismatch")
 refuse({ { kind = "project", path = P } }, "parent itself")
 refuse({ { kind = "bogus", path = P .. "-a" } }, "bad kind")
 refuse({ { kind = "session-env", path = E .. U }, { kind = "project", path = "/x/-a" } }, "one bad refuses all")
+
+-- reason and mtime never decide: a bogus reason is judged by the path rules only
+refuse({ { kind = "session-env", path = "/etc/passwd", reason = "project_empty", mtime = 1 } }, "bogus reason, bad path")
+calls = {}
+local okb
+sessions.removeOrphans({ { kind = "project", path = P .. "-a", reason = "bogus", mtime = "x" } }, function(r) okb = r end)
+eq(okb, true, "bogus reason, good path removed")
 
 -- valid
 calls = {}
