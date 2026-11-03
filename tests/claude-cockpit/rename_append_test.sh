@@ -46,4 +46,7 @@ for tail in newline none; do
     jq -e . "$f" >/dev/null || { echo "FAIL $tail: invalid JSON"; exit 1; }
     [ "$(tail -n1 "$f" | jq -r .customTitle)" = "$want" ] || { echo "FAIL $tail: title"; exit 1; }
 done
+m="$tmp/missing.jsonl"
+if sh -c "$script" sh "$m" "$line"; then echo "FAIL missing: exit 0"; exit 1; fi
+[ ! -e "$m" ] || { echo "FAIL missing: file created"; exit 1; }
 echo "rename_append_test ok"

@@ -53,6 +53,7 @@ local function shapeSession(raw, cwd)
     return {
         id = id,
         cwd = cwd,
+        cwdKnown = type(raw.cwd) == "string" and raw.cwd ~= "",
         gitBranch = (type(raw.gitBranch) == "string" and raw.gitBranch ~= "") and raw.gitBranch or nil,
         mtime = tonumber(raw.mtime) or 0,
         size = tonumber(raw.size) or 0,
@@ -149,30 +150,40 @@ local function validId(id)
     return type(id) == "string" and id:match("^[%x-]+$") ~= nil
 end
 
--- Deletes one session's transcript, subagent sidecar, session-env and
--- file-history, as a direct argv exec — no shell in the way, so no
--- shellQuote is needed. The follow-up rmdir only removes the (now empty)
--- memory and project dirs and fails harmlessly when they hold anything, so
--- its result is ignored and `done` reports the rm alone.
+-- The id folders in session-env and file-history are shared by every copy of
+-- the id; they go only when no project folder still holds a transcript of it.
+-- Paths arrive as positional args, never inside the script text.
+M.CLEANUP_SH = 'for p in "$1"/*/"$2".jsonl; do [ -e "$p" ] && exit 0; done; rm -rf -- "$3" "$4"'
+
+-- Deletes one session's transcript and subagent sidecar, then the shared id
+-- folders (see CLEANUP_SH), as direct argv execs. The final rmdir only removes
+-- the (now empty) memory and project dirs and fails harmlessly when they hold
+-- anything, so `done` reports the first rm alone.
 function M.deleteSession(session, done)
     if not validId(session.id) then
         done(false)
         return
     end
-    local ok = noctalia.runAsync({
-        "rm", "-rf", "--", session.jsonlPath, session.sidecarDir, session.sessionEnvDir, session.fileHistoryDir,
-    }, function(result)
+    local ok = noctalia.runAsync({ "rm", "-rf", "--", session.jsonlPath, session.sidecarDir }, function(result)
         local success = type(result) == "table" and result.exitCode == 0
         if not success then
             done(false)
             return
         end
-        -- done waits for rmdir so memoryKept never sees a memory/ about to go.
-        local started = noctalia.runAsync({ "rmdir", "--", session.memoryDir, session.projectPath }, function()
-            done(true)
-        end)
-        if not started then
-            done(true)
+        local function removeDirs()
+            -- done waits for rmdir so memoryKept never sees a memory/ about to go.
+            local started = noctalia.runAsync({ "rmdir", "--", session.memoryDir, session.projectPath }, function()
+                done(true)
+            end)
+            if not started then
+                done(true)
+            end
+        end
+        local cleaning = noctalia.runAsync({
+            "sh", "-c", M.CLEANUP_SH, "sh", PROJECTS_DIR, session.id, session.sessionEnvDir, session.fileHistoryDir,
+        }, removeDirs)
+        if not cleaning then
+            removeDirs()
         end
     end)
     if not ok then
@@ -183,8 +194,9 @@ end
 -- Appends a custom-title record, the same line /rename writes, so Claude
 -- Code and list-claude-sessions both pick it up. The snippet first adds a
 -- newline if the transcript lacks a final one, so the record never glues
--- onto the last line.
-M.RENAME_SH = 'f="$1"; [ -s "$f" ] && [ -n "$(tail -c1 "$f")" ] && printf "\\n" >> "$f"; printf "%s\\n" "$2" >> "$f"'
+-- onto the last line. A transcript deleted meanwhile fails instead of being
+-- recreated.
+M.RENAME_SH = 'f="$1"; [ -f "$f" ] || exit 1; [ -s "$f" ] && [ -n "$(tail -c1 "$f")" ] && printf "\\n" >> "$f"; printf "%s\\n" "$2" >> "$f"'
 
 function M.renameSession(session, title, done)
     if not validId(session.id) then

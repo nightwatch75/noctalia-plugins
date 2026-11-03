@@ -80,6 +80,7 @@ local sortAsc = false
 local emptyOnly = false -- only sessions that never got a prompt
 local brokenOnly = false -- only sessions whose status is not "ok"
 local renamingId = nil -- session with the inline rename strip open
+local renamingSession = nil -- its session record, for the Return key
 local renameDraft = ""
 local renameRev = 0 -- bumped on each open to reseed the uncontrolled input
 local orphanState = { scanning = false, list = nil, confirming = false }
@@ -648,8 +649,9 @@ local function copyResume(session)
     end
 end
 
-local function openRename(id)
-    renamingId = id
+local function openRename(session)
+    renamingId = session.id
+    renamingSession = session
     renameDraft = ""
     renameRev += 1
     render()
@@ -657,6 +659,7 @@ end
 
 local function closeRename()
     renamingId = nil
+    renamingSession = nil
     render()
 end
 
@@ -666,6 +669,7 @@ local function confirmRename(session)
     end
     sessions.renameSession(session, renameDraft, function(ok)
         renamingId = nil
+        renamingSession = nil
         if not ok then
             noctalia.notifyError(tr("title"), tr("err_rename_failed"))
         end
@@ -762,7 +766,7 @@ local function sessionRow(session, selected, isLive)
     -- Only a real cwd has a CLAUDE.md path worth opening — "unknown project"
     -- sessions (no recorded cwd) skip this button entirely.
     if session.cwd:sub(1, 1) == "/" then
-        if id:match("^[%x-]+$") then
+        if session.cwdKnown and id:match("^[%x-]+$") then
             table.insert(rowButtons, ui.button({
                 key = "copy-" .. id, glyph = "copy", variant = "ghost", controlSize = "sm",
                 tooltip = tr("tip_copy_resume"),
@@ -789,7 +793,7 @@ local function sessionRow(session, selected, isLive)
         table.insert(rowButtons, ui.button({
             key = "ren-" .. id, glyph = "pencil", variant = "ghost", controlSize = "sm",
             tooltip = tr("tip_rename_session"),
-            onClick = function() openRename(id) end,
+            onClick = function() openRename(session) end,
         }))
     end
     table.insert(rowButtons, ui.button({
@@ -823,10 +827,6 @@ local function sessionRow(session, selected, isLive)
                 onChange = function(value)
                     renameDraft = capDraft(value)
                     render()
-                end,
-                onSubmit = function(value)
-                    renameDraft = value
-                    confirmRename(session)
                 end,
             }),
             ui.button({
@@ -1731,6 +1731,7 @@ function onClose()
     confirmingDeleteId = nil
     confirmingClean = false
     renamingId = nil
+    renamingSession = nil
     orphanState.confirming = false
     confirmingSkillKey = nil
     panel.setWantsSecondTicks(false)
@@ -1754,7 +1755,11 @@ function onKey(chord, pressed)
     end
     if chord == "Return" or chord == "KP_Enter" then
         if pressed then
-            activateSelected()
+            if renamingSession ~= nil then
+                confirmRename(renamingSession)
+            else
+                activateSelected()
+            end
         end
         return
     end

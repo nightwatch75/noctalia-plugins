@@ -38,9 +38,12 @@ eq(sessions.memoryKept(s), true, "memoryKept")
 local okv
 sessions.deleteSession(s, function(ok) okv = ok end)
 eq(okv, true, "delete done")
-eq(#calls, 2, "two execs")
-eq(table.concat(calls[1], " "), "rm -rf -- /h/.claude/projects/-p/abcdef12-1.jsonl /h/.claude/projects/-p/abcdef12-1 /h/.claude/session-env/abcdef12-1 /h/.claude/file-history/abcdef12-1", "rm argv")
-eq(table.concat(calls[2], " "), "rmdir -- /h/.claude/projects/-p/memory /h/.claude/projects/-p", "rmdir argv")
+eq(#calls, 3, "three execs")
+eq(table.concat(calls[1], " "), "rm -rf -- /h/.claude/projects/-p/abcdef12-1.jsonl /h/.claude/projects/-p/abcdef12-1", "rm argv")
+eq(table.concat(calls[2], " "), "sh -c " .. sessions.CLEANUP_SH .. " sh /h/.claude/projects abcdef12-1 /h/.claude/session-env/abcdef12-1 /h/.claude/file-history/abcdef12-1", "cleanup argv")
+eq(table.concat(calls[3], " "), "rmdir -- /h/.claude/projects/-p/memory /h/.claude/projects/-p", "rmdir argv")
+eq(group(with({})).cwdKnown, true, "cwd known")
+eq(group(with({ cwd = "" })).cwdKnown, false, "cwd not recorded")
 
 -- done waits for rmdir; a failed rm skips rmdir
 local saved = noctalia.runAsync
@@ -48,8 +51,9 @@ local pending, doneCalled = {}, false
 noctalia.runAsync = function(argv, cb) table.insert(pending, { argv, cb }); return true end
 sessions.deleteSession(s, function() doneCalled = true end)
 pending[1][2]({ exitCode = 0 })
+pending[2][2]({ exitCode = 0 })
 eq(doneCalled, false, "done waits for rmdir")
-pending[2][2]({ exitCode = 1 })
+pending[3][2]({ exitCode = 1 })
 eq(doneCalled, true, "done after rmdir")
 pending, doneCalled = {}, false
 sessions.deleteSession(s, function(ok) doneCalled = ok == false end)

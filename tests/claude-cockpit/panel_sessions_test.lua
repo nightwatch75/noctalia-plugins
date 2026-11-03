@@ -43,7 +43,7 @@ noctalia = {
 
 local function session(id, fields)
     local s = { id = id, label = id, mtime = 100, empty = false, firstPrompt = "", model = "", contextTokens = 0,
-        status = "ok", projectDir = "-p-" .. id, cwd = "/p" }
+        status = "ok", projectDir = "-p-" .. id, cwd = "/p", cwdKnown = true }
     for k, v in pairs(fields or {}) do s[k] = v end
     return s
 end
@@ -51,8 +51,9 @@ local A = session("aaa1", { cwd = "/tmp/o'neil" })
 local B = session("bbb2", { status = "dir_mismatch" })
 local C = session("ccc3", { status = "cwd_missing", cwd = "unknown project" })
 local LIVE = session("beef")
+local GUESS = session("fff6", { cwdKnown = false })
 local projects = {
-    { cwd = "/p", lastActivity = 100, sessions = { A, B, C, LIVE } },
+    { cwd = "/p", lastActivity = 100, sessions = { A, B, C, LIVE, GUESS } },
 }
 
 local refreshes, renames, deletes = 0, {}, {}
@@ -134,6 +135,7 @@ eq(clips[1][2], "text/plain", "copied mime")
 eq(notes[#notes], "copied_resume", "copy notice")
 assert(find(rendered, "copy-bbb2"), "broken session with real cwd can copy")
 assert(find(rendered, "copy-ccc3") == nil, "no copy without a real cwd")
+assert(find(rendered, "copy-fff6") == nil, "no copy for a guessed cwd")
 
 -- Rename.
 assert(find(rendered, "ren-beef") == nil, "no pencil on a live session")
@@ -156,12 +158,25 @@ assert(find(rendered, "ren-input-aaa1-2"), "reopen reseeds the input")
 click("ren-no-aaa1")
 assert(find(rendered, "sess-wrap-aaa1"), "cancel closes the strip")
 
+-- Return saves the rename (the host sends it to onKey, not the input).
+click("ren-aaa1")
+find(rendered, "ren-input-aaa1-3").props.onChange("Via return")
+local nl, nr = #launched, #renames
+onKey("Return", true)
+eq(#renames, nr + 1, "Return renames"); eq(renames[nr + 1][1], "aaa1", "Return rename id")
+eq(renames[nr + 1][2], "Via return", "Return rename title")
+eq(#launched, nl, "Return while renaming launches nothing")
+click("ren-aaa1")
+onKey("KP_Enter", true)
+eq(#renames, nr + 1, "blank draft renames nothing"); eq(#launched, nl, "blank draft launches nothing")
+click("ren-no-aaa1")
+
 -- Draft cap: 130 characters (multibyte) are stored as 120.
 click("ren-aaa1")
-find(rendered, "ren-input-aaa1-3").props.onChange(string.rep("é", 130))
-local capped = find(rendered, "ren-input-aaa1-3").props.value
+find(rendered, "ren-input-aaa1-5").props.onChange(string.rep("é", 130))
+local capped = find(rendered, "ren-input-aaa1-5").props.value
 eq(utf8.len(capped), 120, "draft capped at 120 characters")
-find(rendered, "ren-input-aaa1-3").props.onChange("\255\254bad")
+find(rendered, "ren-input-aaa1-5").props.onChange("\255\254bad")
 click("ren-no-aaa1")
 
 -- Delete: memory notice only for the last session of its project dir.
