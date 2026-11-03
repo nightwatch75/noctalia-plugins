@@ -274,4 +274,45 @@ eq(#orphanResult, 150, "input list not reordered or cut")
 click("orphans-ok")
 eq(#removed, 150, "all 150 removed, not only the shown ones")
 
+-- Size units, stable order, no bogus age, same-UUID keys.
+local function openOrphans(list)
+    click("sess-refresh")
+    orphanResult = list
+    click("sess-orphans")
+    click("orphans-toggle")
+    return orphRows()
+end
+local function hasText(row, text) return has(row, function(n) return n.props.text == text end) end
+local rs = openOrphans({
+    { kind = "project", path = "/x/a", bytes = 3, mtime = 1 },
+    { kind = "project", path = "/x/b", bytes = 1536, mtime = 1 },
+    { kind = "project", path = "/x/c", bytes = 3 * 1048576, mtime = 1 },
+})
+assert(hasText(rs[1], "3.0 MB"), "MB range")
+assert(hasText(rs[2], "1.5 KB"), "KB range")
+assert(hasText(rs[3], "3 B"), "B range")
+
+rs = openOrphans({
+    { kind = "project", path = "/x/c", bytes = 5, mtime = 1 },
+    { kind = "project", path = "/x/a", bytes = 5, mtime = 1 },
+    { kind = "project", path = "/x/b", bytes = 5, mtime = 1 },
+})
+for i, name in ipairs({ "a", "b", "c" }) do assert(hasText(rs[i], name), "tiebreak on path: " .. name) end
+
+rs = openOrphans({
+    { kind = "project", path = "/x/nomtime", bytes = 1 },
+    { kind = "project", path = "/x/zero", bytes = 1, mtime = 0 },
+})
+for _, r in ipairs(rs) do
+    for _, t in ipairs(texts(r)) do assert(not t:find("^time_"), "no age without mtime") end
+end
+
+local U = "22222222-2222-2222-2222-222222222222"
+rs = openOrphans({
+    { kind = "session-env", path = "/h/session-env/" .. U, bytes = 1, mtime = 1 },
+    { kind = "file-history", path = "/h/file-history/" .. U, bytes = 1, mtime = 1 },
+})
+eq(#rs, 2, "two rows")
+assert(rs[1].props.key ~= rs[2].props.key, "distinct keys for the same UUID")
+
 print("panel_sessions_test ok")

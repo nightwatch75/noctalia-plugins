@@ -968,6 +968,16 @@ local function orphansMb(list)
     return string.format("%.1f", bytes / 1048576)
 end
 
+local function formatSize(bytes)
+    if bytes < 1024 then
+        return string.format("%d B", bytes)
+    end
+    if bytes < 1048576 then
+        return string.format("%.1f KB", bytes / 1024)
+    end
+    return string.format("%.1f MB", bytes / 1048576)
+end
+
 local ORPHAN_MAX_ROWS = 100
 local ORPHAN_KINDS = { ["session-env"] = "session_env", ["file-history"] = "file_history", project = "project" }
 local ORPHAN_REASONS = { no_transcript = true, project_empty = true }
@@ -978,7 +988,13 @@ local function orphanDetails(list)
     for _, o in ipairs(list) do
         table.insert(sorted, o)
     end
-    table.sort(sorted, function(a, b) return (tonumber(a.bytes) or 0) > (tonumber(b.bytes) or 0) end)
+    table.sort(sorted, function(a, b)
+        local x, y = tonumber(a.bytes) or 0, tonumber(b.bytes) or 0
+        if x ~= y then
+            return x > y
+        end
+        return tostring(a.path) < tostring(b.path)
+    end)
     local rows = {}
     for i = 1, math.min(#sorted, ORPHAN_MAX_ROWS) do
         local o = sorted[i]
@@ -988,14 +1004,15 @@ local function orphanDetails(list)
             name = name:sub(1, 8) .. "…"
         end
         local kind = ORPHAN_KINDS[o.kind]
-        local lines = {
-            ui.row({ gap = 8, align = "center", tooltip = path }, {
-                muted(kind and tr("orphan_kind_" .. kind) or tostring(o.kind), 10),
-                ui.label({ text = name, fontSize = 12, color = "on_surface", flexGrow = 1 }),
-                muted(string.format("%.1f MB", (tonumber(o.bytes) or 0) / 1048576), 11),
-                muted(relativeTime(o.mtime), 11),
-            }),
+        local cells = {
+            muted(kind and tr("orphan_kind_" .. kind) or tostring(o.kind), 10),
+            ui.label({ text = name, fontSize = 12, color = "on_surface", flexGrow = 1 }),
+            muted(formatSize(tonumber(o.bytes) or 0), 11),
         }
+        if (tonumber(o.mtime) or 0) > 0 then
+            table.insert(cells, muted(relativeTime(o.mtime), 11))
+        end
+        local lines = { ui.row({ gap = 8, align = "center", tooltip = path }, cells) }
         if ORPHAN_REASONS[o.reason] then
             table.insert(lines, muted(tr("orphan_reason_" .. o.reason), 11))
         end
