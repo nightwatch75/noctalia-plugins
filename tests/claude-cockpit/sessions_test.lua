@@ -25,10 +25,23 @@ eq(group(with({ title = "A", firstPrompt = "P" })).label, "A", "ai second")
 eq(group(with({ customTitle = "", title = "", firstPrompt = "P" })).label, "P", "prompt third")
 eq(group(with({})).label, "session_untitledabcdef12", "id last")
 
-local s = group(with({ status = "dir_mismatch" }))
+local s = group(with({ status = "misplaced" }))
 eq(s.projectDir, "-p", "projectDir")
-eq(s.status, "dir_mismatch", "status")
+eq(s.status, "misplaced", "status")
 eq(group(base).status, "ok", "status default")
+eq(group(base).resolvedCwd, "", "resolvedCwd default")
+eq(group(base).hasMemory, false, "hasMemory default")
+eq(group(base).runCwd, "/w", "runCwd is the recorded cwd")
+local rel = group(with({ status = "relocated", resolvedCwd = "/real", hasMemory = true, cwd = "/old" }))
+eq(rel.resolvedCwd, "/real", "resolvedCwd"); eq(rel.hasMemory, true, "hasMemory")
+eq(rel.runCwd, "/real", "runCwd prefers resolvedCwd"); eq(rel.cwd, "/real", "row cwd is the real folder")
+-- A relocated session joins the group of its real folder.
+local gs = sessions.groupByProject({
+    with({ id = "abcdef12-2", cwd = "/real", mtime = 2 }),
+    with({ id = "abcdef12-3", cwd = "/old", resolvedCwd = "/real", status = "relocated", mtime = 1 }),
+})
+eq(#gs, 1, "one group"); eq(gs[1].cwd, "/real", "group cwd"); eq(gs[1].claudeMdPath, "/real/CLAUDE.md", "group CLAUDE.md")
+eq(#gs[1].sessions, 2, "both sessions in it")
 eq(s.sessionEnvDir, "/h/.claude/session-env/abcdef12-1", "env")
 eq(s.fileHistoryDir, "/h/.claude/file-history/abcdef12-1", "history")
 eq(s.memoryDir, "/h/.claude/projects/-p/memory", "memory")

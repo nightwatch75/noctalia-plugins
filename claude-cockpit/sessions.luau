@@ -7,8 +7,8 @@
 -- Never polled: M.refresh is called from the panel's onOpen and its refresh
 -- button only. A "project" here is a distinct cwd a session was run from —
 -- NOT literally a `~/.claude/projects/<encoded>/` directory, though most of
--- the time they line up 1:1; see decodeProjectDir for the one case they
--- don't (a session that states no cwd at all).
+-- the time they line up 1:1; see decodeProjectDir for a session that states
+-- no cwd at all, and resolvedCwd for one whose folder was renamed or moved.
 
 local M = {}
 
@@ -50,6 +50,7 @@ local function shapeSession(raw, cwd)
         end
     end
     local dir = tostring(raw.projectDir or "")
+    local resolved = (type(raw.resolvedCwd) == "string") and raw.resolvedCwd or ""
     return {
         id = id,
         cwd = cwd,
@@ -65,7 +66,12 @@ local function shapeSession(raw, cwd)
         model = (type(raw.model) == "string") and raw.model or "",
         contextTokens = tonumber(raw.contextTokens) or 0,
         projectDir = dir,
+        -- ok | relocated | misplaced | orphan, see list-claude-sessions.
         status = (type(raw.status) == "string" and raw.status ~= "") and raw.status or "ok",
+        resolvedCwd = resolved,
+        hasMemory = raw.hasMemory == true,
+        -- The folder resume and copy cd into: the real folder of a relocated session.
+        runCwd = resolved ~= "" and resolved or cwd,
         jsonlPath = PROJECTS_DIR .. "/" .. dir .. "/" .. id .. ".jsonl",
         sidecarDir = PROJECTS_DIR .. "/" .. dir .. "/" .. id,
         sessionEnvDir = SESSION_ENV_DIR .. "/" .. id,
@@ -75,14 +81,17 @@ local function shapeSession(raw, cwd)
     }
 end
 
--- Groups the flat session list by resolved cwd, sorted most-recent-first
--- both within a project and across projects.
+-- Groups the flat session list by folder (the real one of a relocated
+-- session, else the recorded cwd), sorted most-recent-first both within a
+-- project and across projects.
 function M.groupByProject(rawSessions)
     local byCwd = {}
     local order = {}
     for _, raw in ipairs(rawSessions) do
         local cwd = raw.cwd
-        if type(cwd) ~= "string" or cwd == "" then
+        if type(raw.resolvedCwd) == "string" and raw.resolvedCwd ~= "" then
+            cwd = raw.resolvedCwd
+        elseif type(cwd) ~= "string" or cwd == "" then
             cwd = decodeProjectDir(raw.projectDir) or noctalia.tr("unknown_project")
         end
         local group = byCwd[cwd]
@@ -264,10 +273,11 @@ function M.renameSession(session, title, done)
     end
 end
 
--- ── Repair a moved transcript ────────────────────────────────────────────
--- A dir_mismatch transcript resumes once it sits in the project folder its
--- recorded cwd encodes to; the cwd text inside the file is not used, so the
--- repair is a move and nothing is rewritten.
+-- ── Repair a misplaced transcript ────────────────────────────────────────
+-- A misplaced transcript (no folder matches its project dir, its recorded
+-- cwd exists) resumes once it sits in the project folder that cwd encodes
+-- to; the cwd text inside the file is not used, so the repair is a move and
+-- nothing is rewritten. The cwd folder is never created.
 
 -- Claude Code's folder name: one "-" per character that is not a letter or
 -- digit. Only ASCII counts as letter/digit, a multibyte character is one dash.
@@ -283,7 +293,10 @@ end
 -- The cwd to move the transcript to, or nil and an error code.
 function M.repairTarget(session)
     local cwd = session.cwd
-    if session.status ~= "dir_mismatch" or not validId(session.id) or type(cwd) ~= "string" then
+    if session.status ~= "misplaced" then
+        return nil, "status"
+    end
+    if not validId(session.id) or type(cwd) ~= "string" then
         return nil, "unsafe"
     end
     if cwd:sub(1, 1) ~= "/" then
@@ -314,11 +327,16 @@ end
 
 -- Moves the transcript and its sidecar into the cwd's project folder as
 -- direct argv steps, each after the previous one, stopping at the first
--- failure. mv -n never overwrites; an existing target is refused up front.
+-- failure. The cwd must exist; mv -n never overwrites; an existing target is
+-- refused up front.
 function M.repairSession(session, done)
     local cwd, code = M.repairTarget(session)
     if not cwd then
         done(false, code)
+        return
+    end
+    if not noctalia.fileExists(cwd) then
+        done(false, "cwd_missing")
         return
     end
     local target = PROJECTS_DIR .. "/" .. encodeCwd(cwd)
@@ -331,11 +349,7 @@ function M.repairSession(session, done)
         done(false, "exists")
         return
     end
-    local steps = {}
-    if not noctalia.fileExists(cwd) then
-        table.insert(steps, { argv = { "mkdir", "-p", "--", cwd }, code = "mkdir" })
-    end
-    table.insert(steps, { argv = { "mkdir", "-p", "--", target }, code = "mkdir" })
+    local steps = { { argv = { "mkdir", "-p", "--", target }, code = "mkdir" } }
     table.insert(steps, { argv = { "mv", "-n", "--", session.jsonlPath, target .. "/" }, code = "move" })
     if hasSidecar then
         table.insert(steps, { argv = { "mv", "-n", "--", session.sidecarDir, target .. "/" }, code = "sidecar" })

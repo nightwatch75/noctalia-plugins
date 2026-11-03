@@ -12,11 +12,13 @@
 --             "status" state.
 --   Sessions  every local session, grouped by project, sortable by date,
 --             name or session count, filterable to empty ones (no prompt
---             ever sent) or broken ones (cwd gone, or transcript stored
---             under another project dir; a warning glyph gives the reason).
+--             ever sent), moved ones ("relocated": the folder was renamed,
+--             resume runs from the real one) or orphan ones ("orphan": no
+--             folder at all, "misplaced": transcript in a project dir that
+--             matches no folder); a glyph per status gives the reason.
 --             Up/Down select a row, Enter opens it; a glyph marks the
 --             running ones (the service's "live" state). Click to resume in
---             a terminal (refused for a broken one), copy puts the resume
+--             a terminal (refused for orphan/misplaced), copy puts the resume
 --             command on the clipboard, pencil renames (custom title, not
 --             for a running session), eye toggles a preview, trash deletes
 --             after an inline confirm. "Orphans" scans for leftovers of
@@ -84,10 +86,9 @@ local confirmingClean = false -- inline confirm strip for "delete all empty sess
 local sortBy = "date" -- "date" | "name" | "count"
 local sortAsc = false
 local emptyOnly = false -- only sessions that never got a prompt
-local brokenOnly = false -- only sessions whose status is not "ok"
+local statusFilter = nil -- nil | "moved" (relocated) | "orphan" (orphan + misplaced)
 local renamingId = nil -- session with the inline rename strip open
 local repairingId = nil -- session with the inline repair strip open
-local repairCreates = false -- the open repair strip: its cwd will be created
 local renamingSession = nil -- its session record, for the Return key
 local renameDraft = ""
 local renameRev = 0 -- bumped on each open to reseed the uncontrolled input
@@ -614,14 +615,14 @@ local function liveIds()
 end
 
 local function resumeSession(session)
-    if session.status ~= "ok" then
-        noctalia.notifyError(tr("title"), tr("err_resume_broken", { reason = tr("status_" .. session.status) }))
+    if session.status == "orphan" or session.status == "misplaced" then
+        noctalia.notifyError(tr("title"), tr("err_resume_refused", { reason = tr("resume_reason_" .. session.status) }))
         return
     end
     if session.empty then
         return -- `claude --resume` finds nothing and the terminal closes at once
     end
-    local cmd = "cd " .. shared.shellQuote(session.cwd) .. " && exec claude --resume " .. shared.shellQuote(session.id)
+    local cmd = "cd " .. shared.shellQuote(session.runCwd) .. " && exec claude --resume " .. shared.shellQuote(session.id)
     if not shared.launchTerminal(cmd) then
         noctalia.notifyError(tr("title"), tr("err_no_terminal"))
     end
@@ -663,7 +664,7 @@ end
 
 -- Only a real cwd and a plain hex id: the text gets pasted into a shell.
 local function copyResume(session)
-    local text = "cd " .. shared.shellQuote(session.cwd) .. " && claude --resume " .. session.id
+    local text = "cd " .. shared.shellQuote(session.runCwd) .. " && claude --resume " .. session.id
     if noctalia.copyToClipboard(text, "text/plain") then
         noctalia.notify(tr("title"), tr("copied_resume"))
     end
@@ -701,11 +702,11 @@ local REPAIR_ERRORS = {
     not_absolute = "err_repair_not_absolute", exists = "err_repair_exists",
     move = "err_repair_move", unsafe = "err_repair_unsafe", same_dir = "err_repair_same_dir",
     mkdir = "err_repair_mkdir", sidecar = "err_repair_sidecar",
+    status = "err_repair_status", cwd_missing = "err_repair_cwd_missing",
 }
 
 local function openRepair(session)
     repairingId = session.id
-    repairCreates = not noctalia.fileExists(session.cwd) -- once here, never per render
     render()
 end
 
@@ -774,6 +775,13 @@ local function contextRow(session)
     })
 end
 
+-- Row glyph per status; "ok" has none.
+local STATUS_MARK = {
+    relocated = { glyph = "folder-symlink", color = "on_surface_variant" },
+    orphan = { glyph = "folder-off", color = "error" },
+    misplaced = { glyph = "alert-triangle", color = "tertiary" },
+}
+
 local function sessionWrapKey(session)
     return "sess-wrap-" .. session.id
         .. (expandedSessionId == session.id and "-prev" or "")
@@ -803,11 +811,16 @@ local function sessionRow(session, selected, isLive)
     if isLive then
         table.insert(rowButtons, ui.glyph({ name = "activity", size = 14, color = "primary" }))
     end
-    if session.status ~= "ok" then
-        table.insert(rowButtons, ui.row({ key = "broken-" .. id, tooltip = tr("status_" .. session.status) }, {
-            session.status == "cwd_missing"
-                and ui.glyph({ name = "folder-off", size = 14, color = "error" })
-                or ui.glyph({ name = "alert-triangle", size = 14, color = "tertiary" }),
+    local mark = STATUS_MARK[session.status]
+    if mark then
+        local tip = tr("status_misplaced")
+        if session.status == "relocated" then
+            tip = tr("status_relocated", { path = session.resolvedCwd })
+        elseif session.status == "orphan" then
+            tip = tr(session.hasMemory and "status_orphan_memory" or "status_orphan")
+        end
+        table.insert(rowButtons, ui.row({ key = "status-" .. id, tooltip = tip }, {
+            ui.glyph({ name = mark.glyph, size = 14, color = mark.color }),
         }))
     end
     table.insert(rowButtons, ui.button({
@@ -820,7 +833,8 @@ local function sessionRow(session, selected, isLive)
     -- Only a real cwd has a CLAUDE.md path worth opening — "unknown project"
     -- sessions (no recorded cwd) skip this button entirely.
     if session.cwd:sub(1, 1) == "/" then
-        if session.cwdKnown and id:match("^[%x-]+$") then
+        -- An orphan has no folder to cd into.
+        if session.cwdKnown and session.status ~= "orphan" and session.runCwd:sub(1, 1) == "/" and id:match("^[%x-]+$") then
             table.insert(rowButtons, ui.button({
                 key = "copy-" .. id, glyph = "copy", variant = "ghost", controlSize = "sm",
                 tooltip = tr("tip_copy_resume"),
@@ -850,7 +864,7 @@ local function sessionRow(session, selected, isLive)
             onClick = function() openRename(session) end,
         }))
     end
-    if session.status == "dir_mismatch" and not isLive then
+    if session.status == "misplaced" and not isLive then
         table.insert(rowButtons, ui.button({
             key = "repair-" .. id, glyph = "arrows-exchange", variant = "ghost", controlSize = "sm",
             tooltip = tr("tip_repair_session"),
@@ -881,7 +895,7 @@ local function sessionRow(session, selected, isLive)
     if repairingId == id then
         table.insert(blocks, ui.row({ key = "confirm-repair-" .. id, gap = 8, align = "center" }, {
             ui.label({
-                text = tr(repairCreates and "repair_confirm_create" or "repair_confirm", { cwd = session.cwd }),
+                text = tr("repair_confirm", { cwd = session.cwd }),
                 fontSize = 12, color = "on_surface", flexGrow = 1,
             }),
             ui.button({ key = "repair-ok-" .. id, text = tr("repair_yes"), variant = "primary", controlSize = "sm", onClick = function() confirmRepair(session) end }),
@@ -996,8 +1010,27 @@ local function isEmpty(session)
     return session.empty
 end
 
-local function isBroken(session)
-    return session.status ~= "ok"
+local function isMoved(session)
+    return session.status == "relocated"
+end
+
+local function isOrphan(session)
+    return session.status == "orphan" or session.status == "misplaced"
+end
+
+local STATUS_FILTERS = { moved = isMoved, orphan = isOrphan }
+
+-- Moved and Orphan show a glyph and the count only, so the toolbar keeps its width.
+local function statusFilterButton(name, glyph, test)
+    return ui.button({
+        key = "sort-" .. name, glyph = glyph, text = tostring(countSessions(test)),
+        variant = "ghost", controlSize = "sm", selected = statusFilter == name, tooltip = tr("tip_filter_" .. name),
+        onClick = function()
+            statusFilter = (statusFilter ~= name) and name or nil
+            sel = 1
+            render()
+        end,
+    })
 end
 
 local function checkOrphans()
@@ -1221,15 +1254,8 @@ local function renderSessionsTab()
                     render()
                 end,
             }),
-            ui.button({
-                key = "sort-broken", text = tr("filter_broken", { n = countSessions(isBroken) }),
-                variant = "ghost", controlSize = "sm", selected = brokenOnly, tooltip = tr("tip_filter_broken"),
-                onClick = function()
-                    brokenOnly = not brokenOnly
-                    sel = 1
-                    render()
-                end,
-            }),
+            statusFilterButton("moved", "folder-symlink", isMoved),
+            statusFilterButton("orphan", "folder-off", isOrphan),
             ui.label({ key = "sort-spacer", text = "", flexGrow = 1 }),
             ui.button({
                 key = "sess-refresh", glyph = sessionsState.loading and "loader-2" or "refresh",
@@ -1313,7 +1339,7 @@ local function renderSessionsTab()
             local matches = {}
             for _, session in ipairs(group.sessions) do
                 if (needle == "" or matchesSearch(session, group.cwd, needle)) and (not emptyOnly or session.empty)
-                    and (not brokenOnly or isBroken(session)) then
+                    and (statusFilter == nil or STATUS_FILTERS[statusFilter](session)) then
                     table.insert(matches, session)
                 end
             end

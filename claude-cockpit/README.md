@@ -104,25 +104,30 @@ Each row shows the date and time of the last update, then the time since.
 A glyph marks a running session, and the project that holds one, even when
 the project is closed.
 
-A warning glyph marks a broken session. Its tooltip gives the reason:
+A glyph marks a session with a problem. Its tooltip gives the reason:
 
-- The working directory of the session does not exist now.
-- The transcript is in a project folder that does not match its working
-  directory (for example, after you moved the project). Claude Code cannot
-  resume it.
+- **Moved** (folder glyph with an arrow): you renamed or moved the folder.
+  The panel finds the new folder, shows the session in it, and resumes it
+  from there.
+- **Orphan** (red folder glyph): no folder matches the session. When the
+  project folder still has memory files, the tooltip says so.
+- **Misplaced** (warning glyph): the transcript is in a project folder that
+  matches no folder, but its recorded working directory exists.
 
-You cannot resume a broken session from the panel.
+You cannot resume an orphan or misplaced session from the panel.
 
 Buttons on a session row:
 
 - Copy puts `cd <dir> && claude --resume <id>` on the clipboard. Only for a
-  session with a known working directory.
+  session with a known working directory, not for an orphan. For a moved
+  session, `<dir>` is the new folder.
 - The pencil renames the session. Type the title and push `Return` or
   **Save**. The title is the same one `/rename` gives. Not for a running
   session.
-- The repair button moves a mismatched transcript into the correct project
-  folder, after a confirm. It creates the working directory when it does not
-  exist. It never overwrites a file. Not for a running session.
+- The repair button moves a misplaced transcript into the project folder of
+  its working directory, after a confirm. The working directory must exist:
+  the repair never creates it. It never overwrites a file. Not for a running
+  session.
 - The eye shows the first prompt.
 - The trash deletes the session after a confirm. It also deletes the
   `session-env` and `file-history` folders of the session, when no other
@@ -138,7 +143,10 @@ Buttons on the filter row:
   when you open it and close it before you send a prompt. An empty session
   has an *empty* tag, and clicking it does nothing, because there is nothing
   to resume.
-- **Broken (n)** shows only the broken sessions.
+- The moved button (folder glyph with an arrow and a count) shows only the
+  moved sessions. The orphan button (red folder glyph and a count) shows
+  only the orphan and misplaced sessions. Only one of the two is active at
+  a time.
 - The refresh button reads the sessions again.
 - The bin button deletes every empty session, after a confirm. A running
   session is never deleted, even when it has no prompt yet.
@@ -201,6 +209,8 @@ What the plugin touches:
   sessions, every 2 seconds, only while the widget is in activity mode or
   the Live or Sessions tab is open. A transcript is parsed again only when it changes.
   The Usage and Sessions tabs read the other transcripts in small slices.
+  To find a moved folder, the Sessions scan lists only the folders on the
+  path that its project folder name gives.
 - **Reads** `~/.claude/.credentials.json` for the token of the usage query.
 - **Writes** two caches you can delete: `~/.claude/pricing-cache.json` and
   `~/.claude/usage-cache.json`. In the plugin data dir: `live/` (session
@@ -213,8 +223,8 @@ What the plugin touches:
   `niri msg`, `hyprctl` or `umbriel msg` to focus a window (window ids and pids only,
   never titles).
 - **Writes** to a transcript only on a rename: one `custom-title` line at
-  the end, the same line `/rename` writes. **Moves** a transcript only on a
-  repair, after an inline confirm.
+  the end, the same line `/rename` writes. **Moves** a misplaced transcript
+  only on a repair, after an inline confirm.
 - **Deletes**, always after an inline confirm: a session transcript and its
   `session-env`/`file-history` folders (trash glyph on its row), all empty
   sessions at once (bin button on the filter row, running sessions kept),

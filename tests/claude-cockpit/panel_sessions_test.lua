@@ -1,5 +1,6 @@
 -- Sessions tab row actions of panel.luau, with the host and sessions.luau
--- stubbed: broken status, Broken filter, copy resume command, rename, the
+-- stubbed: status icons, Moved/Orphan filters, resume and copy from the real
+-- folder, repair of a misplaced transcript, rename, the
 -- kept-memory notice on delete and the orphan check.
 
 local function eq(a, b, m) if a ~= b then error(m .. ": got " .. tostring(a) .. " want " .. tostring(b), 2) end end
@@ -43,17 +44,20 @@ noctalia = {
 
 local function session(id, fields)
     local s = { id = id, label = id, mtime = 100, empty = false, firstPrompt = "", model = "", contextTokens = 0,
-        status = "ok", projectDir = "-p-" .. id, cwd = "/p", cwdKnown = true }
+        status = "ok", projectDir = "-p-" .. id, cwd = "/p", cwdKnown = true, resolvedCwd = "", hasMemory = false }
     for k, v in pairs(fields or {}) do s[k] = v end
+    s.runCwd = s.runCwd or s.cwd
     return s
 end
 local A = session("aaa1", { cwd = "/tmp/o'neil" })
-local B = session("bbb2", { status = "dir_mismatch" })
-local C = session("ccc3", { status = "cwd_missing", cwd = "unknown project" })
+local B = session("bbb2", { status = "misplaced" })
+local C = session("ccc3", { status = "orphan", cwd = "/gone", hasMemory = true })
+local D = session("ddd4", { status = "relocated", resolvedCwd = "/real", runCwd = "/real" })
+local E = session("eee5", { status = "orphan", cwd = "/gone2" })
 local LIVE = session("beef")
 local GUESS = session("fff6", { cwdKnown = false })
 local projects = {
-    { cwd = "/p", lastActivity = 100, sessions = { A, B, C, LIVE, GUESS } },
+    { cwd = "/p", lastActivity = 100, sessions = { A, B, C, D, E, LIVE, GUESS } },
 }
 
 local refreshes, renames, deletes = 0, {}, {}
@@ -109,50 +113,72 @@ click("tab-sessions")
 watchers.live({ groups = { count = 1, waiting = {}, idle = {}, busy = { { id = "beef" } } } })
 click("grp-/p")
 
--- Broken rows: warning glyph with the reason; resume does not launch.
-local warn = find(rendered, "broken-bbb2")
-assert(warn, "broken glyph on dir_mismatch row")
-eq(warn.props.tooltip, "status_dir_mismatch", "broken tooltip")
-assert(has(warn, function(n) return n.kind == "glyph" and n.props.name == "alert-triangle" end), "alert-triangle glyph")
-eq(find(rendered, "broken-ccc3").props.tooltip, "status_cwd_missing", "cwd_missing tooltip")
-assert(find(rendered, "broken-aaa1") == nil, "ok row has no warning")
-click("resume-bbb2")
-eq(#launched, 0, "broken resume launches nothing")
-eq(errors[1], "err_resume_broken(reason=status_dir_mismatch)", "broken resume error")
-click("resume-aaa1")
-eq(#launched, 1, "ok row resumes")
-
--- Broken filter.
-eq(find(rendered, "sort-broken").props.text, "filter_broken(n=2)", "broken count")
-click("sort-broken")
-assert(find(rendered, "resume-aaa1") == nil and find(rendered, "resume-beef") == nil, "ok rows hidden")
-assert(find(rendered, "resume-bbb2") and find(rendered, "resume-ccc3"), "broken rows shown")
-click("sort-broken")
-assert(find(rendered, "resume-aaa1"), "filter off shows all")
-
--- Copy resume command.
-click("copy-aaa1")
-eq(clips[1][1], "cd '/tmp/o'\\''neil' && claude --resume aaa1", "copied text")
-eq(clips[1][2], "text/plain", "copied mime")
-eq(notes[#notes], "copied_resume", "copy notice")
-assert(find(rendered, "copy-bbb2"), "broken session with real cwd can copy")
-assert(find(rendered, "copy-ccc3") == nil, "no copy without a real cwd")
-assert(find(rendered, "copy-fff6") == nil, "no copy for a guessed cwd")
-
--- Icons per status.
+-- Status rows: one glyph per status with the reason; resume only for ok/relocated.
 local function glyphOf(key)
     local row = find(rendered, key)
     for _, c in ipairs(row.children) do if c.kind == "glyph" then return c.props end end
 end
-eq(glyphOf("broken-ccc3").name, "folder-off", "cwd_missing glyph"); eq(glyphOf("broken-ccc3").color, "error", "cwd_missing color")
-eq(glyphOf("broken-bbb2").name, "alert-triangle", "mismatch glyph"); eq(glyphOf("broken-bbb2").color, "tertiary", "mismatch color")
+assert(find(rendered, "status-aaa1") == nil, "ok row has no status glyph")
+eq(find(rendered, "status-ddd4").props.tooltip, "status_relocated(path=/real)", "relocated tooltip")
+eq(glyphOf("status-ddd4").name, "folder-symlink", "relocated glyph")
+eq(glyphOf("status-ddd4").color, "on_surface_variant", "relocated color")
+eq(find(rendered, "status-ccc3").props.tooltip, "status_orphan_memory", "orphan tooltip with memory")
+eq(find(rendered, "status-eee5").props.tooltip, "status_orphan", "orphan tooltip")
+eq(glyphOf("status-ccc3").name, "folder-off", "orphan glyph"); eq(glyphOf("status-ccc3").color, "error", "orphan color")
+eq(find(rendered, "status-bbb2").props.tooltip, "status_misplaced", "misplaced tooltip")
+eq(glyphOf("status-bbb2").name, "alert-triangle", "misplaced glyph"); eq(glyphOf("status-bbb2").color, "tertiary", "misplaced color")
+click("resume-bbb2")
+eq(#launched, 0, "misplaced resume launches nothing")
+eq(errors[1], "err_resume_refused(reason=resume_reason_misplaced)", "misplaced resume error")
+click("resume-ccc3")
+eq(#launched, 0, "orphan resume launches nothing")
+eq(errors[2], "err_resume_refused(reason=resume_reason_orphan)", "orphan resume error")
+click("resume-aaa1")
+eq(#launched, 1, "ok row resumes")
+eq(launched[1], "cd '/tmp/o'\\''neil' && exec claude --resume 'aaa1'", "ok resume cwd")
+click("resume-ddd4")
+eq(#launched, 2, "relocated row resumes")
+eq(launched[2], "cd '/real' && exec claude --resume 'ddd4'", "relocated resumes from the real folder")
 
--- Repair: only dir_mismatch, never a live session; inline strip; confirm repairs then reloads.
-assert(find(rendered, "repair-bbb2"), "repair button on dir_mismatch")
+-- Moved / Orphan filters: one at a time, combined with Empty and search.
+eq(find(rendered, "sort-moved").props.text, "1", "moved count")
+eq(find(rendered, "sort-moved").props.glyph, "folder-symlink", "moved glyph")
+eq(find(rendered, "sort-orphan").props.text, "3", "orphan count (orphan + misplaced)")
+eq(find(rendered, "sort-orphan").props.glyph, "folder-off", "orphan filter glyph")
+eq(find(rendered, "sort-moved").props.tooltip, "tip_filter_moved", "moved tooltip")
+eq(find(rendered, "sort-orphan").props.tooltip, "tip_filter_orphan", "orphan tooltip")
+click("sort-moved")
+assert(find(rendered, "sort-moved").props.selected, "moved selected")
+assert(find(rendered, "resume-ddd4") and find(rendered, "resume-aaa1") == nil and find(rendered, "resume-bbb2") == nil, "moved only")
+click("sort-orphan")
+assert(not find(rendered, "sort-moved").props.selected, "orphan replaces moved")
+assert(find(rendered, "resume-bbb2") and find(rendered, "resume-ccc3") and find(rendered, "resume-eee5"), "orphan + misplaced shown")
+assert(find(rendered, "resume-ddd4") == nil and find(rendered, "resume-aaa1") == nil, "others hidden")
+click("sort-empty")
+assert(find(rendered, "resume-bbb2") == nil, "combined with Empty")
+click("sort-empty")
+click("sort-orphan")
+assert(find(rendered, "resume-aaa1") and find(rendered, "resume-ddd4"), "filter off shows all")
+
+-- Copy resume command: from runCwd, never for an orphan.
+click("copy-aaa1")
+eq(clips[1][1], "cd '/tmp/o'\\''neil' && claude --resume aaa1", "copied text")
+eq(clips[1][2], "text/plain", "copied mime")
+eq(notes[#notes], "copied_resume", "copy notice")
+click("copy-ddd4")
+eq(clips[2][1], "cd '/real' && claude --resume ddd4", "relocated copy uses the real folder")
+assert(find(rendered, "copy-bbb2"), "misplaced session with real cwd can copy")
+assert(find(rendered, "copy-ccc3") == nil, "no copy for an orphan")
+assert(find(rendered, "copy-fff6") == nil, "no copy for a guessed cwd")
+
+-- Repair: only misplaced, never a live session; inline strip; confirm repairs then reloads.
+assert(find(rendered, "repair-bbb2"), "repair button on misplaced")
 eq(find(rendered, "repair-bbb2").props.glyph, "arrows-exchange", "repair glyph")
 eq(find(rendered, "repair-bbb2").props.tooltip, "tip_repair_session", "repair tooltip")
-assert(find(rendered, "repair-ccc3") == nil and find(rendered, "repair-aaa1") == nil, "no repair for other statuses")
-LIVE.status = "dir_mismatch"
+for _, k in ipairs({ "repair-ccc3", "repair-ddd4", "repair-aaa1", "repair-eee5" }) do
+    assert(find(rendered, k) == nil, "no repair: " .. k)
+end
+LIVE.status = "misplaced"
 watchers.live({ groups = { count = 1, waiting = {}, idle = {}, busy = { { id = "beef" } } } })
 assert(find(rendered, "repair-beef") == nil, "no repair for a live session")
 LIVE.status = "ok"
@@ -161,11 +187,6 @@ assert(find(rendered, "sess-wrap-bbb2-rep"), "wrapper key changes while the stri
 assert(has(find(rendered, "confirm-repair-bbb2"), function(n) return n.props.text == "repair_confirm(cwd=/p)" end), "strip text")
 click("repair-no-bbb2")
 assert(find(rendered, "confirm-repair-bbb2") == nil, "cancel closes")
-noctalia.fileExists = function(p) return p ~= "/p" end
-click("repair-bbb2")
-assert(has(find(rendered, "confirm-repair-bbb2"), function(n) return n.props.text == "repair_confirm_create(cwd=/p)" end), "strip text with create")
-click("repair-no-bbb2")
-noctalia.fileExists = function() return true end
 click("repair-bbb2")
 click("sess-refresh")
 assert(find(rendered, "confirm-repair-bbb2") == nil, "refresh closes the strip")
@@ -179,7 +200,8 @@ repairResult, repairCode = false, "exists"
 click("repair-bbb2"); click("repair-ok-bbb2")
 eq(errors[#errors], "err_repair_failed(reason=err_repair_exists)", "failure notice")
 for code, key in pairs({ same_dir = "err_repair_same_dir", mkdir = "err_repair_mkdir", sidecar = "err_repair_sidecar",
-    move = "err_repair_move", unsafe = "err_repair_unsafe", not_absolute = "err_repair_not_absolute" }) do
+    move = "err_repair_move", unsafe = "err_repair_unsafe", not_absolute = "err_repair_not_absolute",
+    status = "err_repair_status", cwd_missing = "err_repair_cwd_missing" }) do
     repairCode = code
     click("repair-bbb2"); click("repair-ok-bbb2")
     eq(errors[#errors], "err_repair_failed(reason=" .. key .. ")", "notice for " .. code)
