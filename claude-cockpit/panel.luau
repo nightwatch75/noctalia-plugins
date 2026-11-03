@@ -791,6 +791,8 @@ local STATUS_MARK = {
 -- Hover fill is driven by onHover; render() runs only when the hovered key changes.
 local hoveredIcon = nil
 local HOVER_FILL = "on_surface/0.08"
+-- The host keeps the last fill when the prop is absent, so "no fill" must be sent explicitly.
+local NO_FILL = "#00000000"
 
 local function onIconHover(key)
     return function(state)
@@ -811,7 +813,7 @@ local function iconButton(key, glyph, color, tooltip, onClick)
     return ui.row({
         key = key, tooltip = tooltip, onClick = onClick, onHover = onIconHover(key),
         align = "center", justify = "center", padding = 8, radius = 6,
-        fill = hoveredIcon == key and HOVER_FILL or nil,
+        fill = hoveredIcon == key and HOVER_FILL or NO_FILL,
     }, {
         ui.glyph({ name = glyph, size = 16, color = color }),
     })
@@ -1061,7 +1063,7 @@ local function statusFilterButton(name, glyph, glyphColor, test)
     local selected = statusFilter == name
     return ui.row({
         key = key, tooltip = tr("tip_filter_" .. name), gap = 6, align = "center", padding = 8, radius = 6,
-        fill = selected and "primary" or (hoveredIcon == key and HOVER_FILL or nil),
+        fill = selected and "primary" or (hoveredIcon == key and HOVER_FILL or NO_FILL),
         onHover = onIconHover(key),
         onClick = function()
             statusFilter = (statusFilter ~= name) and name or nil
