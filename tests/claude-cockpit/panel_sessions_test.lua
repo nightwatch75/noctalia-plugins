@@ -484,4 +484,28 @@ rs = openOrphans({
 eq(#rs, 2, "two rows")
 assert(rs[1].props.key ~= rs[2].props.key, "distinct keys for the same UUID")
 
+-- Pinned toolbar: search, toolbar and one-line strips sit above the scroll; the list scrolls alone.
+local body = find(rendered, "sessions-body")
+eq(body.children[1].props.key, "sessions-top", "top comes first")
+eq(body.children[2].props.key, "sessions-scroll", "scroll comes after the top")
+eq(body.props.flexGrow, 1, "body grows")
+local top, scrollNode = body.children[1], body.children[2]
+assert(find(top, "sess-sort") and find(top, "sess-search") and find(top, "sess-clean"), "controls pinned")
+assert(not find(scrollNode, "sess-sort") and not find(scrollNode, "sess-search"), "controls not in the scroll")
+assert(find(scrollNode, "grp-/p"), "group row scrolls")
+orphanResult = { { kind = "project", path = "/x/a", bytes = 1 } }
+click("sess-orphans")
+click("orphans-toggle")
+body = find(rendered, "sessions-body")
+assert(find(body.children[1], "confirm-orphans") and not find(body.children[2], "confirm-orphans"), "orphan strip pinned")
+assert(find(body.children[2], "orph-list") and not find(body.children[1], "orph-list"), "orphan list scrolls")
+click("sess-refresh")
+click("sess-clean")
+body = find(rendered, "sessions-body")
+assert(find(body.children[1], "confirm-clean") and not find(body.children[2], "confirm-clean"), "clean strip pinned")
+click("sess-refresh")
+onKey("down", true); onKey("down", false)
+local sc = find(rendered, "sessions-body").children[2]
+assert(sc.props.revealKey and find(sc, sc.props.revealKey), "revealKey names a row inside the scroll")
+
 print("panel_sessions_test ok")

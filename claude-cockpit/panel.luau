@@ -1255,10 +1255,18 @@ local function stopKeyRepeat()
     panel.setNeedsFrameTick(false)
 end
 
+local function sessionsBody(top, scroll)
+    return ui.column({ key = "sessions-body", flexGrow = 1, gap = 6, align = "stretch" }, {
+        ui.column({ key = "sessions-top", gap = 6, align = "stretch" }, top),
+        scroll,
+    })
+end
+
 local function renderSessionsTab()
     loadSessions(false)
 
-    local rows = {
+    -- Pinned above the scroll: only one-line strips, the tall orphan list stays in the scroll.
+    local top = {
         ui.row({ key = "sess-tools", gap = 6, align = "center" }, {
             ui.input({
                 key = "sess-search",
@@ -1324,9 +1332,10 @@ local function renderSessionsTab()
             }),
         }),
     }
+    local rows = {}
     if orphanState.confirming then
         local list = orphanState.list or {}
-        table.insert(rows, ui.row({ key = "confirm-orphans", gap = 8, align = "center" }, {
+        table.insert(top, ui.row({ key = "confirm-orphans", gap = 8, align = "center" }, {
             ui.label({
                 text = tr("orphans_confirm", { n = #list, mb = orphansMb(list) }),
                 fontSize = 12, color = "on_surface", flexGrow = 1,
@@ -1349,13 +1358,13 @@ local function renderSessionsTab()
                 end,
             }),
         }))
-        table.insert(rows, muted(tr("orphans_rule"), 11))
+        table.insert(top, muted(tr("orphans_rule"), 11))
         if orphanState.showing then
             table.insert(rows, ui.scroll({ key = "orph-list", height = 220, gap = 6, align = "stretch" }, orphanDetails(list)))
         end
     end
     if confirmingClean then
-        table.insert(rows, ui.row({ key = "confirm-clean", gap = 8, align = "center" }, {
+        table.insert(top, ui.row({ key = "confirm-clean", gap = 8, align = "center" }, {
             ui.label({ text = tr("clean_empty_confirm", { n = #deletableEmpty() }), fontSize = 12, color = "on_surface", flexGrow = 1 }),
             ui.button({ text = tr("yes"), variant = "destructive", controlSize = "sm", onClick = cleanEmpty }),
             ui.button({
@@ -1446,10 +1455,10 @@ local function renderSessionsTab()
         if #shown == 0 then
             table.insert(rows, muted(tr("no_sessions")))
         end
-        return ui.scroll({ key = "sessions-scroll", flexGrow = 1, gap = 6, align = "stretch", revealKey = revealKey }, rows)
+        return sessionsBody(top, ui.scroll({ key = "sessions-scroll", flexGrow = 1, gap = 6, align = "stretch", revealKey = revealKey }, rows))
     end
 
-    return ui.scroll({ key = "sessions-scroll", flexGrow = 1, gap = 6, align = "stretch" }, rows)
+    return sessionsBody(top, ui.scroll({ key = "sessions-scroll", flexGrow = 1, gap = 6, align = "stretch" }, rows))
 end
 
 -- ── CLAUDE.md tab ────────────────────────────────────────────────────────
