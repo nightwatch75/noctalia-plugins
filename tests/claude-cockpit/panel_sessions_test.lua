@@ -178,9 +178,18 @@ assert(find(rendered, "confirm-repair-bbb2") == nil, "strip closed after repair"
 repairResult, repairCode = false, "exists"
 click("repair-bbb2"); click("repair-ok-bbb2")
 eq(errors[#errors], "err_repair_failed(reason=err_repair_exists)", "failure notice")
+for code, key in pairs({ same_dir = "err_repair_same_dir", mkdir = "err_repair_mkdir", sidecar = "err_repair_sidecar",
+    move = "err_repair_move", unsafe = "err_repair_unsafe", not_absolute = "err_repair_not_absolute" }) do
+    repairCode = code
+    click("repair-bbb2"); click("repair-ok-bbb2")
+    eq(errors[#errors], "err_repair_failed(reason=" .. key .. ")", "notice for " .. code)
+end
 repairCode = "weird"
 click("repair-bbb2"); click("repair-ok-bbb2")
-eq(errors[#errors], "err_repair_failed", "unknown code falls back")
+eq(errors[#errors], "err_repair_generic", "unknown code falls back")
+click("repair-bbb2")
+eq(find(rendered, "repair-ok-bbb2").props.text, "repair_yes", "confirm label")
+click("repair-no-bbb2")
 repairResult, repairCode = true, nil
 
 -- Rename.

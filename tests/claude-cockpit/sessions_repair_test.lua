@@ -4,7 +4,7 @@
 
 local function eq(a, b, m) if a ~= b then error(m .. ": got " .. tostring(a) .. " want " .. tostring(b), 2) end end
 
-local calls, exists, failAt = {}, {}, nil
+local calls, exists, failAt, noMove = {}, {}, nil, false
 noctalia = {
     expandPath = function(p) return (p:gsub("^~", "/h")) end,
     tr = function(k) return k end,
@@ -12,6 +12,10 @@ noctalia = {
     pluginDir = function() return "/plug" end,
     runAsync = function(argv, cb)
         table.insert(calls, argv)
+        if argv[1] == "mv" and failAt ~= #calls and not noMove then
+            exists[argv[4]] = nil
+            exists[argv[5] .. argv[4]:match("[^/]+$")] = true
+        end
         cb({ exitCode = (failAt == #calls) and 1 or 0 })
         return true
     end,
@@ -38,6 +42,12 @@ t, e = sessions.repairTarget(mk({ cwd = "/a\nb" })); eq(t, nil, "control char");
 t, e = sessions.repairTarget(mk({ cwd = "/" .. string.rep("a", 200) })); eq(t, nil, "long name"); eq(e, "unsafe", "long code")
 t, e = sessions.repairTarget(mk({ cwd = "/w/x", projectDir = "-w-x" })); eq(t, nil, "same dir"); assert(e, "same dir code")
 t, e = sessions.repairTarget(mk({ cwd = "/w/..foo" })); eq(t, "/w/..foo", "dots inside a name are fine")
+
+for name, cwd in pairs({ astral = "/w/\u{1F600}x", dslash = "/a//b", dot = "/a/./b", dotend = "/a/.",
+    trailing = "/a/b/", c1 = "/a\u{85}b", ls = "/a\u{2028}b", ps = "/a\u{2029}b" }) do
+    t, e = sessions.repairTarget(mk({ cwd = cwd })); eq(t, nil, name .. " refused"); eq(e, "unsafe", name .. " code")
+end
+t = sessions.repairTarget(mk({ cwd = "/" })); eq(t, "/", "root is fine")
 
 -- repairSession: no existing cwd, with sidecar
 local P = "/h/.claude/projects"
@@ -69,13 +79,26 @@ calls, exists = {}, { [P .. "/-w-x/" .. ID .. ".jsonl"] = true }
 sessions.repairSession(mk(), function(o, r) ok, err = o, r end)
 eq(ok, false, "collision refused"); eq(err, "exists", "collision code"); eq(#calls, 0, "nothing ran")
 
+-- sidecar destination exists: refused up front
+calls, exists = {}, { [P .. "/-old/" .. ID] = true, [P .. "/-w-x/" .. ID] = true }
+sessions.repairSession(mk(), function(o, r) ok, err = o, r end)
+eq(ok, false, "sidecar collision refused"); eq(err, "exists", "sidecar collision code"); eq(#calls, 0, "nothing ran (sidecar)")
+
+-- mv exits 0 without moving: verified, reported
+noMove = true
+calls, exists = {}, { ["/w/x"] = true }
+ok = nil
+sessions.repairSession(mk(), function(o, r) ok, err = o, r end)
+eq(ok, false, "silent skip fails"); eq(err, "move", "silent skip code")
+noMove = false
+
 -- refusal runs nothing
 calls, exists = {}, {}
 sessions.repairSession(mk({ cwd = "rel" }), function(o, r) ok, err = o, r end)
 eq(ok, false, "refused"); eq(err, "not_absolute", "refusal code"); eq(#calls, 0, "no exec")
 
 -- failures stop the chain
-for step, code in pairs({ [1] = "mkdir", [2] = "mkdir", [3] = "move", [4] = "move" }) do
+for step, code in pairs({ [1] = "mkdir", [2] = "mkdir", [3] = "move", [4] = "sidecar" }) do
     calls, exists, failAt = {}, { [P .. "/-old/" .. ID] = true }, step
     sessions.repairSession(mk(), function(o, r) ok, err = o, r end)
     eq(ok, false, "failed at " .. step); eq(err, code, "code at " .. step); eq(#calls, step, "stopped at " .. step)

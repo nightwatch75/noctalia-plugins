@@ -245,6 +245,16 @@ function M.repairTarget(session)
     if cwd:find("%c") or utf8.len(cwd) == nil or ("/" .. cwd .. "/"):find("/../", 1, true) then
         return nil, "unsafe"
     end
+    -- Non-canonical forms and characters Claude's own encoding may treat differently.
+    if cwd:find("//", 1, true) or ("/" .. cwd .. "/"):find("/./", 1, true) or (#cwd > 1 and cwd:sub(-1) == "/") then
+        return nil, "unsafe"
+    end
+    for _, code in utf8.codes(cwd) do
+        -- Astral: Claude counts UTF-16 units (two dashes), we count code points.
+        if code >= 0x10000 or (code >= 0x80 and code <= 0x9F) or code == 0x2028 or code == 0x2029 then
+            return nil, "unsafe"
+        end
+    end
     local encoded = encodeCwd(cwd)
     if #encoded > 200 then
         return nil, "unsafe"
@@ -269,19 +279,31 @@ function M.repairSession(session, done)
         done(false, "exists")
         return
     end
+    local hasSidecar = noctalia.fileExists(session.sidecarDir)
+    if hasSidecar and noctalia.fileExists(`{target}/{session.id}`) then
+        done(false, "exists")
+        return
+    end
     local steps = {}
     if not noctalia.fileExists(cwd) then
         table.insert(steps, { argv = { "mkdir", "-p", "--", cwd }, code = "mkdir" })
     end
     table.insert(steps, { argv = { "mkdir", "-p", "--", target }, code = "mkdir" })
     table.insert(steps, { argv = { "mv", "-n", "--", session.jsonlPath, target .. "/" }, code = "move" })
-    if noctalia.fileExists(session.sidecarDir) then
-        table.insert(steps, { argv = { "mv", "-n", "--", session.sidecarDir, target .. "/" }, code = "move" })
+    if hasSidecar then
+        table.insert(steps, { argv = { "mv", "-n", "--", session.sidecarDir, target .. "/" }, code = "sidecar" })
     end
     local function run(i)
         local step = steps[i]
         if step == nil then
-            done(true)
+            -- mv -n exits 0 when it skips, so check the result.
+            if not noctalia.fileExists(`{target}/{session.id}.jsonl`) or noctalia.fileExists(session.jsonlPath) then
+                done(false, "move")
+            elseif hasSidecar and (not noctalia.fileExists(`{target}/{session.id}`) or noctalia.fileExists(session.sidecarDir)) then
+                done(false, "sidecar")
+            else
+                done(true)
+            end
             return
         end
         local started = noctalia.runAsync(step.argv, function(result)

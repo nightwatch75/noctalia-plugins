@@ -682,7 +682,8 @@ end
 
 local REPAIR_ERRORS = {
     not_absolute = "err_repair_not_absolute", exists = "err_repair_exists",
-    move = "err_repair_move", unsafe = "err_repair_unsafe",
+    move = "err_repair_move", unsafe = "err_repair_unsafe", same_dir = "err_repair_same_dir",
+    mkdir = "err_repair_mkdir", sidecar = "err_repair_sidecar",
 }
 
 local function openRepair(session)
@@ -704,7 +705,7 @@ local function confirmRepair(session)
         elseif REPAIR_ERRORS[code] then
             noctalia.notifyError(tr("title"), tr("err_repair_failed", { reason = tr(REPAIR_ERRORS[code]) }))
         else
-            noctalia.notifyError(tr("title"), tr("err_repair_failed"))
+            noctalia.notifyError(tr("title"), tr("err_repair_generic"))
         end
         loadSessions(true)
     end)
@@ -866,7 +867,7 @@ local function sessionRow(session, selected, isLive)
                 text = tr(repairCreates and "repair_confirm_create" or "repair_confirm", { cwd = session.cwd }),
                 fontSize = 12, color = "on_surface", flexGrow = 1,
             }),
-            ui.button({ key = "repair-ok-" .. id, text = tr("yes"), variant = "primary", controlSize = "sm", onClick = function() confirmRepair(session) end }),
+            ui.button({ key = "repair-ok-" .. id, text = tr("repair_yes"), variant = "primary", controlSize = "sm", onClick = function() confirmRepair(session) end }),
             ui.button({ key = "repair-no-" .. id, text = tr("no"), variant = "ghost", controlSize = "sm", onClick = closeRepair }),
         }))
     end
