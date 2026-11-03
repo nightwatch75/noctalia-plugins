@@ -57,7 +57,6 @@
   "orphan_reason_no_transcript": "No transcript left for this session",
   "orphan_reason_project_empty": "Project folder has no sessions or files",
   "orphans_hide": "Hide",
-  "orphans_more": "and {n} more",
   "orphans_rule": "Only entries older than 1 day and not linked to live sessions.",
   "orphans_show": "Show",
   "orphans_none": "No orphans found",

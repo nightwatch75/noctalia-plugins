@@ -1050,7 +1050,7 @@ local function formatSize(bytes)
     return string.format("%.1f MB", bytes / 1048576)
 end
 
-local ORPHAN_MAX_ROWS = 100
+local ORPHAN_PAGE = 20 -- detail rows drawn first, and added per "show more"
 local ORPHAN_KINDS = { ["session-env"] = "session_env", ["file-history"] = "file_history", project = "project" }
 local ORPHAN_REASONS = { no_transcript = true, project_empty = true }
 
@@ -1068,7 +1068,8 @@ local function orphanDetails(list)
         return tostring(a.path) < tostring(b.path)
     end)
     local rows = {}
-    for i = 1, math.min(#sorted, ORPHAN_MAX_ROWS) do
+    local drawn = math.min(#sorted, orphanState.shown or ORPHAN_PAGE)
+    for i = 1, drawn do
         local o = sorted[i]
         local path = tostring(o.path)
         local name = path:match("([^/]+)$") or path
@@ -1090,8 +1091,18 @@ local function orphanDetails(list)
         end
         table.insert(rows, ui.column({ key = "orph-row-" .. path, gap = 2 }, lines))
     end
-    if #sorted > ORPHAN_MAX_ROWS then
-        table.insert(rows, muted(tr("orphans_more", { n = #sorted - ORPHAN_MAX_ROWS }), 11))
+    if drawn < #sorted then
+        local remaining = #sorted - drawn
+        -- Not in navItems: the whole orphan strip is mouse-only.
+        table.insert(rows, ui.button({
+            key = "orph-more",
+            text = tr("show_more", { n = math.min(remaining, ORPHAN_PAGE), total = remaining }),
+            variant = "ghost", controlSize = "sm",
+            onClick = function()
+                orphanState.shown = drawn + ORPHAN_PAGE
+                render()
+            end,
+        }))
     end
     return rows
 end
@@ -1258,6 +1269,7 @@ local function renderSessionsTab()
                 variant = "ghost", controlSize = "sm",
                 onClick = function()
                     orphanState.showing = not orphanState.showing
+                    orphanState.shown = nil
                     render()
                 end,
             }),
