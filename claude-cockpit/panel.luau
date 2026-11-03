@@ -70,9 +70,10 @@ local expandedGroups = {} -- cwd -> bool, seeded on first load (see loadSessions
 local expandedSessionId = nil -- one preview open at a time
 local confirmingDeleteId = nil
 local confirmingClean = false -- inline confirm strip for "delete all empty sessions"
--- Sessions tab ordering/filter. Date sorts newest first, name A-Z, until the
--- active button is clicked again.
-local sortBy = "date" -- "date" | "name"
+-- Sessions tab ordering/filter. Date sorts newest first, name A-Z, count
+-- (sessions per folder, folders only) most first, until the active button is
+-- clicked again.
+local sortBy = "date" -- "date" | "name" | "count"
 local sortAsc = false
 local emptyOnly = false -- only sessions that never got a prompt
 
@@ -277,8 +278,9 @@ local function headerRow()
 
     return ui.row({ gap = 10, align = "center" }, {
         ui.glyph({ name = "robot", size = 20, color = "primary" }),
-        ui.label({ text = tr("title"), fontSize = 16, fontWeight = "bold", flexGrow = 1 }),
+        ui.label({ text = tr("title"), fontSize = 16, fontWeight = "bold" }),
         ui.label({ text = pluginVersion, fontSize = 10, color = "on_surface_variant" }),
+        ui.label({ key = "hdr-spacer", text = "", flexGrow = 1 }),
         ui.button({
             glyph = loading and "loader-2" or "refresh",
             variant = "ghost", controlSize = "sm",
@@ -779,6 +781,9 @@ end
 
 local function sortGroups(list)
     table.sort(list, byActiveSort(function(group)
+        if sortBy == "count" then
+            return #group.matches
+        end
         return sortBy == "name" and (group.cwd:match("([^/]+)/?$") or group.cwd):lower() or group.lastActivity
     end))
 end
@@ -919,6 +924,7 @@ local function renderSessionsTab()
         ui.row({ key = "sess-sort", gap = 6, align = "center" }, {
             sortButton("date", "sort_date"),
             sortButton("name", "sort_name"),
+            sortButton("count", "sort_count"),
             ui.button({
                 key = "sort-empty", text = tr("filter_empty", { n = countEmpty() }),
                 variant = "ghost", controlSize = "sm", selected = emptyOnly, tooltip = tr("tip_filter_empty"),
