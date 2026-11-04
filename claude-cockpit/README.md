@@ -25,8 +25,8 @@ widget and the Live and Usage tabs only show what it publishes.
   older noctalia keeps getting the last version it can load.
 - `bash`, `jq` and `curl`.
 - The base tools the scripts call: `sh`, `find`, `xargs`, `stat`, `du`,
-  `grep`, `tac`, `awk`, `head`, `tail`, `rm`, `rmdir`, `mkdir`, `mv`. Every
-  distribution ships them.
+  `grep`, `tac`, `awk`, `cut`, `head`, `tail`, `rm`, `rmdir`, `mkdir`, `mv`.
+  Every distribution ships them.
   The Sessions scan runs on up to 8 CPUs through `xargs -P` (`nproc` picks the
   count, 4 without it).
 - `claude` on `PATH` for the Skills/Mods tab, and a logged-in Claude Code
@@ -73,7 +73,9 @@ on.
 
 ![Usage tab](images/usage.png)
 
-*Plan limits, token use and cost, daily activity and models.*
+*Everything fits on one screen. Each section has a coloured title and a
+glyph: plan limits (with pace and reset time under each title), token
+consumption, models this week and daily activity.*
 
 Cost is an estimate from token counts and public prices, in the currency
 you choose.
@@ -104,36 +106,29 @@ Each row shows the date and time of the last update, then the time since.
 A glyph marks a running session, and the project that holds one, even when
 the project is closed.
 
-A glyph marks a session with a problem. Its tooltip gives the reason:
+A glyph marks a session that cannot resume as it is. Its tooltip gives the
+reason:
 
-- **Moved** (folder glyph with an arrow): you renamed or moved the folder.
-  The panel finds the new folder, shows the session in it, and resumes it
-  from there.
-- **Orphan** (red folder glyph): no folder matches the session. When the
-  project folder still has memory files, the tooltip says so.
-- **Misplaced** (warning glyph): the transcript is in a project folder that
-  matches no folder, but its recorded working directory exists.
-- **Unknown** (question mark glyph): the scan could not check if the folder
-  still exists. For example, a folder on the path is not readable.
+- **Moved**: you renamed or moved the folder. The panel finds the new folder
+  and resumes the session from there.
+- **Orphan**: no folder matches the session. The tooltip says when the project
+  folder still has memory files.
+- **Misplaced**: the transcript is in a project folder that matches no
+  folder, but its recorded working directory exists.
+- **Unknown**: the scan could not check the folder.
 
-You cannot resume an orphan, misplaced or unknown session from the panel.
+An orphan, misplaced or unknown session does not resume from the panel.
 
 Buttons on a session row:
 
-- Copy puts `cd <dir> && claude --resume <id>` on the clipboard. Only for a
-  session that you can resume (not orphan, misplaced or unknown). For a moved
-  session, `<dir>` is the new folder.
-- The pencil renames the session. Type the title and push `Return` or
-  **Save**. The title is the same one `/rename` gives. Not for a running
-  session.
+- Copy puts `cd <dir> && claude --resume <id>` on the clipboard.
+- The pencil renames the session with the same title `/rename` gives. Not for
+  a running or orphan session.
 - The repair button moves a misplaced transcript into the project folder of
-  its working directory, after a confirm. The working directory must exist:
-  the repair never creates it. It never overwrites a file. Not for a running
-  session.
-- The eye shows the first prompt.
-- The trash deletes the session after a confirm. It also deletes the
-  `session-env` and `file-history` folders of the session, when no other
-  project folder has a transcript with the same id.
+  its working directory, after a confirm. It never creates a folder and never
+  overwrites a file.
+- The trash now also deletes the `session-env` and `file-history` folders of
+  the session, when no other transcript has the same id.
 
 Buttons on the filter row:
 
@@ -145,18 +140,15 @@ Buttons on the filter row:
   when you open it and close it before you send a prompt. An empty session
   has an *empty* tag, and clicking it does nothing, because there is nothing
   to resume.
-- The moved button (folder glyph with an arrow and a count) shows only the
-  moved sessions. The orphan button (red folder glyph and a count) shows
-  only the orphan and misplaced sessions. Only one of the two is active at
-  a time.
+- The moved button and the orphan button (orphan and misplaced sessions)
+  show only their sessions, with a count.
 - The refresh button reads the sessions again.
 - The bin button deletes every empty session, after a confirm. A running
   session is never deleted, even when it has no prompt yet.
 - **Orphans** finds the leftovers of deleted sessions: `session-env` and
   `file-history` folders without a transcript, and project folders with no
-  session. Only items older than 1 day count. A confirm shows the count and
-  the size. **Show** lists each item with its size, age and reason. **Yes**
-  deletes them. A running session is never touched.
+  session. Only items older than 1 day count. **Show** lists them, **Yes**
+  deletes them.
 
 ![Delete empty sessions](images/sessions-empty.png)
 
