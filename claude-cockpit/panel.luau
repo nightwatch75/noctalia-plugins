@@ -145,6 +145,14 @@ local function card(children)
     return ui.column({ gap = 8, padding = 14, fill = "surface_container/0.45", radius = 12, align = "stretch" }, children)
 end
 
+-- The Usage tab packs everything into one screen: tighter padding, and an
+-- optional flexGrow so two cards can share a row.
+local function compactCard(children, flexGrow)
+    return ui.column({
+        gap = 6, padding = 10, fill = "surface_container/0.45", radius = 12, align = "stretch", flexGrow = flexGrow,
+    }, children)
+end
+
 -- ── sessions/CLAUDE.md data loading ─────────────────────────────────────────
 
 -- utf8.offset is only safe on valid UTF-8; invalid text is left as is.
@@ -359,14 +367,56 @@ end
 
 -- ── Usage tab (trimmed port of jrohland/claudecode's panel.luau) ──────────
 
-local function rateCard(w)
+-- Title colour per window, all from the theme: session, weekly, anything else.
+local function windowGlyph(w)
+    if w.kind == "session" then
+        return "clock"
+    end
+    if w.group == "weekly" and (type(w.model) ~= "string" or w.model == "") then
+        return "calendar-stats"
+    end
+    return "cpu"
+end
+
+local function windowColor(w)
+    if w.kind == "session" then
+        return "primary"
+    end
+    if w.group == "weekly" and (type(w.model) ~= "string" or w.model == "") then
+        return "tertiary"
+    end
+    return "secondary"
+end
+
+-- Big coloured card title, same look as the limit windows' titles.
+local function sectionTitle(text, color, glyph)
+    return ui.row({ gap = 6, align = "center" }, {
+        ui.glyph({ name = glyph, size = 18, color = color }),
+        ui.label({ text = text, fontSize = 17, fontWeight = "bold", color = color }),
+    })
+end
+
+-- One window: a big coloured title with the percent at the far end, the
+-- pace/reset text under it, then the two bars.
+local function rateRow(w)
     local util = w.percent
     local p = w.pace
     local fill = shared.paceColor(w.status, "primary")
 
+    local caption = shared.paceLabel(p)
+    local cd = shared.formatCountdown(w.resetIso)
+    if cd then
+        local clock = shared.formatResetClock(w.resetIso, true)
+        local resets = `{tr("resets_in")} {cd}`
+        if clock then
+            resets = `{resets} ({clock})`
+        end
+        caption = caption and `{caption} · {resets}` or resets
+    end
+
     local rows = {
         ui.row({ align = "center", justify = "space_between" }, {
-            heading(w.label),
+            sectionTitle(w.label, windowColor(w), windowGlyph(w)),
             ui.label({ text = `{shared.round(util)}% {tr("used")}`, fontSize = 14, color = fill }),
         }),
         ui.progress({
@@ -380,36 +430,26 @@ local function rateCard(w)
             fill = "on_surface/0.45", track = "on_surface/0.10", radius = 2, height = 3,
         }))
     end
-
-    local caption = shared.paceLabel(p)
-    local cd = shared.formatCountdown(w.resetIso)
-    if cd then
-        local clock = shared.formatResetClock(w.resetIso, true)
-        local resets = `{tr("resets_in")} {cd}`
-        if clock then
-            resets = `{resets} ({clock})`
-        end
-        caption = caption and `{caption} · {resets}` or resets
-    end
     if caption then
-        table.insert(rows, muted(caption, 11))
+        table.insert(rows, 2, muted(caption, 11))
     end
-    return card(rows)
+    return ui.column({ gap = 4, align = "stretch" }, rows)
 end
 
 local function metricCol(label, tokens, cost, rate)
-    return ui.column({ gap = 2, align = "center", flexGrow = 1 }, {
-        muted(label, 12),
+    return ui.column({ gap = 1, align = "center", flexGrow = 1 }, {
+        muted(label, 11),
         ui.label({ text = shared.formatTokens(tokens), fontSize = 16, fontWeight = "bold", color = "primary" }),
         ui.label({ text = shared.formatCost(cost, rate), fontSize = 11, color = "on_surface_variant" }),
     })
 end
 
+-- Heading at the left, the three periods in one row beside it.
 local function tokensCard(u, todayTokens)
     local rate = u.currency_rates
-    return card({
-        heading(tr("token_consumption")),
-        ui.row({ gap = 8, align = "start" }, {
+    return compactCard({
+        ui.row({ gap = 8, align = "center" }, {
+            sectionTitle(tr("token_consumption"), "secondary", "coins"),
             metricCol(tr("today"), todayTokens, u.today_cost, rate),
             metricCol(tr("week"), u.week_tokens, u.week_cost, rate),
             metricCol(tr("month"), u.month_tokens, u.month_cost, rate),
@@ -435,7 +475,7 @@ local function dailyChart(daily, dailyCosts, rate)
     end
 
     local todayIdx = shared.todayIndex()
-    local barH = 64
+    local barH = 52
     local cols = {}
     for i = 1, 7 do
         local v = tonumber(daily[i]) or 0
@@ -448,7 +488,7 @@ local function dailyChart(daily, dailyCosts, rate)
         end
 
         table.insert(cols, ui.column({
-            key = `day-{i}`, flexGrow = 1, gap = 4, align = "center",
+            key = `day-{i}`, flexGrow = 1, gap = 3, align = "center",
             onHover = function(state)
                 if state == "true" then
                     hoveredDay = i
@@ -461,7 +501,7 @@ local function dailyChart(daily, dailyCosts, rate)
             end,
         }, {
             ui.column({ height = barH, justify = "end", align = "center" }, {
-                ui.box({ width = isHover and 22 or 18, height = h, radius = 3, fill = fill }),
+                ui.box({ width = isHover and 20 or 16, height = h, radius = 3, fill = fill }),
             }),
             ui.label({
                 text = labels[i] or tostring(i), fontSize = 10,
@@ -479,12 +519,12 @@ local function dailyChart(daily, dailyCosts, rate)
         })
     end
 
-    return card({
+    return compactCard({
         ui.row({ align = "center", justify = "space_between" }, {
-            heading(tr("daily_activity")),
+            sectionTitle(tr("daily_activity"), "tertiary", "chart-bar"),
             ui.label({ text = detail, fontSize = 11, color = "primary", maxLines = 1 }),
         }),
-        ui.row({ gap = 6, align = "end" }, cols),
+        ui.row({ gap = 4, align = "end" }, cols),
     })
 end
 
@@ -495,22 +535,25 @@ local function modelsCard(weekModels, weekTokens)
     end
     weekTokens = tonumber(weekTokens) or 0
 
-    local rows = { heading(tr("models_this_week")) }
+    local rows = { sectionTitle(tr("models_this_week"), "primary", "robot") }
     for _, m in list do
         local share = (weekTokens > 0) and math.min(1, m.tokens / weekTokens) or 0
         table.insert(rows, ui.column({ gap = 2, align = "stretch" }, {
             ui.row({ align = "center", justify = "space_between" }, {
                 ui.label({ text = shared.shortModelName(m.name), fontSize = 12 }),
-                muted(`{shared.formatTokens(m.tokens)} · {shared.round(share * 100)}%`, 12),
+                muted(`{shared.round(share * 100)}% · {shared.formatTokens(m.tokens)}`, 11),
             }),
             ui.progress({ progress = share, fill = "primary", track = "on_surface/0.14", height = 5, radius = 2 }),
         }))
     end
-    return card(rows)
+    return compactCard(rows)
 end
 
-local function allTimeRow(u)
+local function allTimeRow(u, plan)
     local parts = {}
+    if type(plan) == "string" and plan ~= "" then
+        table.insert(parts, plan)
+    end
     local first = u.first_session
     if type(first) == "string" and first ~= "" and first ~= "unknown" then
         table.insert(parts, `{tr("since")} {first}`)
@@ -554,22 +597,26 @@ local function renderUsageTab()
     local plan = shared.planName(usage.subscription_type, usage.rate_limit_tier)
     local todayTokens = (type(usage.daily) == "table" and usage.daily[shared.todayIndex()]) or 0
 
-    local cards = { muted(plan, 11) }
+    local cards = {}
+    local rates = {}
     for _, w in shared.windows(usage) do
-        table.insert(cards, rateCard(w))
+        table.insert(rates, rateRow(w))
     end
+    table.insert(cards, compactCard(rates))
     table.insert(cards, tokensCard(usage, todayTokens))
-    table.insert(cards, dailyChart(usage.daily, usage.daily_costs, usage.currency_rates))
+    local daily = dailyChart(usage.daily, usage.daily_costs, usage.currency_rates)
     local models = modelsCard(usage.week_models, usage.week_tokens)
     if models then
         table.insert(cards, models)
     end
-    local footer = allTimeRow(usage)
+    table.insert(cards, daily)
+    -- The plan name moves to the footer line, next to the all-time totals.
+    local footer = allTimeRow(usage, plan)
     if footer then
         table.insert(cards, footer)
     end
 
-    return ui.scroll({ key = "usage-scroll", flexGrow = 1, gap = 10, align = "stretch" }, cards)
+    return ui.scroll({ key = "usage-scroll", flexGrow = 1, gap = 8, align = "stretch" }, cards)
 end
 
 -- ── Sessions tab ─────────────────────────────────────────────────────────
