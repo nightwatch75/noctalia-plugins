@@ -20,7 +20,7 @@
 --             running ones (the service's "live" state). Click to resume in
 --             a terminal (refused for orphan/misplaced), copy puts the resume
 --             command on the clipboard, pencil renames (custom title, not
---             for a running session), eye toggles a preview, trash deletes
+--             for a running or orphan session), eye toggles a preview, trash deletes
 --             after an inline confirm. "Orphans" scans for leftovers of
 --             deleted sessions and removes them after an inline confirm.
 --             Fetched on-demand via sessions.luau, never polled.
@@ -367,25 +367,24 @@ end
 
 -- ── Usage tab (trimmed port of jrohland/claudecode's panel.luau) ──────────
 
--- Title colour per window, all from the theme: session, weekly, anything else.
+-- The plan-wide weekly window (not a per-model one).
+local function isWeekly(w)
+    return w.group == "weekly" and (type(w.model) ~= "string" or w.model == "")
+end
+
 local function windowGlyph(w)
     if w.kind == "session" then
         return "clock"
     end
-    if w.group == "weekly" and (type(w.model) ~= "string" or w.model == "") then
-        return "calendar-stats"
-    end
-    return "cpu"
+    return isWeekly(w) and "calendar-stats" or "cpu"
 end
 
+-- Title colour per window, all from the theme: session, weekly, anything else.
 local function windowColor(w)
     if w.kind == "session" then
         return "primary"
     end
-    if w.group == "weekly" and (type(w.model) ~= "string" or w.model == "") then
-        return "tertiary"
-    end
-    return "secondary"
+    return isWeekly(w) and "tertiary" or "secondary"
 end
 
 -- Big coloured card title, same look as the limit windows' titles.
@@ -501,7 +500,7 @@ local function dailyChart(daily, dailyCosts, rate)
             end,
         }, {
             ui.column({ height = barH, justify = "end", align = "center" }, {
-                ui.box({ width = isHover and 20 or 16, height = h, radius = 3, fill = fill }),
+                ui.box({ width = isHover and 34 or 30, height = h, radius = 3, fill = fill }),
             }),
             ui.label({
                 text = labels[i] or tostring(i), fontSize = 10,
