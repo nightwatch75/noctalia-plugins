@@ -37,5 +37,6 @@ done
 sh "$here/list_sessions_test.sh"
 LUAU="$LUAU" sh "$here/rename_append_test.sh"
 sh "$here/orphans_test.sh"
+sh "$here/usage_token_test.sh"
 LUAU="$LUAU" sh "$here/cleanup_test.sh"
 LUAU="$LUAU" sh "$here/repair_test.sh"
