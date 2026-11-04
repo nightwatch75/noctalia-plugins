@@ -894,8 +894,9 @@ local function sessionRow(session, selected, isLive)
         tr(previewOpen and "tip_hide_preview" or "tip_preview"),
         function() togglePreview(id) end
     ))
-    -- A running session would write over the custom title on its next turn.
-    if not isLive then
+    -- A running session would write over the custom title on its next turn;
+    -- an orphan cannot resume, so a name on it is pointless.
+    if not isLive and session.status ~= "orphan" then
         table.insert(rowButtons, iconButton(
             "ren-" .. id, "pencil", "primary", tr("tip_rename_session"),
             function() openRename(session) end

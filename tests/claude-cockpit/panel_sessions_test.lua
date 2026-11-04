@@ -277,6 +277,9 @@ repairResult, repairCode = true, nil
 
 -- Rename.
 assert(find(rendered, "ren-beef") == nil, "no pencil on a live session")
+assert(find(rendered, "ren-ccc3") == nil and find(rendered, "ren-eee5") == nil, "no pencil on an orphan session")
+assert(find(rendered, "prev-ccc3") ~= nil, "orphan keeps the preview glyph")
+assert(find(rendered, "ren-bbb2") ~= nil, "misplaced keeps the pencil")
 click("ren-aaa1")
 assert(find(rendered, "sess-wrap-aaa1-ren"), "wrapper key changes while renaming")
 local input = find(rendered, "ren-input-aaa1-1")
