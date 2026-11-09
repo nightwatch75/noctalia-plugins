@@ -46,6 +46,8 @@ local shared = {
     dataDir = function() return "/data" end,
     cacheTag = function() return "folder" end,
     searchRoot = function() return "/home" end,
+    extraRoots = function() return {} end,
+    readFolders = function() return false end,
     computeRoots = function() return { "/home" } end,
     indexRootsOf = function() return nil end,
     cacheFresh = function() return true end,
@@ -76,9 +78,13 @@ end
 assert(loadstring(PANEL_SRC, "=panel.luau"))()
 
 local function hits()
-    for _, child in ipairs(rendered.children) do
-        if child.props.key == "body" then
-            return child.children[1]
+    for _, top in ipairs(rendered.children) do
+        if top.props.key == "main" then -- the results column sits in the "main" row, next to the chart
+            for _, child in ipairs(top.children) do
+                if child.props.key == "body" then
+                    return child.children[1]
+                end
+            end
         end
     end
 end
