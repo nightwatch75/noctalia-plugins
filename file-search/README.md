@@ -6,8 +6,8 @@ search files and folders as you type, matched with
 panel; picking a result opens it with the system MIME association
 (`xdg-open`) — directories open in the file manager. A `/fs` launcher entry
 gives the same search with native keyboard navigation. The panel can widen
-the search to mounted USB/removable disks, and show a disk-usage donut for
-the search folder. A second panel tab, **Space**, browses disk usage with
+the search to folders you add and to mounted USB/removable disks, and show a
+disk-usage donut for the search folder. A second panel tab, **Space**, browses disk usage with
 `ncdu`: a donut, a sortable folder list and a file-type view.
 
 ## Plugin
@@ -150,13 +150,13 @@ the search folder.
 **External disks are only ever indexed on command.** Opening the panel,
 switching mode, changing a setting or plugging a disk in never starts a
 walk with USB disks on — the index stays as-is and the footer says *out of
-date*. Press refresh (or *Rebuild search index* in the launcher) to walk it.
-The search folder alone keeps re-indexing itself automatically, since that
-takes seconds rather than minutes.
+date*. Press *Re-index* (or *Rebuild search index* in the launcher) to walk it.
+With USB disks off, the index keeps re-indexing itself automatically, since
+that takes seconds rather than minutes.
 
 ### Disk usage chart
 
-A donut under the results shows what fills the search folder: its biggest
+A donut left of the results shows what fills the search folder: its biggest
 direct children, the rest folded into *other*, and loose files that belong
 to no subfolder. Each legend row gives the size and share of the total. It
 is offered in every mode except *Whole system*; it always measures the search
@@ -169,7 +169,7 @@ row again) lifts the restriction. It combines with whatever you type — pick
 
 Sizes come from `du -x -d1`, measured once and cached for a day, so restarts
 and reopens cost nothing (`du` over a home directory takes a few seconds).
-The refresh button re-measures immediately. Other filesystems are never
+The *Re-index* button re-measures immediately. Other filesystems are never
 walked — a mount point under the search folder is skipped and named in the
 legend as *not counted: … (other filesystem)*. The `usage_exclude_dirs`
 setting keeps `du` out of specific, slow-but-same-filesystem folders instead.
@@ -256,7 +256,7 @@ results whenever the index is out of date.
 - `nice` (GNU coreutils) — runs the scan at low priority (needed only for the
   Space tab)
 - `lsblk` (util-linux) — lists mounted USB/removable volumes, only run when
-  the scope includes them. Missing, it falls back to `/proc/mounts` and the
+  USB disks are on. Missing, it falls back to `/proc/mounts` and the
   udisks2 layout (`/run/media/<user>/…`, `/media/…`)
 - `gdbus` (glib2) — reveals a result in the file manager. Missing, or with no
   file manager implementing `FileManager1`, *Show in file manager* opens the
@@ -313,13 +313,13 @@ folders are skipped.
 - The index lives in the plugin's private data directory
   (`noctalia.pluginDataDir()`, by default
   `~/.local/state/noctalia/plugins/data/nightwatch75/file-search/`):
-  `list-<scope>` is the plain list of paths, `meta-<scope>` the fingerprint
-  it was built with, `count-<scope>` its entry count and build time, and
+  `list-<tag>` is the plain list of paths, `meta-<tag>` the fingerprint
+  it was built with, `count-<tag>` its entry count and build time, and
   `scope`/`whole-system`/`folders`/`ranking`/`usage-chart` the one-word header
   choices and `extra_roots` the added folders. The disk usage
   measurement is cached in `usage.json`, rendered as one of two alternating
   SVG files. The Space tab keeps one index per folder and settings
-  tag, `space-<root>-<tag>.json`, and its chart in `space-a.svg` / `space-b.svg`. A fingerprint mismatch (a settings change, a scope change, a
+  tag, `space-<root>-<tag>.json`, and its chart in `space-a.svg` / `space-b.svg`. A fingerprint mismatch (a settings change, a mode change, a
   disk plugged in or removed) rebuilds the search-folder index automatically
   and marks a disk index out of date.
 - Several disks share one index, not one each: a rebuild walks every mounted
