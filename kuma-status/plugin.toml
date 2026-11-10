@@ -1,0 +1,30 @@
+id = "nightwatch75/kuma-status"
+name = "kuma-status"
+version = "0.0.2"
+plugin_api = 32
+author = "nightwatch75"
+license = "MIT"
+dependencies = []
+tags = ["bar", "panel", "monitoring"]
+icon = "heartbeat"
+description = "Uptime Kuma monitors on the bar: a glyph shows the overall state, a panel lists monitors and status pages."
+
+[[panel]]
+id = "panel"
+entry = "panel.luau"
+width = 640
+height = 640
+placement = "floating"
+position = "auto"
+open_near_click = true
+
+[[widget]]
+id = "kuma-status"
+entry = "kuma-status.luau"
+
+  [[widget.setting]]
+  key = "glyph"
+  type = "glyph"
+  label_key = "settings.glyph.label"
+  description_key = "settings.glyph.description"
+  default = "heartbeat"

@@ -1,0 +1,12 @@
+{
+  "tooltip": "Uptime Kuma",
+  "settings": {
+    "glyph": {
+      "label": "Bar icon",
+      "description": "Glyph shown on the bar."
+    }
+  },
+  "panel": {
+    "placeholder": "Dashboard and status pages: work in progress."
+  }
+}
