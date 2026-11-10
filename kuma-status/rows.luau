@@ -1,23 +1,17 @@
 --!nonstrict
--- kuma-status — UI builders shared by the panel tabs: a monitor row with its
--- 40-cell heartbeat bar and optional certificate line, and a collapsible group
--- header. Pure functions over the Row/Group tables of kuma.luau; callbacks are
--- closures (render-scoped, plugin_api >= 9). Keys: "row-<id>" (the column, also
--- the tooltip carrier: the check's URL), "dot-", "name-" (a ghost button: only
--- a button's onRightClick can raise the context menu), "ping-", "bar-",
--- "cert-<id>" with "cert-glyph-" / "cert-text-".
+-- kuma-status — UI builders for the panel: a monitor row (40-cell heartbeat bar,
+-- optional certificate line) and a collapsible group header. The name is a ghost
+-- button because only a button has onRightClick. "row-<id>" carries the URL tooltip.
 
 local R = {}
 
 R.CELLS = 40
 R.COLORS = { [0] = "#e06c75", [1] = "#98c379", [2] = "#e5c07b", [3] = "#61afef" }
 R.EMPTY = "#4b5263"
--- Name button width: panel 640 - 2*14 padding - 14 scrollbar - dot 10 - ping 64
--- - bar (40*4 + 39) - 3 gaps of 8. Keep in sync with [[panel]] width.
+-- Panel width minus padding, scrollbar, dot, ping, bar and gaps (see plugin.toml).
 local NAME_W = 300
 
--- Always exactly CELLS boxes, oldest left; missing history shows as neutral
--- cells on the left so every bar has the same width.
+-- Always CELLS boxes, oldest left; missing history is padded with neutral cells.
 function R.beatBar(beats, key)
     local n = #beats
     local first = math.max(1, n - R.CELLS + 1)
@@ -42,7 +36,7 @@ local function pingText(row)
     return string.format("%d ms", math.floor(row.ping + 0.5))
 end
 
--- Level (computed in kuma.luau from the cert limits) to color; expired is red.
+-- Certificate level to color; expired is red.
 function R.levelColor(level)
     if level == "green" then return R.COLORS[1] end
     if level == "yellow" then return R.COLORS[2] end

@@ -1,37 +1,33 @@
 --!nonstrict
--- kuma-status — pure data functions (no noctalia.* access, testable without
--- the host). Parsing of Kuma's /metrics text, /api/monitors (Kuma 3) and the
--- public status-page JSON, plus URL validation. Everything that reaches the UI
--- passes through safeText: monitor names are untrusted text.
+-- kuma-status — pure data functions (no noctalia.* access): parsing of /metrics,
+-- /api/monitors (Kuma 3) and status-page JSON, URL validation, grouping.
+-- Monitor names and URLs are untrusted: all UI text passes through safeText.
 --
--- Types (informal):
---   Metric     = { id, name, type, url?, status, ping?, uptime1d?, certDays?, tags }
+--   Metric     = { id, name, type, url?, link?, status, ping?, uptime1d?, certDays?, tags }
 --   Structure  = { id, name, type, parent?, children, tags, active }
 --   StatusPage = { slug, title, url, groups = { { name, monitors = { { id, name, beats } } } } }
--- Status codes everywhere: 0 down, 1 up, 2 pending, 3 maintenance.
+-- Status codes: 0 down, 1 up, 2 pending, 3 maintenance.
 
 local K = {}
 
 local MAX_NAME = 80
 local BEATS = 40
 local MAX_MONITORS = 500 -- per status page
+local MAX_LINK = 2000
 
--- Labels that describe the monitor itself; every other label of a /metrics
--- series is a Kuma tag (tag name as label name, value empty or free).
+-- /metrics labels that are not tags.
 local RESERVED = {
     monitor_id = true, monitor_name = true, monitor_type = true, monitor_url = true,
     monitor_hostname = true, monitor_port = true, window = true,
 }
 
--- Controls become spaces, invalid UTF-8 bytes become "?", then the text is cut
--- to `max` characters on a character boundary (utf8.codes would throw on
--- invalid input, so validity is checked first).
+-- Controls become spaces, invalid UTF-8 becomes "?", bidi and zero-width marks
+-- are dropped, then the text is cut to `max` characters.
 function K.safeText(s: string, max: number): string
     s = tostring(s or ""):gsub("[\0-\31\127]", " ")
     if utf8.len(s) == nil then
         s = s:gsub("[\128-\255]", "?")
     end
-    -- bidi controls and zero-width marks can disguise a name or a URL
     s = s:gsub("\226\128[\139-\143\170-\174]", ""):gsub("\226\129[\166-\169]", "")
     if utf8.len(s) > max then
         s = s:sub(1, utf8.offset(s, max + 1) - 1)
@@ -39,25 +35,19 @@ function K.safeText(s: string, max: number): string
     return s
 end
 
--- A monitored URL for the screen: no user:password@, no query or fragment
--- (they often carry tokens), cut to 200 characters.
+-- URL for display: no user:password@, no query or fragment.
 local function displayUrl(url: string): string
     url = url:gsub("^(%a+://)[^/@]*@", "%1"):gsub("[?#].*$", "?\u{2026}")
     return K.safeText(url, 200)
 end
 
--- The real URL, kept for "open" and "copy"; nil when absurdly long (a cut URL
--- would open something else).
-local MAX_LINK = 2000
-
--- True for a URL that is safe to hand to xdg-open as a single argument.
+-- True for an http(s) URL without spaces, safe as one xdg-open argument.
 function K.openable(url: any): boolean
     return type(url) == "string" and url:match("^https?://[^%s]+$") ~= nil
 end
 
--- One Prometheus series line: name{k="v",...} value. Label values may hold
--- escaped quotes, backslashes and newlines, so the label block is scanned
--- character by character instead of with a pattern.
+-- One series line, name{k="v",...} value, scanned by character because label
+-- values may hold escaped quotes.
 local function parseSeries(l: string)
     local brace = l:find("{", 1, true)
     if brace == nil then return nil end
@@ -95,11 +85,8 @@ local function parseSeries(l: string)
     return metric, labels, value
 end
 
--- Hot path (a production /metrics is ~250 KB and the host gives a callback
--- ~25 ms): lines of series we do not use are skipped on a cheap prefix test,
--- and labels are parsed only on the first line of each monitor (the label set
--- is the same on all its series). Lines holding a backslash (escaped quote or
--- newline in a value) take the slow character scanner above.
+-- Hot path (callbacks get ~25 ms): unused series are skipped by prefix and
+-- labels are parsed once per monitor. Lines with a backslash use parseSeries.
 local USED = {
     monitor_status = true, monitor_response_time = true,
     monitor_uptime_ratio = true, monitor_cert_days_remaining = true,
@@ -132,7 +119,6 @@ function K.parseMetrics(text: string)
                             if not RESERVED[key] then tags[#tags + 1] = K.safeText(key, MAX_NAME) end
                         end
                         table.sort(tags)
-                        -- what the check hits: the URL, else host[:port]
                         local url = labels.monitor_url
                         if url == nil or url == "" or url == "null" then
                             url = nil
@@ -168,7 +154,7 @@ function K.parseMetrics(text: string)
             end
         end
     end
-    -- Series order in the text puts status last; a monitor without it is noise.
+    -- a monitor without a status series is noise
     for id, m in pairs(byId) do
         if m.status == nil then byId[id] = nil end
     end
@@ -203,8 +189,7 @@ function K.parseMonitors(decoded: any)
     return out
 end
 
--- scheme://host[:port] plus the rest of the URL, or nil. Only http and https;
--- no credentials, spaces, query or fragment in the host part.
+-- scheme, host (lowercase, no credentials) and path of an http(s) URL, or nil.
 local function splitUrl(url)
     if type(url) ~= "string" or url:find("%s") then return nil end
     local scheme, rest = url:match("^(%a+)://(.*)$")
@@ -225,10 +210,10 @@ end
 
 function K.statusPageUrl(url: string)
     local scheme, host, path = splitUrl(url)
-    if scheme == nil then return nil, nil, "not an http(s) URL" end
+    if scheme == nil then return nil end
     local slug = path:match("^/status/([%w_%-]+)$")
-    if slug == nil then return nil, nil, "expected https://host/status/<slug>" end
-    return scheme .. "://" .. host, slug:lower(), nil
+    if slug == nil then return nil end
+    return scheme .. "://" .. host, slug:lower()
 end
 
 function K.parseStatusPage(page: any, heartbeats: any, origin: string, slug: string)
@@ -263,10 +248,7 @@ function K.parseStatusPage(page: any, heartbeats: any, origin: string, slug: str
     return sp
 end
 
--- Certificate expiry level for a number of days left. Kuma does not expose its
--- own notification days, so the limits are fixed here: up to 7 days "red",
--- up to 30 days "yellow", beyond "green"; already expired (negative) is
--- "expired".
+-- Expiry level for the days left: expired (<0), red (<=7), yellow (<=30), green.
 K.CERT_RED_DAYS = 7
 K.CERT_YELLOW_DAYS = 30
 
@@ -277,9 +259,8 @@ function K.certLevel(days)
     return "green"
 end
 
--- Certificates tab: every monitor that reports a certificate expiry, shortest
--- first, in groups by level (empty groups omitted). Uses data already fetched
--- for the Dashboard; groups of monitors and monitors without one are left out.
+-- Certificates tab: monitors with a certificate expiry, shortest first, grouped
+-- by level (empty levels omitted).
 function K.buildCertificates(metrics)
     local all = {}
     for id, m in pairs(metrics) do
@@ -299,15 +280,14 @@ function K.buildCertificates(metrics)
         if g == nil then
             g = { key = row.level, level = row.level, rows = {} }
             byLevel[row.level] = g
-            groups[#groups + 1] = g -- rows are sorted, so groups come out in order
+            groups[#groups + 1] = g
         end
         g.rows[#g.rows + 1] = row
     end
     return { groups = groups, total = #all }
 end
 
--- Samples kept for monitors that no status page covers: the last `cap`
--- statuses, oldest first.
+-- Keeps the last `cap` statuses of a monitor no status page covers, oldest first.
 function K.pushSample(buffer, id: number, status: number, cap: number)
     local b = buffer[id]
     if b == nil then
@@ -318,9 +298,8 @@ function K.pushSample(buffer, id: number, status: number, cap: number)
     while #b > cap do table.remove(b, 1) end
 end
 
--- Overall state for the bar. Groups are containers, not checks, so they are
--- not counted. Maintenance (3) is neither up nor down: it keeps the color
--- green but adds to no counter. No series at all is "idle", never green.
+-- Overall state for the bar. Groups are not counted; maintenance counts as
+-- neither up nor down; no series at all is "idle".
 function K.summarize(metrics)
     local s = { up = 0, down = 0, pending = 0, color = "idle", downNames = {} }
     local seen = 0
@@ -354,8 +333,7 @@ local function byName(a, b)
     return a.id < b.id
 end
 
--- Rows come from /metrics; a monitor known only from the structure (Kuma 3)
--- is paused: Kuma exports no series for a paused monitor.
+-- A monitor known only from the structure (Kuma 3) is paused: no series.
 local function makeRow(id, m, struct, beats, buffer)
     local b = beats[id]
     if b == nil or #b == 0 then b = buffer[id] or {} end
@@ -387,13 +365,10 @@ local function makeGroup(id, name, rows, metrics)
     return g
 end
 
--- Groups for the Dashboard tab. With a Kuma 3 structure the groups are the
--- real group monitors (nested ones named "Parent / Child"); without it, one
--- group per tag (a multi-tag monitor appears in several) and an unnamed group
--- last for what has no group or tag; opts.firstTagOnly puts a monitor only in
--- its first tag (tags are sorted, so alphabetical); opts.groupTags (list) limits
--- the groups to those tags, see below. Counts here are per group; the bar uses
--- summarize, which counts every monitor once.
+-- Groups for the Dashboard. With a Kuma 3 structure: the group monitors (nested
+-- ones named "Parent / Child"). Without: one group per tag, an unnamed one last.
+-- opts.firstTagOnly: a monitor only in its first tag. opts.groupTags: only these
+-- tags make groups, in this order; a monitor goes to the first one it has.
 function K.buildDashboard(metrics, structure, beats, buffer, opts)
     local groups = {}
     if structure ~= nil then
@@ -406,22 +381,19 @@ function K.buildDashboard(metrics, structure, beats, buffer, opts)
             end
             return table.concat(parts, " / ")
         end
-        local placed, loose = {}, {}
-        local ids = {}
+        local placed, loose, named = {}, {}, {}
         for id, st in pairs(structure) do
-            if st.type == "group" then ids[#ids + 1] = id end
-        end
-        local named = {}
-        for _, id in ipairs(ids) do
-            local rows = {}
-            for _, c in ipairs(structure[id].children) do
-                local cs = structure[c]
-                if cs ~= nil and cs.type ~= "group" then
-                    rows[#rows + 1] = makeRow(c, metrics[c], cs, beats, buffer)
-                    placed[c] = true
+            if st.type == "group" then
+                local rows = {}
+                for _, c in ipairs(st.children) do
+                    local cs = structure[c]
+                    if cs ~= nil and cs.type ~= "group" then
+                        rows[#rows + 1] = makeRow(c, metrics[c], cs, beats, buffer)
+                        placed[c] = true
+                    end
                 end
+                named[#named + 1] = { name = fullName(id), id = id, rows = rows }
             end
-            named[#named + 1] = { name = fullName(id), id = id, rows = rows }
         end
         table.sort(named, function(a, b) return a.name:lower() < b.name:lower() end)
         for _, g in ipairs(named) do groups[#groups + 1] = makeGroup(g.id, g.name, g.rows, metrics) end
@@ -440,9 +412,6 @@ function K.buildDashboard(metrics, structure, beats, buffer, opts)
     end
     local byTag, untagged, names = {}, {}, {}
     local firstOnly = opts ~= nil and opts.firstTagOnly == true
-    -- group_tags: only the listed tags make groups, in the list's order and
-    -- spelling; a monitor goes to the first listed tag it has (every one it has
-    -- when firstOnly is off). Other tags are ignored; no listed tag = unnamed group.
     local groupTags = opts and opts.groupTags or nil
     local rank = {}
     if groupTags ~= nil then

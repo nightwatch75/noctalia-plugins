@@ -1,13 +1,9 @@
 --!nonstrict
 -- kuma-status — bar widget: overall state at a glance, click opens the panel.
 --
--- Pure renderer: service.luau publishes "kuma_status_data" (summary, errors,
--- ts) and this entry only draws it, so the glyph is right before the panel
--- has ever been opened. The widget is a declarative tree (barWidget.render):
--- [bar_label text] [heart glyph] and, with bar_display "counts",
--- "<up> ▲ <down> ▼" with a green up arrow and a red down arrow. "color" shows
--- the glyph alone. Glyph colors are theme roles: up primary, pending tertiary,
--- down error, idle/offline on_surface_variant. The tick re-reads the settings.
+-- Renders "kuma_status_data" (from service.luau): [bar_label] [glyph] and, with
+-- bar_display "counts", "<up> ▲ <down> ▼". Glyph colors are theme roles.
+-- The tooltip lists the down monitors and the http / TLS warnings.
 local PANEL_ID = "nightwatch75/kuma-status:panel"
 local DATA_KEY = "kuma_status_data"
 local MAX_DOWN_NAMES = 8

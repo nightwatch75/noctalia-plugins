@@ -1,20 +1,14 @@
 --!nonstrict
 -- kuma-status — panel with three tabs: Dashboard, Status pages and Certificates.
 --
--- Pure renderer over the "kuma_status_data" state published by service.luau,
--- plus two small writes: the refresh request ("kuma_status_request", nonce from
--- a clock-seeded counter so a new panel session is never mistaken for a nonce
--- the service already saw) and the status pages added here (pages_store.luau;
--- the service merges them with the `status_pages` setting).
--- Header: title, settings (noctalia.openSettings) and close buttons like the
--- other plugins; under it the tabs, the configured Kuma URL and refresh.
--- Both tabs stay mounted and the inactive one is hidden with `visible =
--- false` (recreating a tab would replay its creation animations). Dashboard
--- groups collapse by dropping their rows (cheaper than hiding).
--- Clicks: a monitor name opens its Kuma page; right click raises a native menu
--- (Open browser / Copy URL, both about the URL the check hits) — onActivate
--- must name a global, so the menu target is kept in file-locals. Only http(s)
--- URLs built or validated by this plugin reach xdg-open.
+-- Renders "kuma_status_data" (from service.luau). Writes only the refresh and
+-- tag_mode requests ("kuma_status_request", nonce seeded from the clock) and the
+-- pages added here (pages_store.luau).
+-- All tabs stay mounted; the inactive ones are hidden with `visible = false`.
+-- Collapsed groups drop their rows.
+-- A monitor name opens its Kuma page; right click opens a menu for the checked
+-- URL. onActivate must name a global, so the target lives in menuUrl.
+-- Only URLs passing K.openable reach xdg-open.
 
 local R = require("./rows.luau")
 local K = require("./kuma.luau")
@@ -47,7 +41,7 @@ local function requestRefresh()
     sendRequest("refresh")
 end
 
--- Last used tab, kept in the plugin data folder (start_tab = "last").
+-- last_tab.txt in the plugin data folder (start_tab = "last").
 local function tabFile()
     local dir = noctalia.pluginDataDir()
     return dir and (dir .. "/last_tab.txt") or nil
@@ -86,8 +80,7 @@ local function openMonitor(id)
     openUrl(base .. "/dashboard/" .. math.floor(tonumber(id)))
 end
 
--- Right click on a monitor: its page in Kuma, the URL it tests, copy that URL.
--- The tested URL items are disabled when the check has none (groups, push).
+-- Items about the checked URL are disabled when the check has none.
 local function openRowMenu(row)
     menuUrl = row.link
     local base = data and data.baseUrl or ""
@@ -120,8 +113,7 @@ local function isCollapsed(key)
     return v
 end
 
--- "Last state": the collapsed group names, one per line, in the plugin data
--- folder. A group never seen before is not in the file, so it starts open.
+-- collapsed_groups.txt in the plugin data folder: collapsed group keys, one per line.
 local function groupsFile()
     local dir = noctalia.pluginDataDir()
     return dir and (dir .. "/collapsed_groups.txt") or nil
@@ -150,8 +142,7 @@ local function toggleGroup(key)
     render()
 end
 
--- Expand/collapse all for one list ("certs" or "dashboard"). Certificate
--- groups share the collapsed table under a "certs:" prefix.
+-- which = "certs" or "dashboard"; certificate groups use a "certs:" key prefix.
 local function setAllCollapsed(which, value)
     if which == "certs" then
         for _, g in ipairs(data and data.certs and data.certs.groups or {}) do
@@ -187,8 +178,7 @@ local function dashboardView()
     return children
 end
 
--- A status page row is the newest heartbeat plus the bar; ping is not in the
--- public heartbeat list, so the ping column stays empty.
+-- The public heartbeat list has no ping.
 local function pageRow(m, open)
     local status = m.beats[#m.beats]
     return R.monitorRow({ id = m.id, name = m.name, status = status or -1, beats = m.beats, paused = false, noPing = true }, open, nil)
@@ -290,8 +280,6 @@ local function pagesView()
     return out
 end
 
--- Certificates tab: the groups kuma.luau built from the data the Dashboard
--- already fetched. Group names say what the level means (limits from settings).
 local CERT_W = 440
 
 local function certGroupName(level)
@@ -329,7 +317,6 @@ local function certsView()
         local g = groups[gi]
         local key = "certs:" .. g.key
         local closed = isCollapsed(key)
-        -- section title like claude-cockpit's usage tab: big, bold, colored; no glyph
         out[#out + 1] = ui.row({ key = "cgh-" .. g.key, gap = 8, align = "center", paddingV = 6, onClick = function() toggleGroup(key) end }, {
             ui.label({ text = closed and "▶" or "▼", width = 14, color = "on_surface_variant" }),
             ui.label({ key = "cert-group-" .. g.key, text = certGroupName(g.level), fontSize = 17, fontWeight = "bold", color = R.levelColor(g.level), flexGrow = 1, maxLines = 1 }),
@@ -372,7 +359,7 @@ function render()
         if mode == "hierarchy" then
             left = ui.label({ key = "mode-line", text = tr("panel.mode_hierarchy"), flexGrow = 1, color = "on_surface_variant" })
         else
-            -- tags mode: the button is the view choice; its text is the current view
+            -- the button shows the current view
             local all = data and data.tagMode == "all"
             left = ui.row({ gap = 0, flexGrow = 1 }, {
                 ui.button({

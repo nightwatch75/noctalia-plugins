@@ -1,8 +1,6 @@
 --!nonstrict
--- kuma-status — status pages added from the panel. One normalized URL per line
--- in <pluginDataDir>/status_pages.txt, next to (never replacing) the
--- `status_pages` setting: the host gives plugins no way to write settings.
--- The panel adds and removes lines; the service re-reads the file every cycle.
+-- kuma-status — status pages added from the panel: one URL per line in
+-- <pluginDataDir>/status_pages.txt, merged by the service with `status_pages`.
 local S = {}
 
 local function path()

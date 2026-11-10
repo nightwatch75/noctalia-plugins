@@ -1,42 +1,31 @@
 --!nonstrict
 -- kuma-status — singleton engine: all network, parsing and buffering.
+-- The widget and the panel only render what this publishes.
 --
--- Runs once however many bars show the widget. The widget and the panel are
--- pure renderers wired through the plugin's shared state:
---   engine publishes  "kuma_status_data"    = { nonce, ts, summary, dashboard?,
---                       pages (each with .source = the URL as configured),
---                       pageUrls (setting + panel-added URLs, deduped),
---                       addedUrls (the panel-added ones), errors = { metrics?, monitors?, pages = {[url]=msg} },
---                       mode = "hierarchy"|"tags", baseUrl, plainHttp, insecureTls }
---                     summary.color is "offline" when /metrics is unusable.
---                     certs (Certificates tab: groups by expiry level).
---   UI entries send   "kuma_status_request" = { nonce, action = "refresh" }
---                     or { nonce, action = "tag_mode", value = "first"|"all" }
---                     (rebuilds the grouping from the last data, no network;
---                     a nonce already seen is ignored).
+--   publishes "kuma_status_data" = { nonce, ts, summary, dashboard?, certs?,
+--       pages (each with .source), pageUrls, addedUrls, errors = { metrics?,
+--       monitors?, pages = {[url]=msg} }, mode, tagMode, credWarn, baseUrl,
+--       plainHttp, insecureTls }; summary.color is "offline" without /metrics.
+--   reads "kuma_status_request" = { nonce, action = "refresh" }
+--       or { nonce, action = "tag_mode", value = "first"|"all" }; a nonce
+--       already seen is ignored.
 --
--- Sources per cycle (refresh_seconds, default 60):
---   /metrics            Basic, user "kuma", password = the API key (status, ping, tags)
---   /api/monitors       Bearer API key, only with kuma3_support (Kuma 3 hierarchy)
---   status pages        <origin>/api/status-page/<slug> and .../heartbeat/<slug>,
---                       Basic with the global proxy user/password when set
--- Secrets never live in the settings: api_key_file and proxy_password_file hold
--- the PATH of a file, read like noctalia's own credential_source = "file" (absolute
--- path, regular file, 1 byte to 64 KiB, no NUL, one trailing LF/CRLF ignored, never
--- written here) and re-read every cycle, so a secret manager can rotate it. A file
--- readable by group/other raises credWarn (checked with stat at start and on
--- settings changes). Values stay in locals: never in the shared state, logs or
--- notifications.
--- The API key goes to kuma_url only; the proxy pair goes to the host of kuma_url
--- and to the hosts named in proxy_hosts, never to any other status page host.
--- Responses over 1 MiB (4 MiB for status pages) are refused. insecure_tls turns
--- certificate checks off for every request (published as insecureTls). A 401/403 blocks that source until the settings
--- change; a 404 on /api/monitors switches Kuma 3 support off for the session;
--- any other failure is retried on the next cycle. A source that fails never
--- clears the others. Callbacks decode and parse inline: the host budget is
--- ~25 ms per callback (measured in the budget test, Task 7).
--- Monitors that no listed status page covers get their history from a
--- 40-sample buffer fed by /metrics; it lives in memory only.
+-- Sources per cycle (refresh_seconds):
+--   /metrics        Basic, user "kuma", password = API key
+--   /api/monitors   Bearer API key, only with kuma3_support
+--   status pages    <origin>/api/status-page/<slug> and .../heartbeat/<slug>
+-- Secrets: api_key_file and proxy_password_file hold a file PATH (absolute,
+-- regular, 1 B to 64 KiB, no NUL), re-read every cycle, never kept in state or
+-- logs. A file readable by group/other raises credWarn.
+-- The API key goes to kuma_url only. The proxy user/password pair (Basic on
+-- status pages) goes to the kuma_url host and proxy_hosts only.
+-- Bodies over 1 MiB (4 MiB for status pages) are refused. insecure_tls skips
+-- certificate checks on every request.
+-- A 401/403 blocks a source until the secret or the settings change; a 404 on
+-- /api/monitors turns Kuma 3 support off for the session; other failures retry
+-- next cycle. A failing source never clears the others.
+-- Callbacks parse inline (host budget ~25 ms). Monitors no status page covers
+-- get a 40-sample history buffer in memory.
 
 local K = require("./kuma.luau")
 local store = require("./pages_store.luau")
@@ -56,9 +45,8 @@ local blocked = { metrics = false, monitors = false, pages = {} }
 local reasons = { pages = {} } -- text shown for blocked sources
 local buffer = {}
 local credWarn = false -- a credentials file is readable by group/other
-local publish           -- defined below; checkPermissions republishes through it
--- "first": a monitor in its first tag only; "all": in every tag. The choice is
--- kept in the plugin data folder (tag_mode.txt) across restarts.
+local publish -- defined below; checkPermissions republishes through it
+-- tag_mode.txt in the plugin data folder: "first" (monitor in its first tag) or "all"
 local function modeFile()
     local dir = noctalia.pluginDataDir()
     return dir and (dir .. "/tag_mode.txt") or nil
@@ -68,8 +56,8 @@ local function loadTagMode()
     local saved = f and noctalia.readFile(f) or nil
     return (saved ~= nil and saved:match("^%s*all")) and "all" or "first"
 end
-local tagMode = "first"
-local last = nil         -- inputs of the last publish, to rebuild the view without network
+local tagMode = loadTagMode()
+local last = nil -- inputs of the last publish, to rebuild the view without network
 
 local function tr(key, args)
     return noctalia.tr(key, args)
@@ -102,7 +90,7 @@ local function proxyHostSet()
 end
 
 local function readConfig()
-    -- the setting first, then pages added from the panel; one entry per page
+    -- setting first, then pages added from the panel; one entry per page
     local pages, seen = {}, {}
     local function add(url)
         if type(url) ~= "string" then return end
@@ -170,11 +158,10 @@ local function checkPermissions(cfg)
     if started == 0 then credWarn = false end
 end
 
--- Maps an http response to (body) or (nil, message, hard) where `hard` marks a
--- 401/403 that should block the source.
 local MAX_BODY = 1048576
 local MAX_PAGE_BODY = 4194304
 
+-- (body) or (nil, message, hard); hard marks a 401/403 that blocks the source.
 local function classify(r, max)
     if not r.ok then return nil, tr("error.offline"), false end
     if #(r.body or "") > (max or MAX_BODY) then return nil, tr("error.too_large"), false end
@@ -231,9 +218,7 @@ local function refresh()
     end
     inFlight = true
 
-    -- Credentials come from files, fresh every cycle. A source blocked by a 401
-    -- stays blocked only while the secret that was refused is still the one in
-    -- the file, so rotating the secret unblocks it without touching settings.
+    -- A blocked source stays blocked only while the refused secret is still in the file.
     local key, keyErr = readCredential(cfg.keyFile)
     local proxyPw, proxyErr = "", nil
     if cfg.proxyUser ~= "" and cfg.proxyFile ~= "" then
@@ -304,8 +289,7 @@ local function refresh()
                     reasons.metrics = msg
                 end
             elseif body:find("monitor_status", 1, true) == nil then
-                -- an HTML login page or a wrong path also answers 200; even with
-                -- every monitor paused Kuma still lists its monitor_* HELP lines
+                -- a login page or wrong path also answers 200
                 errors.metrics = tr("error.bad_metrics")
             else
                 metrics = K.parseMetrics(body)
@@ -405,7 +389,6 @@ local function refresh()
     finish()
 end
 
-tagMode = loadTagMode()
 local request0 = noctalia.state.get(REQUEST_KEY)
 if type(request0) == "table" then seenRequest = request0.nonce end
 noctalia.state.watch(REQUEST_KEY, function(req)
@@ -426,7 +409,7 @@ function update()
     if not inFlight and elapsed >= readConfig().interval then refresh() end
 end
 
--- Settings changed: forget every block and the 404 verdict, ask again now.
+-- Settings changed: drop every block and ask again.
 function onConfigChanged()
     blocked = { metrics = false, monitors = false, pages = {} }
     reasons = { pages = {} }

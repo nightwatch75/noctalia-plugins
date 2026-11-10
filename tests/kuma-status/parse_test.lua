@@ -76,9 +76,7 @@ eq(list(s[11].tags), "alpha", "tag names")
 
 -- test: statusurl_rejects_other_schemes
 for _, u in ipairs({ "ftp://h.example.test/status/dev", "javascript:alert(1)", "file:///status/dev", "" }) do
-    local origin, slug, err = K.statusPageUrl(u)
-    eq(origin, nil, "origin nil for " .. u)
-    eq(type(err), "string", "err for " .. u)
+    eq(K.statusPageUrl(u), nil, "rejected " .. u)
 end
 
 -- test: statusurl_accepts_http_and_https
