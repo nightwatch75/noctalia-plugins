@@ -277,7 +277,9 @@ local function pagesView()
                 children[2] = ui.label({ key = "page-desc-" .. i, text = sp.description, fontSize = 11, maxLines = 1, color = "on_surface_variant" })
             end
             for j, g in ipairs(sp.groups) do
-                children[#children + 1] = ui.label({ key = "page-group-" .. i .. "-" .. j, text = g.name, fontWeight = "semibold", color = "on_surface_variant" })
+                if #sp.groups > 1 then
+                    children[#children + 1] = ui.label({ key = "page-group-" .. i .. "-" .. j, text = g.name, fontWeight = "semibold", color = "on_surface_variant" })
+                end
                 for _, m in ipairs(g.monitors) do
                     children[#children + 1] = pageRow(m, open)
                 end

@@ -59,9 +59,16 @@ local P = boot()
 P.publish({ pageUrls = { URL }, pages = { PAGE } })
 local tab = find(P.tree, "tab-pages")
 eq(find(tab, "page-title-1").props.text, "Board", "title")
-eq(find(tab, "page-group-1-1").props.text, "G", "group name")
+eq(find(tab, "page-group-1-1"), nil, "a single group has no label")
 eq(find(tab, "row-1") ~= nil, true, "monitor row"); eq(find(tab, "row-2") ~= nil, true, "second monitor")
 eq(find(tab, "dot-1").props.fill, "#e06c75", "dot follows the newest beat (down)")
+
+-- test: group_labels_only_with_several_groups
+P = boot()
+local TWO = { source = URL, url = URL, slug = "dev", title = "Board", description = "", groups = {
+    { name = "G1", monitors = { { id = 1, name = "a", beats = {} } } }, { name = "G2", monitors = { { id = 2, name = "b", beats = {} } } } } }
+P.publish({ pageUrls = { URL }, pages = { TWO } })
+eq(find(P.tree, "page-group-1-2").props.text, "G2", "labels shown with two groups")
 
 -- test: page_error_line_when_401
 P = boot()

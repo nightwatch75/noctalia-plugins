@@ -1,6 +1,6 @@
 id = "nightwatch75/kuma-status"
 name = "Kuma Status"
-version = "0.9.5"
+version = "0.9.6"
 plugin_api = 32
 author = "nightwatch75"
 license = "MIT"
