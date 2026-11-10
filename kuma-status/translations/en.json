@@ -55,5 +55,7 @@
   },
   "panel": {
     "placeholder": "Dashboard and status pages: work in progress."
-  }
+  },
+  "tooltip_down": "DOWN",
+  "tooltip_more": "+{count} more"
 }
