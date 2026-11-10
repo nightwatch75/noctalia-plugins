@@ -35,6 +35,7 @@ local gen = 0        -- bumps per cycle and on config change; stale callbacks dr
 local nonce = 0
 local seenRequest = nil
 local elapsed = 0
+local inFlight = false -- a cycle is waiting for answers; the timer must not restart it
 local v3Off = false  -- /api/monitors answered 404: stop asking this session
 local blocked = { metrics = false, monitors = false, pages = {} }
 local reasons = { pages = {} } -- text shown for blocked sources
@@ -76,9 +77,10 @@ local function publish(cfg, metrics, structure, beatsById, pages, errors)
     if metrics ~= nil then
         dashboard = K.buildDashboard(metrics, structure, beatsById, buffer)
     end
+    -- from the configured URLs, so a page that failed still flags clear text
     local plain = cfg.base ~= nil and cfg.base:sub(1, 7) == "http://"
-    for _, p in ipairs(pages) do
-        if p.url:sub(1, 7) == "http://" then plain = true end
+    for _, url in ipairs(cfg.pages) do
+        if type(url) == "string" and url:lower():sub(1, 7) == "http://" then plain = true end
     end
     noctalia.state.set(STATE_KEY, {
         nonce = nonce,
@@ -102,9 +104,11 @@ local function refresh()
     local errors = { pages = {} }
     if cfg.base == nil then
         errors.metrics = tr("error.no_url")
+        inFlight = false
         publish(cfg, nil, nil, {}, {}, errors)
         return
     end
+    inFlight = true
 
     local metrics, structure = nil, nil
     local pageResults = {} -- [index] = StatusPage
@@ -113,6 +117,7 @@ local function refresh()
     local function finish()
         pending -= 1
         if pending > 0 or mine ~= gen then return end
+        inFlight = false
         local pages, beatsById = {}, {}
         for i = 1, #cfg.pages do
             local sp = pageResults[i]
@@ -138,7 +143,8 @@ local function refresh()
     local function request(req, cb)
         pending += 1
         local sent = noctalia.http(req, function(r)
-            if mine == gen then cb(r) end
+            -- a throwing handler must not leave the cycle without its finish()
+            if mine == gen then pcall(cb, r) end
             finish()
         end)
         if not sent then
@@ -161,6 +167,10 @@ local function refresh()
                     blocked.metrics = true
                     reasons.metrics = msg
                 end
+            elseif body:find("monitor_status", 1, true) == nil then
+                -- an HTML login page or a wrong path also answers 200; even with
+                -- every monitor paused Kuma still lists its monitor_* HELP lines
+                errors.metrics = tr("error.bad_metrics")
             else
                 metrics = K.parseMetrics(body)
             end
@@ -191,8 +201,9 @@ local function refresh()
                     return
                 end
                 local decoded = noctalia.json.decode(body)
-                if type(decoded) == "table" then
-                    structure = K.parseMonitors(decoded)
+                local parsed, res = pcall(K.parseMonitors, decoded)
+                if type(decoded) == "table" and parsed then
+                    structure = res
                 else
                     errors.monitors = tr("error.bad_json")
                 end
@@ -222,8 +233,9 @@ local function refresh()
                 end
                 local page = noctalia.json.decode(got.page)
                 local hb = noctalia.json.decode(got.hb)
-                if type(page) == "table" and type(hb) == "table" then
-                    pageResults[i] = K.parseStatusPage(page, hb, origin, slug)
+                local parsed, res = pcall(K.parseStatusPage, page, hb, origin, slug)
+                if type(page) == "table" and type(hb) == "table" and parsed then
+                    pageResults[i] = res
                     pageResults[i].source = url
                 else
                     errors.pages[url] = tr("error.bad_json")
@@ -264,7 +276,7 @@ end)
 
 function update()
     elapsed += 1
-    if elapsed >= readConfig().interval then refresh() end
+    if not inFlight and elapsed >= readConfig().interval then refresh() end
 end
 
 -- Settings changed: forget every block and the 404 verdict, ask again now.

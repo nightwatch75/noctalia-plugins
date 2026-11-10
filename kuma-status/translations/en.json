@@ -51,7 +51,8 @@
     "http": "Unexpected answer: HTTP {status}.",
     "v3_api_off": "The Kuma 3 API is not enabled on this server.",
     "bad_json": "Unreadable answer.",
-    "bad_url": "Not a valid status page URL."
+    "bad_url": "Not a valid status page URL.",
+    "bad_metrics": "The server did not answer with Kuma metrics. Check the URL and that /metrics is enabled."
   },
   "panel": {
     "tab_dashboard": "Dashboard",
@@ -67,7 +68,8 @@
     "no_xdg_open": "xdg-open is not installed.",
     "pages_empty": "No status pages configured. Add their URLs in the plugin settings.",
     "page_no_data": "No data.",
-    "tip_open_page": "Open the status page"
+    "tip_open_page": "Open the status page",
+    "empty_groups": "No monitors to show."
   },
   "tooltip_down": "DOWN",
   "tooltip_more": "+{count} more"

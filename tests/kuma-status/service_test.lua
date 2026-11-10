@@ -14,6 +14,8 @@ local METRICS = table.concat({
 }, "\n")
 
 local DECODED = {
+    badmonitors = { monitors = { 1 } },
+    badpage = { config = { title = "x" }, publicGroupList = { 1 } },
     monitors = { monitors = {
         { id = 10, name = "grp", type = "group", active = true, childrenIDs = { 1, 2 }, tags = {} },
         { id = 1, name = "svc-a", type = "http", active = true, parent = 10, childrenIDs = {}, tags = {} },
@@ -41,6 +43,7 @@ local function boot(cfg, respond)
         http = function(req, cb)
             H.calls[#H.calls + 1] = req
             local r = respond(req)
+            if r == "HOLD" then return true end -- never answers: a stalled server
             if r == nil then r = { ok = false, status = 0, body = "" } end
             cb(r)
             return true
@@ -171,5 +174,48 @@ local U = "https://status.example.test/status/Dev"
 h = boot({ status_pages = { U } }, standard)
 eq(h.data().pageUrls[1], U, "configured URL kept as typed")
 eq(h.data().pages[1].source, U, "page remembers the URL it came from")
+
+-- test: metrics_200_that_is_not_prometheus_is_an_error
+h = boot({}, function(req)
+    if req.url:sub(-8) == "/metrics" then return ok("<html>login</html>") end
+    return standard(req)
+end)
+eq(h.data().errors.metrics, "error.bad_metrics", "html answer is reported")
+eq(h.data().summary.color, "offline", "offline, not idle")
+
+-- test: metrics_help_lines_only_is_idle_not_an_error
+h = boot({}, function(req)
+    if req.url:sub(-8) == "/metrics" then return ok("# HELP monitor_status Monitor Status\n# TYPE monitor_status gauge") end
+    return standard(req)
+end)
+eq(h.data().errors.metrics, nil, "all paused is not an error")
+eq(h.data().summary.color, "idle", "idle")
+
+-- test: timer_does_not_restart_a_cycle_in_flight
+h = boot({ refresh_seconds = 20 }, function(req)
+    if req.url:sub(-8) == "/metrics" then return "HOLD" end
+    return standard(req)
+end)
+for _ = 1, 45 do update() end
+eq(h.count("/metrics"), 1, "stalled cycle is not restarted by the timer")
+
+-- test: wrong_shape_json_is_reported_and_cycle_still_publishes
+h = boot({ kuma3_support = true, status_pages = { "https://status.example.test/status/dev" } }, function(req)
+    if req.url:sub(-13) == "/api/monitors" then return ok("badmonitors") end
+    if req.url:find("/api/status%-page/heartbeat/") then return ok("beats") end
+    if req.url:find("/api/status%-page/") then return ok("badpage") end
+    return standard(req)
+end)
+eq(h.data() ~= nil, true, "published despite wrong shapes")
+eq(h.data().errors.monitors, "error.bad_json", "monitors shape")
+eq(h.data().errors.pages["https://status.example.test/status/dev"], "error.bad_json", "page shape")
+eq(h.data().summary.up, 1, "metrics still shown")
+
+-- test: plain_http_flag_counts_failed_pages
+h = boot({ status_pages = { "http://status.example.test/status/dev" } }, function(req)
+    if req.url:find("^http://status.example.test/") then return { ok = true, status = 401, body = "" } end
+    return standard(req)
+end)
+eq(h.data().plainHttp, true, "a failed http page still sent the proxy password in clear")
 
 print("service_test OK")

@@ -141,4 +141,9 @@ find(P.tree, "btn-refresh").props.onClick()
 eq(P.state["kuma_status_request"].action, "refresh", "action")
 eq(P.state["kuma_status_request"].nonce, before + 1, "nonce increments")
 
+-- test: zero_groups_shows_an_empty_hint
+P = boot()
+P.publish({ baseUrl = "https://k.example.test", dashboard = dash("tags", {}) })
+eq(find(P.tree, "dash-empty").props.text, "panel.empty_groups", "hint when nothing to list")
+
 print("panel_dash_test OK")

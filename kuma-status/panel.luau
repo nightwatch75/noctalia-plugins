@@ -59,6 +59,8 @@ local function dashboardView()
     local dash = data and data.dashboard
     if dash == nil then
         children[1] = ui.label({ key = "empty", text = tr("panel.empty"), color = "on_surface_variant" })
+    elseif #dash.groups == 0 then
+        children[1] = ui.label({ key = "dash-empty", text = tr("panel.empty_groups"), color = "on_surface_variant" })
     else
         for _, g in ipairs(dash.groups) do
             local key = R.groupKey(g)
