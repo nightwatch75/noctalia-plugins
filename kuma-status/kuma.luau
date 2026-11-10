@@ -202,4 +202,153 @@ function K.parseStatusPage(page: any, heartbeats: any, origin: string, slug: str
     return sp
 end
 
+-- Samples kept for monitors that no status page covers: the last `cap`
+-- statuses, oldest first.
+function K.pushSample(buffer, id: number, status: number, cap: number)
+    local b = buffer[id]
+    if b == nil then
+        b = {}
+        buffer[id] = b
+    end
+    b[#b + 1] = status
+    while #b > cap do table.remove(b, 1) end
+end
+
+-- Overall state for the bar. Groups are containers, not checks, so they are
+-- not counted. Maintenance (3) is neither up nor down: it keeps the color
+-- green but adds to no counter. No series at all is "idle", never green.
+function K.summarize(metrics)
+    local s = { up = 0, down = 0, pending = 0, color = "idle", downNames = {} }
+    local seen = 0
+    for _, m in pairs(metrics) do
+        if m.type ~= "group" then
+            seen += 1
+            if m.status == 1 then
+                s.up += 1
+            elseif m.status == 0 then
+                s.down += 1
+                s.downNames[#s.downNames + 1] = m.name
+            elseif m.status == 2 then
+                s.pending += 1
+            end
+        end
+    end
+    table.sort(s.downNames)
+    if s.down > 0 then
+        s.color = "down"
+    elseif s.pending > 0 then
+        s.color = "pending"
+    elseif seen > 0 then
+        s.color = "up"
+    end
+    return s
+end
+
+local function byName(a, b)
+    local x, y = a.name:lower(), b.name:lower()
+    if x ~= y then return x < y end
+    return a.id < b.id
+end
+
+-- Rows come from /metrics; a monitor known only from the structure (Kuma 3)
+-- is paused: Kuma exports no series for a paused monitor.
+local function makeRow(id, m, struct, beats, buffer)
+    local b = beats[id]
+    if b == nil or #b == 0 then b = buffer[id] or {} end
+    if m ~= nil then
+        return { id = id, name = m.name, status = m.status, ping = m.ping, beats = b, paused = false }
+    end
+    return { id = id, name = struct.name, status = -1, beats = b, paused = true }
+end
+
+local function makeGroup(id, name, rows, metrics)
+    table.sort(rows, byName)
+    local g = { id = id, name = name, up = 0, total = 0, rows = rows }
+    local sum, n = 0, 0
+    for _, r in ipairs(rows) do
+        if not r.paused then
+            g.total += 1
+            if r.status == 1 or r.status == 3 then g.up += 1 end
+            local u = metrics[r.id] and metrics[r.id].uptime1d
+            if u ~= nil then
+                sum += u
+                n += 1
+            end
+        end
+    end
+    if n > 0 then g.uptime1d = sum / n end
+    return g
+end
+
+-- Groups for the Dashboard tab. With a Kuma 3 structure the groups are the
+-- real group monitors (nested ones named "Parent / Child"); without it, one
+-- group per tag (a multi-tag monitor appears in several) and an unnamed group
+-- last for what has no group or tag. Counts here are per group; the bar uses
+-- summarize, which counts every monitor once.
+function K.buildDashboard(metrics, structure, beats, buffer)
+    local groups = {}
+    if structure ~= nil then
+        local function fullName(id)
+            local st, parts, guard = structure[id], {}, 0
+            while st ~= nil and guard < 20 do
+                table.insert(parts, 1, st.name)
+                st = st.parent and structure[st.parent] or nil
+                guard += 1
+            end
+            return table.concat(parts, " / ")
+        end
+        local placed, loose = {}, {}
+        local ids = {}
+        for id, st in pairs(structure) do
+            if st.type == "group" then ids[#ids + 1] = id end
+        end
+        local named = {}
+        for _, id in ipairs(ids) do
+            local rows = {}
+            for _, c in ipairs(structure[id].children) do
+                local cs = structure[c]
+                if cs ~= nil and cs.type ~= "group" then
+                    rows[#rows + 1] = makeRow(c, metrics[c], cs, beats, buffer)
+                    placed[c] = true
+                end
+            end
+            named[#named + 1] = { name = fullName(id), id = id, rows = rows }
+        end
+        table.sort(named, function(a, b) return a.name:lower() < b.name:lower() end)
+        for _, g in ipairs(named) do groups[#groups + 1] = makeGroup(g.id, g.name, g.rows, metrics) end
+        for id, st in pairs(structure) do
+            if st.type ~= "group" and not placed[id] then
+                loose[#loose + 1] = makeRow(id, metrics[id], st, beats, buffer)
+            end
+        end
+        for id, m in pairs(metrics) do
+            if m.type ~= "group" and structure[id] == nil then
+                loose[#loose + 1] = makeRow(id, m, nil, beats, buffer)
+            end
+        end
+        if #loose > 0 then groups[#groups + 1] = makeGroup(nil, "", loose, metrics) end
+        return { mode = "hierarchy", groups = groups }
+    end
+    local byTag, untagged, names = {}, {}, {}
+    for id, m in pairs(metrics) do
+        if m.type ~= "group" then
+            local r = makeRow(id, m, nil, beats, buffer)
+            if #m.tags == 0 then
+                untagged[#untagged + 1] = r
+            end
+            for _, t in ipairs(m.tags) do
+                if byTag[t] == nil then
+                    byTag[t] = {}
+                    names[#names + 1] = t
+                end
+                table.insert(byTag[t], r)
+            end
+        end
+    end
+    table.sort(names, function(a, b) return a:lower() < b:lower() end)
+    for _, t in ipairs(names) do groups[#groups + 1] = makeGroup(nil, t, byTag[t], metrics) end
+    if #untagged > 0 then groups[#groups + 1] = makeGroup(nil, "", untagged, metrics) end
+    return { mode = "tags", groups = groups }
+end
+
 return K
