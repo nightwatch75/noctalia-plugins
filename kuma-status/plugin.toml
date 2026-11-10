@@ -1,6 +1,6 @@
 id = "nightwatch75/kuma-status"
 name = "Kuma Status"
-version = "0.8.0"
+version = "0.9.0"
 plugin_api = 32
 author = "nightwatch75"
 license = "MIT"
@@ -36,6 +36,19 @@ type = "file"
 label_key = "settings.proxy_password_file.label"
 description_key = "settings.proxy_password_file.description"
 default = ""
+
+[[setting]]
+key = "proxy_hosts"
+type = "string_list"
+label_key = "settings.proxy_hosts.label"
+description_key = "settings.proxy_hosts.description"
+
+[[setting]]
+key = "insecure_tls"
+type = "bool"
+label_key = "settings.insecure_tls.label"
+description_key = "settings.insecure_tls.description"
+default = false
 
 [[setting]]
 key = "status_pages"

@@ -130,4 +130,37 @@ eq(cm[21].url, "https://svc.example.test/health", "url label")
 eq(cm[22].url, "h.example.test:8883", "hostname:port fallback")
 eq(cm[23].url, nil, "nothing to show")
 
+-- test: safeText_strips_bidi_and_format_chars
+eq(K.safeText("a\u{202E}b\u{200F}c\u{2066}d\u{200B}e", 20), "abcde", "bidi/format chars removed")
+
+-- test: url_display_masks_secrets_but_link_keeps_them
+local function urlMetric(id, url)
+    return 'monitor_status{monitor_id="' .. id .. '",monitor_name="n",monitor_type="http",monitor_url="' .. url
+        .. '",monitor_hostname="null",monitor_port="null"} 1'
+end
+local um = K.parseMetrics(table.concat({
+    urlMetric(1, "https://user:pw@h.example.test/p?token=abc#f"),
+    urlMetric(2, "http://x.example.test\\n--flag=1"),
+    urlMetric(3, "https://l.example.test/" .. string.rep("a", 300)),
+    urlMetric(4, "https://l.example.test/" .. string.rep("a", 2100)),
+}, "\n"))
+eq(um[1].url, "https://h.example.test/p?\u{2026}", "userinfo, query and fragment hidden in display")
+eq(um[1].link, "https://user:pw@h.example.test/p?token=abc#f", "link keeps the real URL")
+eq(um[3].link, "https://l.example.test/" .. string.rep("a", 300), "long URL not cut for actions")
+eq(utf8.len(um[3].url) <= 200, true, "display is cut")
+eq(um[4].link, nil, "absurdly long URL gives no link")
+
+-- test: openable_url_rejects_whitespace
+eq(K.openable("https://h.example.test/a"), true, "plain URL")
+eq(K.openable(um[2].link), false, "newline turned into a space")
+eq(K.openable("ftp://h.example.test/"), false, "scheme")
+eq(K.openable("https://h.example.test/ --x"), false, "space")
+eq(K.openable(nil), false, "nil")
+
+-- test: status_page_caps_monitors
+local many = {}
+for i = 1, 700 do many[i] = { id = i, name = "m" .. i } end
+local capped = K.parseStatusPage({ config = {}, publicGroupList = { { name = "G", monitorList = many } } }, { heartbeatList = {} }, "https://h.example.test", "s")
+eq(#capped.groups[1].monitors, 500, "monitors per page capped")
+
 print("parse_test OK")

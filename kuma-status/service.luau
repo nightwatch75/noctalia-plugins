@@ -7,7 +7,7 @@
 --                       pages (each with .source = the URL as configured),
 --                       pageUrls (setting + panel-added URLs, deduped),
 --                       addedUrls (the panel-added ones), errors = { metrics?, monitors?, pages = {[url]=msg} },
---                       mode = "hierarchy"|"tags", baseUrl, plainHttp }
+--                       mode = "hierarchy"|"tags", baseUrl, plainHttp, insecureTls }
 --                     summary.color is "offline" when /metrics is unusable.
 --                     certs (Certificates tab: groups by expiry level).
 --   UI entries send   "kuma_status_request" = { nonce, action = "refresh" }
@@ -27,8 +27,10 @@
 -- readable by group/other raises credWarn (checked with stat at start and on
 -- settings changes). Values stay in locals: never in the shared state, logs or
 -- notifications.
--- The API key goes to kuma_url only; the proxy pair goes to the hosts of the
--- listed status pages only. A 401/403 blocks that source until the settings
+-- The API key goes to kuma_url only; the proxy pair goes to the host of kuma_url
+-- and to the hosts named in proxy_hosts, never to any other status page host.
+-- Responses over 1 MiB (4 MiB for status pages) are refused. insecure_tls turns
+-- certificate checks off for every request (published as insecureTls). A 401/403 blocks that source until the settings
 -- change; a 404 on /api/monitors switches Kuma 3 support off for the session;
 -- any other failure is retried on the next cycle. A source that fails never
 -- clears the others. Callbacks decode and parse inline: the host budget is
@@ -86,6 +88,19 @@ local function groupTagList()
     return out
 end
 
+-- Lowercase hosts (host or host:port) from the proxy_hosts setting.
+local function proxyHostSet()
+    local setting = noctalia.getConfig("proxy_hosts")
+    local out = {}
+    for _, h in ipairs(type(setting) == "table" and setting or {}) do
+        if type(h) == "string" then
+            h = h:match("^%s*(.-)%s*$"):lower()
+            if h ~= "" then out[h] = true end
+        end
+    end
+    return out
+end
+
 local function readConfig()
     -- the setting first, then pages added from the panel; one entry per page
     local pages, seen = {}, {}
@@ -111,6 +126,8 @@ local function readConfig()
         pages = pages,
         added = added,
         groupTags = groupTagList(),
+        proxyHosts = proxyHostSet(),
+        insecure = noctalia.getConfig("insecure_tls") == true,
         v3 = noctalia.getConfig("kuma3_support") == true,
         interval = math.min(3600, math.max(20, interval))
     }
@@ -155,8 +172,12 @@ end
 
 -- Maps an http response to (body) or (nil, message, hard) where `hard` marks a
 -- 401/403 that should block the source.
-local function classify(r)
+local MAX_BODY = 1048576
+local MAX_PAGE_BODY = 4194304
+
+local function classify(r, max)
     if not r.ok then return nil, tr("error.offline"), false end
+    if #(r.body or "") > (max or MAX_BODY) then return nil, tr("error.too_large"), false end
     if r.status == 401 or r.status == 403 then return nil, tr("error.unauthorized"), true end
     if r.status == 404 then return nil, tr("error.not_found"), false end
     if r.status ~= 200 then return nil, tr("error.http", { status = r.status }), false end
@@ -192,6 +213,7 @@ function publish(cfg, metrics, structure, beatsById, pages, errors)
         certs = metrics ~= nil and K.buildCertificates(metrics) or nil,
         baseUrl = cfg.base or "",
         plainHttp = plain,
+        insecureTls = cfg.insecure,
     })
 end
 
@@ -216,6 +238,11 @@ local function refresh()
     local proxyPw, proxyErr = "", nil
     if cfg.proxyUser ~= "" and cfg.proxyFile ~= "" then
         proxyPw, proxyErr = readCredential(cfg.proxyFile)
+    end
+    local kumaHost = cfg.base:match("^%a+://([^/]+)")
+    local function proxyAllowed(origin)
+        local host = origin:match("^%a+://(.+)$")
+        return host == kumaHost or cfg.proxyHosts[host] == true or cfg.proxyHosts[host:gsub(":%d+$", "")] == true
     end
 
     local metrics, structure = nil, nil
@@ -250,6 +277,7 @@ local function refresh()
 
     local function request(req, cb)
         pending += 1
+        if cfg.insecure then req.allow_insecure_tls = true end
         local sent = noctalia.http(req, function(r)
             -- a throwing handler must not leave the cycle without its finish()
             if mine == gen then pcall(cb, r) end
@@ -324,11 +352,12 @@ local function refresh()
         local origin, slug = K.statusPageUrl(url)
         if origin == nil then
             errors.pages[url] = tr("error.bad_url")
-        elseif proxyErr ~= nil then
+        elseif cfg.proxyUser ~= "" and proxyAllowed(origin) and proxyErr ~= nil then
             errors.pages[url] = tr(proxyErr)
         elseif blocked.pages[url] ~= nil and blocked.pages[url] == proxyPw then
             errors.pages[url] = reasons.pages[url]
         else
+            local sendProxy = cfg.proxyUser ~= "" and proxyAllowed(origin)
             local got = { left = 2 }
             local function done()
                 got.left -= 1
@@ -353,13 +382,14 @@ local function refresh()
             end
             local function pageRequest(path, field)
                 local req = { url = origin .. path .. slug }
-                if cfg.proxyUser ~= "" then
+                if sendProxy then
                     req.basic_username = cfg.proxyUser
                     req.basic_password = proxyPw
                 end
                 request(req, function(r)
-                    local body, msg, hard = classify(r)
+                    local body, msg, hard = classify(r, MAX_PAGE_BODY)
                     if body == nil then
+                        if hard and not sendProxy and cfg.proxyUser ~= "" then msg = tr("error.unauthorized_host") end
                         got.err, got.hard = got.err or msg, got.hard or hard
                     else
                         got[field] = body

@@ -14,6 +14,7 @@ local K = {}
 
 local MAX_NAME = 80
 local BEATS = 40
+local MAX_MONITORS = 500 -- per status page
 
 -- Labels that describe the monitor itself; every other label of a /metrics
 -- series is a Kuma tag (tag name as label name, value empty or free).
@@ -30,10 +31,28 @@ function K.safeText(s: string, max: number): string
     if utf8.len(s) == nil then
         s = s:gsub("[\128-\255]", "?")
     end
+    -- bidi controls and zero-width marks can disguise a name or a URL
+    s = s:gsub("\226\128[\139-\143\170-\174]", ""):gsub("\226\129[\166-\169]", "")
     if utf8.len(s) > max then
         s = s:sub(1, utf8.offset(s, max + 1) - 1)
     end
     return s
+end
+
+-- A monitored URL for the screen: no user:password@, no query or fragment
+-- (they often carry tokens), cut to 200 characters.
+local function displayUrl(url: string): string
+    url = url:gsub("^(%a+://)[^/@]*@", "%1"):gsub("[?#].*$", "?\u{2026}")
+    return K.safeText(url, 200)
+end
+
+-- The real URL, kept for "open" and "copy"; nil when absurdly long (a cut URL
+-- would open something else).
+local MAX_LINK = 2000
+
+-- True for a URL that is safe to hand to xdg-open as a single argument.
+function K.openable(url: any): boolean
+    return type(url) == "string" and url:match("^https?://[^%s]+$") ~= nil
 end
 
 -- One Prometheus series line: name{k="v",...} value. Label values may hold
@@ -128,7 +147,8 @@ function K.parseMetrics(text: string)
                             id = id,
                             name = K.safeText(labels.monitor_name or "", MAX_NAME),
                             type = K.safeText(labels.monitor_type or "", 40),
-                            url = url and K.safeText(url, 200) or nil,
+                            url = url and displayUrl(url) or nil,
+                            link = url and utf8.len(url) ~= nil and #url <= MAX_LINK and K.safeText(url, MAX_LINK) or nil,
                             tags = tags,
                         }
                         byId[id] = m
@@ -220,11 +240,13 @@ function K.parseStatusPage(page: any, heartbeats: any, origin: string, slug: str
         url = origin .. "/status/" .. slug,
         groups = {},
     }
+    local total = 0
     for _, g in ipairs(type(page) == "table" and page.publicGroupList or {}) do
         local group = { name = K.safeText(g.name or "", MAX_NAME), monitors = {} }
         for _, mon in ipairs(g.monitorList or {}) do
             local id = tonumber(mon.id)
-            if id ~= nil then
+            if id ~= nil and total < MAX_MONITORS then
+                total += 1
                 local src = lists[tostring(id)] or lists[id] or {}
                 local beats = {}
                 for i = math.max(1, #src - BEATS + 1), #src do
@@ -263,7 +285,7 @@ function K.buildCertificates(metrics)
     for id, m in pairs(metrics) do
         if m.type ~= "group" and m.certDays ~= nil then
             local days = math.floor(m.certDays)
-            all[#all + 1] = { id = id, name = m.name, url = m.url, certDays = days, level = K.certLevel(days) }
+            all[#all + 1] = { id = id, name = m.name, url = m.url, link = m.link, certDays = days, level = K.certLevel(days) }
         end
     end
     table.sort(all, function(a, b)
@@ -339,7 +361,7 @@ local function makeRow(id, m, struct, beats, buffer)
     if b == nil or #b == 0 then b = buffer[id] or {} end
     if m ~= nil then
         return {
-            id = id, name = m.name, status = m.status, ping = m.ping, beats = b, paused = false, url = m.url,
+            id = id, name = m.name, status = m.status, ping = m.ping, beats = b, paused = false, url = m.url, link = m.link,
             certDays = m.certDays, certLevel = m.certDays ~= nil and K.certLevel(math.floor(m.certDays)) or nil,
         }
     end

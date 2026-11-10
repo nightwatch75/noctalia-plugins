@@ -72,7 +72,7 @@ local function setTab(name)
 end
 
 local function openUrl(url)
-    if url == nil or not url:match("^https?://") then return end
+    if not K.openable(url) then return end
     if not noctalia.commandExists("xdg-open") then
         noctalia.notifyError(tr("title"), tr("panel.no_xdg_open"))
         return
@@ -89,14 +89,14 @@ end
 -- Right click on a monitor: its page in Kuma, the URL it tests, copy that URL.
 -- The tested URL items are disabled when the check has none (groups, push).
 local function openRowMenu(row)
-    menuUrl = row.url
+    menuUrl = row.link
     local base = data and data.baseUrl or ""
     panel.openContextMenu({
         onActivate = "onRowMenu",
         context = tostring(row.id),
         items = {
             { id = "kuma", label = tr("panel.menu_kuma"), enabled = base ~= "" },
-            { id = "open", label = tr("panel.menu_open"), enabled = menuUrl ~= nil and menuUrl:match("^https?://") ~= nil },
+            { id = "open", label = tr("panel.menu_open"), enabled = K.openable(menuUrl) },
             { id = "copy", label = tr("panel.menu_copy"), enabled = menuUrl ~= nil },
         },
     })
@@ -309,7 +309,7 @@ local function certRow(c)
         ui.button({
             key = "curl-" .. c.id, text = c.url or c.name, variant = "ghost", contentAlign = "start", width = CERT_W,
             onClick = function() openMonitor(c.id) end,
-            onRightClick = function() openRowMenu({ id = c.id, url = c.url }) end,
+            onRightClick = function() openRowMenu({ id = c.id, link = c.link }) end,
         }),
         ui.label({ key = "cdays-" .. c.id, text = days, width = 90, textAlign = "end", color = "on_surface_variant" }),
     })
@@ -353,6 +353,9 @@ local function notices()
     if errors.monitors then out[#out + 1] = ui.label({ key = "err-monitors", text = errors.monitors, color = "error" }) end
     if data and data.credWarn then
         out[#out + 1] = ui.label({ key = "warn-cred", text = tr("panel.warn_cred_perms"), color = "tertiary" })
+    end
+    if data and data.insecureTls then
+        out[#out + 1] = ui.label({ key = "warn-tls", text = tr("panel.warn_insecure_tls"), color = "tertiary" })
     end
     if data and data.plainHttp then
         out[#out + 1] = ui.label({ key = "warn-http", text = tr("panel.warn_http"), color = "tertiary" })

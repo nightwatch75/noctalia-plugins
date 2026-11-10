@@ -62,7 +62,15 @@
     },
     "proxy_password_file": {
       "label": "Status page password file",
-      "description": "Path of a file that holds the password for the status page user. Sent only to the hosts of the listed status pages."
+      "description": "Path of a file that holds the password for the status page user. Sent only to the host of the Kuma URL and to the hosts in the list below."
+    },
+    "proxy_hosts": {
+      "label": "Hosts that get the status page password",
+      "description": "Hosts (host or host:port, one per line) of status pages that sit behind the same proxy login, for example status.example.com. The Kuma URL host is always included. A status page on any other host gets no password."
+    },
+    "insecure_tls": {
+      "label": "Accept untrusted HTTPS certificates",
+      "description": "Skips certificate checks for every request (self-signed or expired certificates). The API key and passwords can then be read by anyone who can intercept the connection. Leave off unless you trust the network."
     },
     "group_tags": {
       "label": "Group by these tags",
@@ -73,6 +81,8 @@
     "no_url": "Set the Kuma URL in the plugin settings.",
     "no_key": "Set the API key file in the plugin settings.",
     "unauthorized": "Access denied (401/403). Check the credentials.",
+    "unauthorized_host": "Access denied (401/403). The proxy password is not sent to this host: add it to the proxy hosts setting.",
+    "too_large": "The answer is too large to read.",
     "not_found": "Not found (404).",
     "offline": "Server not reachable.",
     "http": "Unexpected answer: HTTP {status}.",
@@ -92,6 +102,7 @@
     "empty": "No data yet.",
     "mode_hierarchy": "Groups as in Kuma",
     "group_none": "No group",
+    "warn_insecure_tls": "Certificate checks are off: the API key and passwords can be read by anyone who can intercept the connection.",
     "warn_http": "This server is reached over plain http: the API key and passwords travel in clear text.",
     "tip_bar": "{up} of {total} checks up",
     "no_xdg_open": "xdg-open is not installed.",

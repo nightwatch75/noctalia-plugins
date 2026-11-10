@@ -136,7 +136,7 @@ h.refresh(1)
 eq(h.count("/api/monitors"), 1, "not called again this session")
 
 -- test: status_page_gets_proxy_pair_only_for_listed_hosts
-h = boot({ status_pages = { "https://status.example.test/status/dev" }, proxy_user = "pu", proxy_password_file = "/secrets/proxy" }, standard)
+h = boot({ status_pages = { "https://status.example.test/status/dev" }, proxy_user = "pu", proxy_password_file = "/secrets/proxy", proxy_hosts = { "Status.Example.Test" } }, standard)
 local pageCalls = 0
 for _, c in ipairs(h.calls) do
     if c.url:find("^https://status.example.test/") then
@@ -149,6 +149,40 @@ end
 eq(pageCalls, 2, "page + heartbeat")
 eq(h.data().pages[1].title, "Board", "page parsed")
 eq(table.concat(h.data().dashboard.groups[1].rows[1].beats, ","), "1,0", "beats from the status page")
+
+-- test: proxy_pair_not_sent_to_unlisted_hosts
+local OTHER = "https://other.example.test/status/x"
+h = boot({ status_pages = { OTHER }, proxy_user = "pu", proxy_password_file = "/secrets/proxy" }, standard)
+for _, c in ipairs(h.calls) do
+    if c.url:find("^https://other.example.test/") then
+        eq(c.basic_username, nil, "no proxy user to an unlisted host"); eq(c.basic_password, nil, "no proxy password to an unlisted host")
+    end
+end
+h = boot({ status_pages = { "https://kuma.example.test/status/x" }, proxy_user = "pu", proxy_password_file = "/secrets/proxy" }, standard)
+eq(h.calls[2].basic_password, "pp", "the Kuma host itself gets the pair")
+
+-- test: unlisted_host_401_names_the_cause
+h = boot({ status_pages = { OTHER }, proxy_user = "pu", proxy_password_file = "/secrets/proxy" }, function(req)
+    if req.url:find("^https://other.example.test/") then return { ok = true, status = 401, body = "" } end
+    return standard(req)
+end)
+eq(h.data().errors.pages[OTHER], "error.unauthorized_host", "401 without the pair says why")
+
+-- test: oversized_body_is_refused
+h = boot({}, function(req)
+    if req.url:sub(-8) == "/metrics" then return ok(string.rep("x", 1048577)) end
+    return standard(req)
+end)
+eq(h.data().errors.metrics, "error.too_large", "metrics over 1 MiB refused")
+eq(h.data().summary.color, "offline", "nothing parsed")
+
+-- test: insecure_tls_only_when_enabled
+h = boot({ status_pages = { "https://status.example.test/status/dev" } }, standard)
+for _, c in ipairs(h.calls) do eq(c.allow_insecure_tls, nil, "verification on by default") end
+eq(h.data().insecureTls, false, "not flagged")
+h = boot({ insecure_tls = true, status_pages = { "https://status.example.test/status/dev" } }, standard)
+for _, c in ipairs(h.calls) do eq(c.allow_insecure_tls, true, "toggle reaches every request") end
+eq(h.data().insecureTls, true, "flagged for the panel")
 
 -- test: key_never_sent_to_status_page_host
 for _, c in ipairs(h.calls) do
@@ -314,7 +348,7 @@ eq(h.calls[#h.calls].basic_password, "ROTATED", "rotated key used on the next cy
 
 -- test: bad_proxy_password_file_blocks_pages_not_metrics
 local PU = "https://status.example.test/status/dev"
-h = boot({ status_pages = { PU }, proxy_user = "pu", proxy_password_file = "/secrets/none" }, standard)
+h = boot({ status_pages = { PU }, proxy_user = "pu", proxy_password_file = "/secrets/none", proxy_hosts = { "status.example.test" } }, standard)
 eq(h.count("/api/status-page/dev"), 0, "no page request without the password")
 eq(h.data().errors.pages[PU], "error.cred_unreadable", "reason on the page")
 eq(h.data().summary.up, 1, "metrics unaffected")

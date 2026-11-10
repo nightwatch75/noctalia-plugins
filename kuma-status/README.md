@@ -88,7 +88,9 @@ refresh, in memory only), so right after a start their bar is mostly empty.
 | `kuma_url` | `string` | empty | Base URL, `http://` or `https://`. Over `http://` the panel shows a warning: the key and password travel in clear text |
 | `api_key_file` | `file` | empty | Path of a file holding the Kuma API key (see Credentials below). Sent only to `kuma_url`: as Basic password on `/metrics`, as Bearer on `/api/monitors` |
 | `proxy_user` | `string` | empty | Basic auth user for status pages behind a reverse proxy. Not a secret |
-| `proxy_password_file` | `file` | empty | Path of a file holding that user's password. Sent, with the user, only to the hosts of the listed status pages |
+| `proxy_password_file` | `file` | empty | Path of a file holding that user's password. Sent, with the user, only to the Kuma URL host and to `proxy_hosts` |
+| `proxy_hosts` | `string_list` | empty | Hosts (`host` or `host:port`) of status pages behind the same proxy login, e.g. `status.example.com`. A status page on any other host gets no password and shows a 401 hint |
+| `insecure_tls` | `bool` | `false` | Accept untrusted HTTPS certificates (self-signed, expired) on every request. The panel shows a warning while it is on |
 | `status_pages` | `string_list` | empty | One URL per page, `https://host/status/<slug>`. Pages added from the panel are kept in the plugin data folder and merged with this list |
 | `kuma3_support` | `bool` | `false` | Call `/api/monitors` (Kuma 3). Off means no call at all. A 404 turns it off until the settings change |
 | `groups_on_open` | `select` | `expanded` | Dashboard groups when the panel opens: `expanded`, `collapsed` or `last` (the groups you closed stay closed; a new group starts open) |
@@ -123,10 +125,14 @@ A file path keeps the secret out of `settings.toml`.
   other programs running as you.
 - A 401 or 403 on a source stops calls to it until the settings change or the
   secret in its file changes.
-- Monitor names come from the server: control characters are removed and the
-  text is cut to 80 characters. Names never reach a command.
+- Monitor names come from the server: control characters and bidi marks are
+  removed and the text is cut to 80 characters. Names never reach a command.
+- Monitored URLs are shown without `user:password@`, query and fragment;
+  "Copy monitored URL" copies the real one.
+- Answers over 1 MiB (4 MiB for status pages) are refused, and a status page
+  shows at most 500 monitors.
 - Commands spawned: `xdg-open <url>` on click or from the right-click menu,
-  with a URL the plugin builds or validates (`http://` or `https://` only), and
+  with a URL the plugin builds or validates (`http://` or `https://`, no spaces), and
   `stat -c %a <file>` to check a credentials file.
 - Kuma exposes the certificate expiry in `/metrics` but not the domain
   expiry: the plugin cannot show the latter.

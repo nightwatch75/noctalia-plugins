@@ -172,8 +172,8 @@ eq(find(P.tree, "kuma-url").props.text, "https://kuma.example.test", "url next t
 
 -- test: row_tooltip_is_the_test_url
 P = boot()
-P.publish({ baseUrl = "https://kuma.example.test", dashboard = dash("tags", { group("x", { row(7, "a", 1, { url = "https://svc.example.test/health" }), row(8, "b", 1) }) }) })
-eq(find(P.tree, "row-7").props.tooltip, "https://svc.example.test/health", "tooltip is the url")
+P.publish({ baseUrl = "https://kuma.example.test", dashboard = dash("tags", { group("x", { row(7, "a", 1, { url = "https://svc.example.test/health?\u{2026}", link = "https://svc.example.test/health?k=1" }), row(8, "b", 1), row(9, "c", 1, { url = "x", link = "https://x.example.test/ --flag=1" }) }) }) })
+eq(find(P.tree, "row-7").props.tooltip, "https://svc.example.test/health?\u{2026}", "tooltip is the masked url")
 eq(find(P.tree, "row-8").props.tooltip, nil, "no url, no tooltip")
 
 -- test: right_click_menu_kuma_page_tested_url_and_copy
@@ -185,13 +185,20 @@ eq(P.menu.onActivate, "onRowMenu", "named global")
 onRowMenu("kuma", "7")
 eq(table.concat(P.runs[#P.runs], "|"), "xdg-open|https://kuma.example.test/dashboard/7", "Kuma page")
 onRowMenu("copy", "7")
-eq(P.copied, "https://svc.example.test/health", "copied url")
+eq(P.copied, "https://svc.example.test/health?k=1", "copies the real url")
 onRowMenu("open", "7")
-eq(table.concat(P.runs[#P.runs], "|"), "xdg-open|https://svc.example.test/health", "browser opens the tested url")
+eq(table.concat(P.runs[#P.runs], "|"), "xdg-open|https://svc.example.test/health?k=1", "browser opens the real url")
 P.menu = nil
 find(P.tree, "name-8").props.onRightClick()
 eq(P.menu.items[1].enabled ~= false, true, "Kuma page always available")
 eq(P.menu.items[2].enabled, false, "no url: tested URL disabled"); eq(P.menu.items[3].enabled, false, "no url: copy disabled")
+
+-- test: open_refuses_a_url_with_spaces
+find(P.tree, "name-9").props.onRightClick()
+eq(P.menu.items[2].enabled, false, "open disabled for a URL with a space")
+local runsBefore = #P.runs
+onRowMenu("open", "9")
+eq(#P.runs, runsBefore, "xdg-open not started")
 
 -- test: cert_line_small_glyph_colored_by_days
 local function certNode(days, level)
