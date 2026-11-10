@@ -17,12 +17,12 @@ end
 
 local GREEN, RED, YELLOW, BLUE = "#98c379", "#e06c75", "#e5c07b", "#61afef"
 
-local function boot()
-    local P = { state = {}, watchers = {}, runs = {}, tree = nil }
+local function boot(cfg, files)
+    local P = { state = {}, watchers = {}, runs = {}, tree = nil, cfg = cfg or {} }
     ui = { column = node("column"), row = node("row"), scroll = node("scroll"), label = node("label"), button = node("button"), box = node("box"), input = node("input"), glyph = node("glyph"), separator = node("separator") }
     panel = { render = function(t) P.tree = t end, setWantsSecondTicks = function() end }
     noctalia = {
-        tr = function(k) return k end,
+        tr = function(k) return k end, getConfig = function(k) return P.cfg[k] end,
         formatTime = function() return "12:00" end,
         nowMs = function() return 1000 end,
         runAsync = function(argv) P.runs[#P.runs + 1] = argv; return true end,
@@ -37,7 +37,7 @@ local function boot()
             watch = function(k, w) P.watchers[k] = P.watchers[k] or {}; table.insert(P.watchers[k], w) end,
         },
     }
-    P.files = {}
+    P.files = files or {}
     noctalia.pluginDataDir = function() return "/data" end
     noctalia.readFile = function(p) return P.files[p] end
     noctalia.writeFile = function(p, c) P.files[p] = c; P.writes = (P.writes or 0) + 1; return true end
@@ -112,7 +112,7 @@ eq(find(P.tree, "ping-2").props.text, "—", "dash when nil")
 -- test: mode_line_says_tags_or_hierarchy
 P = boot()
 P.publish({ baseUrl = "https://k.example.test", dashboard = dash("tags", {}), mode = "tags" })
-eq(find(P.tree, "mode-line").props.text, "panel.mode_tags", "tags")
+eq(find(P.tree, "btn-tag-mode").props.text, "panel.tag_first", "tags: the toggle shows the current view")
 P.publish({ baseUrl = "https://k.example.test", dashboard = dash("hierarchy", {}), mode = "hierarchy" })
 eq(find(P.tree, "mode-line").props.text, "panel.mode_hierarchy", "hierarchy")
 
@@ -176,18 +176,22 @@ P.publish({ baseUrl = "https://kuma.example.test", dashboard = dash("tags", { gr
 eq(find(P.tree, "row-7").props.tooltip, "https://svc.example.test/health", "tooltip is the url")
 eq(find(P.tree, "row-8").props.tooltip, nil, "no url, no tooltip")
 
--- test: right_click_menu_open_browser_and_copy_url
+-- test: right_click_menu_kuma_page_tested_url_and_copy
 find(P.tree, "name-7").props.onRightClick()
-eq(P.menu.items[1].id, "open", "first item"); eq(P.menu.items[2].id, "copy", "second item")
+eq(P.menu.items[1].id, "kuma", "first: the monitor page in Kuma"); eq(P.menu.items[2].id, "open", "second: the tested URL")
+eq(P.menu.items[3].id, "copy", "third: copy")
 eq(P.menu.context, "7", "monitor id rides along")
 eq(P.menu.onActivate, "onRowMenu", "named global")
+onRowMenu("kuma", "7")
+eq(table.concat(P.runs[#P.runs], "|"), "xdg-open|https://kuma.example.test/dashboard/7", "Kuma page")
 onRowMenu("copy", "7")
 eq(P.copied, "https://svc.example.test/health", "copied url")
 onRowMenu("open", "7")
-eq(table.concat(P.runs[#P.runs], "|"), "xdg-open|https://svc.example.test/health", "browser opens the test url")
+eq(table.concat(P.runs[#P.runs], "|"), "xdg-open|https://svc.example.test/health", "browser opens the tested url")
 P.menu = nil
 find(P.tree, "name-8").props.onRightClick()
-eq(P.menu, nil, "no url, no menu")
+eq(P.menu.items[1].enabled ~= false, true, "Kuma page always available")
+eq(P.menu.items[2].enabled, false, "no url: tested URL disabled"); eq(P.menu.items[3].enabled, false, "no url: copy disabled")
 
 -- test: cert_line_small_glyph_colored_by_days
 local function certNode(days)
@@ -206,6 +210,48 @@ eq(certNode(nil), nil, "no cert data, no line")
 -- test: mode_line_has_no_kuma3_hint
 P = boot()
 P.publish({ baseUrl = "https://k.example.test", dashboard = dash("tags", {}), mode = "tags" })
-eq(find(P.tree, "mode-line").props.text, "panel.mode_tags", "plain key; the wording lives in en.json")
+eq(find(P.tree, "btn-tag-mode") ~= nil, true, "toggle in tags mode; no Grouped-by-tag line")
+
+-- test: expand_all_and_collapse_all
+P = boot()
+P.publish({ baseUrl = "https://k.example.test", dashboard = dash("tags", { group("x", { row(1, "a", 1) }), group("y", { row(2, "b", 1) }) }) })
+find(P.tree, "btn-collapse-all").props.onClick()
+eq(find(P.tree, "row-1"), nil, "x collapsed"); eq(find(P.tree, "row-2"), nil, "y collapsed")
+find(P.tree, "gh-x").props.onClick()
+eq(find(P.tree, "row-1") ~= nil, true, "one group reopened by hand"); eq(find(P.tree, "row-2"), nil, "the other stays closed")
+find(P.tree, "btn-expand-all").props.onClick()
+eq(find(P.tree, "row-1") ~= nil and find(P.tree, "row-2") ~= nil, true, "expand all")
+
+-- test: start_collapsed_setting
+P = boot({ start_collapsed = true })
+P.publish({ baseUrl = "https://k.example.test", dashboard = dash("tags", { group("x", { row(1, "a", 1) }) }) })
+eq(find(P.tree, "gh-x") ~= nil, true, "header shown"); eq(find(P.tree, "row-1"), nil, "rows hidden at start")
+find(P.tree, "gh-x").props.onClick()
+eq(find(P.tree, "row-1") ~= nil, true, "a click opens it")
+
+-- test: start_tab_setting_and_last_used
+P = boot({ start_tab = "pages" })
+eq(find(P.tree, "tab-pages").props.visible, true, "opens on the pages tab")
+P = boot({ start_tab = "dashboard" })
+eq(find(P.tree, "tab-dashboard").props.visible, true, "opens on the dashboard")
+P = boot({ start_tab = "last" }, { ["/data/last_tab.txt"] = "pages" })
+eq(find(P.tree, "tab-pages").props.visible, true, "last used tab restored")
+find(P.tree, "btn-tab-dashboard").props.onClick()
+eq(P.files["/data/last_tab.txt"], "dashboard", "tab choice remembered")
+
+-- test: tag_view_toggle_sends_request
+P = boot()
+P.publish({ baseUrl = "https://k.example.test", tagMode = "first", dashboard = dash("tags", {}) })
+find(P.tree, "btn-tag-mode").props.onClick()
+eq(P.state["kuma_status_request"].action, "tag_mode", "action"); eq(P.state["kuma_status_request"].value, "all", "switch to all tags")
+P.publish({ baseUrl = "https://k.example.test", tagMode = "all", dashboard = dash("tags", {}) })
+eq(find(P.tree, "btn-tag-mode").props.text, "panel.tag_all", "shows the current view")
+find(P.tree, "btn-tag-mode").props.onClick()
+eq(P.state["kuma_status_request"].value, "first", "and back")
+
+-- test: hierarchy_mode_has_no_tag_toggle
+P = boot()
+P.publish({ baseUrl = "https://k.example.test", dashboard = dash("hierarchy", {}), mode = "hierarchy" })
+eq(find(P.tree, "btn-tag-mode"), nil, "no toggle"); eq(find(P.tree, "mode-line").props.text, "panel.mode_hierarchy", "plain label")
 
 print("panel_dash_test OK")

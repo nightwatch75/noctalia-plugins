@@ -111,4 +111,18 @@ d = K.buildDashboard(set(metric(1, "a", 1, { url = "https://u.example.test/", ce
 eq(d.groups[1].rows[1].url, "https://u.example.test/", "row url")
 eq(d.groups[1].rows[1].certDays, 12, "row cert days")
 
+-- test: tags_first_tag_only_puts_a_monitor_in_one_group
+local multi = set(
+    metric(1, "a", 1, { tags = { "x", "y" } }),
+    metric(2, "b", 0, { tags = { "y" } }),
+    metric(3, "c", 1, { tags = {} })
+)
+d = K.buildDashboard(multi, nil, {}, {}, { firstTagOnly = true })
+eq(#d.groups, 3, "x, y and untagged")
+eq(d.groups[1].name, "x", "x"); eq(#d.groups[1].rows, 1, "a only in x")
+eq(d.groups[2].name, "y", "y"); eq(#d.groups[2].rows, 1, "y holds just b"); eq(d.groups[2].rows[1].name, "b", "b")
+eq(d.groups[3].name, "", "untagged last")
+d = K.buildDashboard(multi, nil, {}, {})
+eq(#d.groups[2].rows, 2, "default keeps duplicates: y holds a and b")
+
 print("model_test OK")

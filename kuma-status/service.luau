@@ -10,7 +10,9 @@
 --                       mode = "hierarchy"|"tags", baseUrl, plainHttp }
 --                     summary.color is "offline" when /metrics is unusable.
 --   UI entries send   "kuma_status_request" = { nonce, action = "refresh" }
---                     (a nonce already seen is ignored).
+--                     or { nonce, action = "tag_mode", value = "first"|"all" }
+--                     (rebuilds the grouping from the last data, no network;
+--                     a nonce already seen is ignored).
 --
 -- Sources per cycle (refresh_seconds, default 60):
 --   /metrics            Basic, user "kuma", password = api_key (status, ping, tags)
@@ -42,6 +44,8 @@ local v3Off = false  -- /api/monitors answered 404: stop asking this session
 local blocked = { metrics = false, monitors = false, pages = {} }
 local reasons = { pages = {} } -- text shown for blocked sources
 local buffer = {}
+local tagMode = "first"  -- "first": a monitor in its first tag only; "all": in every tag
+local last = nil         -- inputs of the last publish, to rebuild the view without network
 
 local function tr(key, args)
     return noctalia.tr(key, args)
@@ -90,9 +94,10 @@ local function publish(cfg, metrics, structure, beatsById, pages, errors)
     nonce += 1
     local summary = K.summarize(metrics or {})
     if metrics == nil then summary.color = "offline" end
+    last = { cfg, metrics, structure, beatsById, pages, errors }
     local dashboard = nil
     if metrics ~= nil then
-        dashboard = K.buildDashboard(metrics, structure, beatsById, buffer)
+        dashboard = K.buildDashboard(metrics, structure, beatsById, buffer, { firstTagOnly = tagMode == "first" })
     end
     -- from the configured URLs, so a page that failed still flags clear text
     local plain = cfg.base ~= nil and cfg.base:sub(1, 7) == "http://"
@@ -109,6 +114,7 @@ local function publish(cfg, metrics, structure, beatsById, pages, errors)
         addedUrls = cfg.added,
         errors = errors,
         mode = structure ~= nil and "hierarchy" or "tags",
+        tagMode = tagMode,
         baseUrl = cfg.base or "",
         plainHttp = plain,
     })
@@ -286,9 +292,13 @@ end
 local request0 = noctalia.state.get(REQUEST_KEY)
 if type(request0) == "table" then seenRequest = request0.nonce end
 noctalia.state.watch(REQUEST_KEY, function(req)
-    if type(req) == "table" and req.action == "refresh" and req.nonce ~= seenRequest then
-        seenRequest = req.nonce
+    if type(req) ~= "table" or req.nonce == seenRequest then return end
+    seenRequest = req.nonce
+    if req.action == "refresh" then
         refresh()
+    elseif req.action == "tag_mode" and (req.value == "first" or req.value == "all") then
+        tagMode = req.value
+        if last ~= nil then publish(table.unpack(last)) end
     end
 end)
 

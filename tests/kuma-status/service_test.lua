@@ -230,4 +230,23 @@ h.refresh(1)
 eq(h.data().pageUrls[1], SET, "settings first"); eq(h.data().pageUrls[2], ADD, "then added"); eq(#h.data().pageUrls, 2, "duplicate dropped")
 eq(h.data().addedUrls[1], ADD, "added list published for the panel")
 
+-- test: tag_view_defaults_to_first_tag_and_switches_without_network
+local function multiTag(req)
+    if req.url:sub(-8) == "/metrics" then
+        return ok(table.concat({
+            series("monitor_status", 1, "svc-a", 1, ',x="",y=""'),
+            series("monitor_status", 2, "svc-b", 1, ',y=""'),
+        }, "\n"))
+    end
+    return standard(req)
+end
+h = boot({}, multiTag)
+eq(h.data().tagMode, "first", "default view")
+eq(#h.data().dashboard.groups[1].rows + #h.data().dashboard.groups[2].rows, 2, "each monitor once")
+local calls = #h.calls
+noctalia.state.set("kuma_status_request", { nonce = 9, action = "tag_mode", value = "all" })
+eq(h.data().tagMode, "all", "switched")
+eq(#h.data().dashboard.groups[2].rows, 2, "duplicates back: y holds both")
+eq(#h.calls, calls, "no new network call")
+
 print("service_test OK")

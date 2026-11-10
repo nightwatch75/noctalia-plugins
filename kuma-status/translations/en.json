@@ -44,6 +44,19 @@
     "bar_label": {
       "label": "Bar text",
       "description": "Text shown to the left of the heart icon. Leave empty to hide it."
+    },
+    "start_collapsed": {
+      "label": "Start collapsed",
+      "description": "Open the Dashboard with every group collapsed."
+    },
+    "start_tab": {
+      "label": "Opens on",
+      "description": "Tab shown when the panel opens.",
+      "options": {
+        "dashboard": "Dashboard",
+        "pages": "Status pages",
+        "last": "Last used"
+      }
     }
   },
   "error": {
@@ -64,7 +77,6 @@
     "tip_refresh": "Refresh now",
     "updated": "Updated {time}",
     "empty": "No data yet.",
-    "mode_tags": "Grouped by tag",
     "mode_hierarchy": "Groups as in Kuma",
     "group_none": "No group",
     "warn_http": "This server is reached over plain http: the API key and passwords travel in clear text.",
@@ -80,10 +92,17 @@
     "add_bad_url": "Not a valid status page URL (https://host/status/<slug>).",
     "tip_add": "Add status page",
     "tip_remove_page": "Remove this page (added from here)",
-    "menu_open": "Open Browser",
-    "menu_copy": "Copy URL",
+    "menu_open": "Open monitored URL",
+    "menu_copy": "Copy monitored URL",
     "cert_days": "Certificate expires in {days}d",
-    "cert_expired": "Certificate expired"
+    "cert_expired": "Certificate expired",
+    "menu_kuma": "Open monitor in Kuma",
+    "tag_first": "First tag only",
+    "tag_all": "All tags (duplicates)",
+    "tip_tag_first": "Each monitor appears once, under its first tag. Click to show it under every tag.",
+    "tip_tag_all": "A monitor with several tags appears under each. Click to show it once, under its first tag.",
+    "tip_expand_all": "Expand all groups",
+    "tip_collapse_all": "Collapse all groups"
   },
   "tooltip_down": "DOWN",
   "tooltip_more": "+{count} more",

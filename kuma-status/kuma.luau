@@ -322,9 +322,10 @@ end
 -- Groups for the Dashboard tab. With a Kuma 3 structure the groups are the
 -- real group monitors (nested ones named "Parent / Child"); without it, one
 -- group per tag (a multi-tag monitor appears in several) and an unnamed group
--- last for what has no group or tag. Counts here are per group; the bar uses
+-- last for what has no group or tag; opts.firstTagOnly puts a monitor only in
+-- its first tag (tags are sorted, so alphabetical). Counts here are per group; the bar uses
 -- summarize, which counts every monitor once.
-function K.buildDashboard(metrics, structure, beats, buffer)
+function K.buildDashboard(metrics, structure, beats, buffer, opts)
     local groups = {}
     if structure ~= nil then
         local function fullName(id)
@@ -369,18 +370,21 @@ function K.buildDashboard(metrics, structure, beats, buffer)
         return { mode = "hierarchy", groups = groups }
     end
     local byTag, untagged, names = {}, {}, {}
+    local firstOnly = opts ~= nil and opts.firstTagOnly == true
     for id, m in pairs(metrics) do
         if m.type ~= "group" then
             local r = makeRow(id, m, nil, beats, buffer)
             if #m.tags == 0 then
                 untagged[#untagged + 1] = r
             end
-            for _, t in ipairs(m.tags) do
-                if byTag[t] == nil then
-                    byTag[t] = {}
-                    names[#names + 1] = t
+            for i, t in ipairs(m.tags) do
+                if i == 1 or not firstOnly then
+                    if byTag[t] == nil then
+                        byTag[t] = {}
+                        names[#names + 1] = t
+                    end
+                    table.insert(byTag[t], r)
                 end
-                table.insert(byTag[t], r)
             end
         end
     end

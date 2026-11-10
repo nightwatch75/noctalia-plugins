@@ -43,9 +43,10 @@ noctalia msg panel-toggle nightwatch75/kuma-status:panel
   of the last 40 heartbeats. Under a check, in small, the certificate expiry
   when Kuma reports it (colored glyph: green over 30 days, yellow over 7, red
   below). Click a group to collapse it, a monitor name to open its page in
-  Kuma. Right click a check for **Open Browser** and **Copy URL** (the URL
-  the check hits); hovering a row shows the same URL. A line under the tabs
-  says how groups are built.
+  Kuma. Right click a monitor for **Open monitor in Kuma**,
+  **Open monitored URL** and **Copy monitored URL** (the URL the monitor
+  tests); hovering a row shows that URL. A line of buttons above the list
+  has the view choice (see below) and **expand all** / **collapse all**.
 - **Status pages tab:** type a status page URL in the field and press `+` to
   add it here; the trash button removes pages added this way. Pages from the
   `Status pages` setting are listed too (remove them in the settings). The
@@ -57,7 +58,7 @@ How groups are built:
 | Server | Groups |
 | --- | --- |
 | Kuma 3 with **Kuma 3 support** on | The real groups, nested ones as `Parent / Child`; paused monitors are grey |
-| Kuma 2 | One group per tag (a monitor with two tags appears twice; the bar counts it once). Paused monitors are not listed: Kuma exports nothing for them |
+| Kuma 2 | One group per tag. By default a monitor appears once, under its first tag (tags sorted alphabetically). The view button switches to **All tags (duplicates)**: a monitor with two tags then appears twice; the bar counts it once either way. Paused monitors are not listed: Kuma exports nothing for them |
 
 The history bar uses the status page data for monitors that are on one of your
 listed pages. The others fill from the plugin's own polls (one cell per
@@ -72,6 +73,8 @@ refresh, in memory only), so right after a start their bar is mostly empty.
 | `proxy_user`, `proxy_password` | `string` | empty | One Basic auth pair for status pages behind a reverse proxy. Sent only to the hosts of the listed status pages |
 | `status_pages` | `string_list` | empty | One URL per page, `https://host/status/<slug>`. Pages added from the panel are kept in the plugin data folder and merged with this list |
 | `kuma3_support` | `bool` | `false` | Call `/api/monitors` (Kuma 3). Off means no call at all. A 404 turns it off until the settings change |
+| `start_collapsed` | `bool` | `false` | Open the Dashboard with every group collapsed |
+| `start_tab` | `select` | `dashboard` | Tab the panel opens on: `dashboard`, `pages` or `last` (the one you used last) |
 | `bar_display` | `select` | `counts` | `counts`: glyph, up and down numbers. `color`: glyph color only |
 | `refresh_seconds` | `int` | `60` | Seconds between updates, 20 to 3600. Kuma caches status pages for a minute |
 | `glyph` | `glyph` | `heartbeat` | Bar icon (per widget) |

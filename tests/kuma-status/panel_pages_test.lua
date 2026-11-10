@@ -13,12 +13,12 @@ local function find(n, key)
     return nil
 end
 
-local function boot()
-    local P = { state = {}, watchers = {}, runs = {}, tree = nil }
+local function boot(cfg, files)
+    local P = { state = {}, watchers = {}, runs = {}, tree = nil, cfg = cfg or {} }
     ui = { column = node("column"), row = node("row"), scroll = node("scroll"), label = node("label"), button = node("button"), box = node("box"), input = node("input"), glyph = node("glyph") }
     panel = { render = function(t) P.tree = t end }
     noctalia = {
-        tr = function(k) return k end, formatTime = function() return "12:00" end, nowMs = function() return 1000 end,
+        tr = function(k) return k end, getConfig = function(k) return P.cfg[k] end, formatTime = function() return "12:00" end, nowMs = function() return 1000 end,
         runAsync = function(argv) P.runs[#P.runs + 1] = argv; return true end,
         commandExists = function() return true end, notifyError = function() end,
         state = {
@@ -27,7 +27,7 @@ local function boot()
             watch = function(k, w) P.watchers[k] = P.watchers[k] or {}; table.insert(P.watchers[k], w) end,
         },
     }
-    P.files = {}
+    P.files = files or {}
     noctalia.pluginDataDir = function() return "/data" end
     noctalia.readFile = function(p) return P.files[p] end
     noctalia.writeFile = function(p, c) P.files[p] = c; P.writes = (P.writes or 0) + 1; return true end

@@ -1,6 +1,6 @@
 id = "nightwatch75/kuma-status"
 name = "Kuma Status"
-version = "0.2.0"
+version = "0.3.0"
 plugin_api = 32
 author = "nightwatch75"
 license = "MIT"
@@ -69,6 +69,25 @@ description_key = "settings.refresh_seconds.description"
 default = 60
 min = 20
 max = 3600
+
+[[setting]]
+key = "start_collapsed"
+type = "bool"
+label_key = "settings.start_collapsed.label"
+description_key = "settings.start_collapsed.description"
+default = false
+
+[[setting]]
+key = "start_tab"
+type = "select"
+label_key = "settings.start_tab.label"
+description_key = "settings.start_tab.description"
+default = "dashboard"
+options = [
+  { value = "dashboard", label_key = "settings.start_tab.options.dashboard" },
+  { value = "pages", label_key = "settings.start_tab.options.pages" },
+  { value = "last", label_key = "settings.start_tab.options.last" },
+]
 
 [[service]]
 id = "service"
