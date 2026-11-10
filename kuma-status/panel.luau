@@ -244,13 +244,12 @@ local function pagesView()
         out[1] = ui.label({ key = "pages-empty", text = tr("panel.pages_empty"), color = "on_surface_variant" })
         return out
     end
-    local bySource, added = {}, {}
+    local bySource = {}
     for _, sp in ipairs(data.pages or {}) do bySource[sp.source] = sp end
-    for _, u in ipairs(data.addedUrls or {}) do added[u] = true end
     local pageErrors = data.errors and data.errors.pages or {}
     for i, url in ipairs(urls) do
         local sp = bySource[url]
-        local removeBtn = added[url] and ui.button({ key = "btn-del-page-" .. i, glyph = "trash", variant = "ghost", tooltip = tr("panel.tip_remove_page"), onClick = function() removePage(url) end }) or nil
+        local removeBtn = ui.button({ key = "btn-del-page-" .. i, glyph = "trash", variant = "ghost", tooltip = tr("panel.tip_remove_page"), onClick = function() removePage(url) end })
         if sp == nil then
             out[#out + 1] = ui.column({ key = "page-" .. i, gap = 2 }, {
                 ui.row({ key = "page-head-" .. i, gap = 6, align = "center" }, {
@@ -261,11 +260,19 @@ local function pagesView()
             })
         else
             local function open() openUrl(sp.url) end
+            local head = { ui.label({ key = "page-title-" .. i, text = sp.title, maxLines = 1, fontWeight = "bold" }) }
+            if sp.description ~= "" then
+                head[#head + 1] = ui.label({ key = "page-desc-" .. i, text = sp.description, fontSize = 11, flexGrow = 1, textAlign = "end", maxLines = 1, color = "on_surface_variant" })
+            else
+                head[#head + 1] = ui.box({ flexGrow = 1 })
+            end
+            head[#head + 1] = ui.button({ key = "btn-open-page-" .. i, glyph = "external-link", variant = "ghost", tooltip = tr("panel.tip_open_page"), onClick = open })
+            head[#head + 1] = removeBtn
             local children = {
-                ui.row({ key = "page-head-" .. i, gap = 6, align = "center" }, {
-                    ui.label({ key = "page-title-" .. i, text = sp.title, flexGrow = 1, maxLines = 1, fontWeight = "bold" }),
-                    ui.button({ key = "btn-open-page-" .. i, glyph = "external-link", variant = "ghost", tooltip = tr("panel.tip_open_page"), onClick = open }),
-                    removeBtn,
+                ui.row({ key = "page-head-" .. i, gap = 6, align = "center" }, head),
+                ui.button({
+                    key = "page-link-" .. i, text = sp.url, variant = "ghost", contentAlign = "start", tooltip = tr("panel.tip_copy_url"),
+                    onClick = function() noctalia.copyToClipboard(sp.url, "text/plain") end,
                 }),
             }
             for j, g in ipairs(sp.groups) do

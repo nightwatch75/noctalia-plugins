@@ -101,6 +101,11 @@ for _, u in ipairs({ "ftp://x", "https://", "javascript:alert(1)", "https://a b.
     eq(K.baseUrl(u), nil, "rejected " .. u)
 end
 
+-- test: statuspage_description_is_sanitized
+local sp0 = K.parseStatusPage({ config = { title = "T", description = "a\nb" }, publicGroupList = {} }, { heartbeatList = {} }, "https://h.example.test", "dev")
+eq(sp0.description, "a b", "description cleaned")
+eq(K.parseStatusPage({ config = {}, publicGroupList = {} }, {}, "https://h.example.test", "dev").description, "", "missing description")
+
 -- test: statuspage_keeps_last_40_beats
 local beats = {}
 for i = 1, 60 do beats[i] = { status = i % 2, time = "t" .. i, ping = i } end

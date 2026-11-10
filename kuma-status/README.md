@@ -57,9 +57,9 @@ noctalia msg panel-toggle nightwatch75/kuma-status:panel
   tests); hovering a row shows that URL. A line of buttons above the list
   has the view choice (see below) and **expand all** / **collapse all**.
 - **Status pages tab:** type a status page URL in the field and press `+` to
-  add it here; the trash button removes pages added this way. Pages from the
-  `Status pages` setting are listed too (remove them in the settings). The
-  open button next to a title opens the page.
+  add it; the trash button removes it. The open button next to a title opens
+  the page; the URL under the title copies it on click; the page description
+  shows at the right of the title.
 - **Certificates tab:** every monitor for which Kuma reports a certificate
   expiry, shortest first, grouped by how close the expiry is: **Expired**,
   **Expiring now** (up to 7 days), **Expiring soon** (8 to 30 days) and
@@ -91,7 +91,6 @@ refresh, in memory only), so right after a start their bar is mostly empty.
 | `proxy_password_file` | `file` | empty | Path of a file holding that user's password. Sent, with the user, only to the Kuma URL host and to `proxy_hosts` |
 | `proxy_hosts` | `string_list` | empty | Hosts (`host` or `host:port`) of status pages behind the same proxy login, e.g. `status.example.com`. A status page on any other host gets no password and shows a 401 hint |
 | `insecure_tls` | `bool` | `false` | Accept untrusted HTTPS certificates (self-signed, expired) on every request. The panel shows a warning while it is on |
-| `status_pages` | `string_list` | empty | One URL per page, `https://host/status/<slug>`. Pages added from the panel are kept in the plugin data folder and merged with this list |
 | `kuma3_support` | `bool` | `false` | Call `/api/monitors` (Kuma 3). Off means no call at all. A 404 turns it off until the settings change |
 | `groups_on_open` | `select` | `expanded` | Dashboard groups when the panel opens: `expanded`, `collapsed` or `last` (the groups you closed stay closed; a new group starts open) |
 | `start_tab` | `select` | `dashboard` | Tab the panel opens on: `dashboard`, `pages`, `certs` or `last` (the one you used last) |

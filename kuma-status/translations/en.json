@@ -13,10 +13,6 @@
       "label": "Status page user",
       "description": "Basic auth user in front of the status pages. Empty if they are public."
     },
-    "status_pages": {
-      "label": "Status pages",
-      "description": "One URL per line, like https://host/status/<slug>."
-    },
     "kuma3_support": {
       "label": "Kuma 3 support",
       "description": "Show the real groups from /api/monitors. Leave off on Kuma 2."
@@ -106,9 +102,10 @@
     "warn_http": "This server is reached over plain http: the API key and passwords travel in clear text.",
     "tip_bar": "{up} of {total} checks up",
     "no_xdg_open": "xdg-open is not installed.",
-    "pages_empty": "No status pages configured. Add their URLs in the plugin settings.",
+    "pages_empty": "No status pages yet. Add a URL above.",
     "page_no_data": "No data.",
     "tip_open_page": "Open the status page",
+    "tip_copy_url": "Copy the URL",
     "empty_groups": "No monitors to show.",
     "tip_settings": "Plugin settings",
     "tip_close": "Close",

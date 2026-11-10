@@ -3,7 +3,7 @@
 -- The widget and the panel only render what this publishes.
 --
 --   publishes "kuma_status_data" = { nonce, ts, summary, dashboard?, certs?,
---       pages (each with .source), pageUrls, addedUrls, errors = { metrics?,
+--       pages (each with .source), pageUrls, errors = { metrics?,
 --       monitors?, pages = {[url]=msg} }, mode, tagMode, credWarn, baseUrl,
 --       plainHttp, insecureTls }; summary.color is "offline" without /metrics.
 --   reads "kuma_status_request" = { nonce, action = "refresh" }
@@ -90,29 +90,13 @@ local function proxyHostSet()
 end
 
 local function readConfig()
-    -- setting first, then pages added from the panel; one entry per page
-    local pages, seen = {}, {}
-    local function add(url)
-        if type(url) ~= "string" then return end
-        local origin, slug = K.statusPageUrl(url)
-        local key = origin and (origin .. "/status/" .. slug) or url
-        if not seen[key] then
-            seen[key] = true
-            pages[#pages + 1] = url
-        end
-    end
-    local setting = noctalia.getConfig("status_pages")
-    for _, url in ipairs(type(setting) == "table" and setting or {}) do add(url) end
-    local added = store.load()
-    for _, url in ipairs(added) do add(url) end
     local interval = tonumber(noctalia.getConfig("refresh_seconds")) or 60
     return {
         base = K.baseUrl(noctalia.getConfig("kuma_url") or ""),
         keyFile = noctalia.getConfig("api_key_file") or "",
         proxyUser = noctalia.getConfig("proxy_user") or "",
         proxyFile = noctalia.getConfig("proxy_password_file") or "",
-        pages = pages,
-        added = added,
+        pages = store.load(),
         groupTags = groupTagList(),
         proxyHosts = proxyHostSet(),
         insecure = noctalia.getConfig("insecure_tls") == true,
@@ -192,7 +176,6 @@ function publish(cfg, metrics, structure, beatsById, pages, errors)
         dashboard = dashboard,
         pages = pages,
         pageUrls = cfg.pages,
-        addedUrls = cfg.added,
         errors = errors,
         mode = structure ~= nil and "hierarchy" or "tags",
         tagMode = tagMode,

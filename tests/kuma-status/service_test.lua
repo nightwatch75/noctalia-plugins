@@ -35,6 +35,9 @@ local function boot(cfg, respond, files)
     }
     for k, v in pairs(cfg) do defaults[k] = v end
     H.cfg = defaults
+    if #defaults.status_pages > 0 and files == nil then
+        H.files["/data/status_pages.txt"] = table.concat(defaults.status_pages, "\n") .. "\n"
+    end
     H.files["/secrets/api-key"] = H.files["/secrets/api-key"] or "KEY-SECRET\n"
     H.files["/secrets/proxy"] = H.files["/secrets/proxy"] or "pp\n"
     H.runs = {}
@@ -270,14 +273,13 @@ h = boot({ status_pages = { "http://status.example.test/status/dev" } }, functio
 end)
 eq(h.data().plainHttp, true, "a failed http page still sent the proxy password in clear")
 
--- test: added_pages_are_merged_with_settings_without_duplicates
-local SET, ADD = "https://a.example.test/status/dev", "https://b.example.test/status/dev"
-h = boot({ status_pages = { SET } }, function(req) return standard(req) end)
-eq(h.count("/api/status-page/dev"), 1, "settings page only")
-h.files["/data/status_pages.txt"] = ADD .. "\n" .. SET .. "\n"
+-- test: pages_come_from_the_store_without_duplicates
+local ADD = "https://b.example.test/status/dev"
+h = boot({}, function(req) return standard(req) end)
+eq(#h.data().pageUrls, 0, "no pages by default")
+h.files["/data/status_pages.txt"] = ADD .. "\n" .. ADD .. "\n"
 h.refresh(1)
-eq(h.data().pageUrls[1], SET, "settings first"); eq(h.data().pageUrls[2], ADD, "then added"); eq(#h.data().pageUrls, 2, "duplicate dropped")
-eq(h.data().addedUrls[1], ADD, "added list published for the panel")
+eq(#h.data().pageUrls, 1, "duplicate dropped"); eq(h.data().pageUrls[1], ADD, "page listed")
 
 -- test: tag_view_defaults_to_first_tag_and_switches_without_network
 local function multiTag(req)

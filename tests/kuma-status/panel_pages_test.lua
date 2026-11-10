@@ -87,7 +87,7 @@ eq(#find(find(P.tree, "tab-pages"), "bar-2").children, 40, "40 cells without bea
 
 -- test: add_page_valid_is_saved_normalized_and_refreshes
 P = boot()
-P.publish({ pageUrls = {}, pages = {}, addedUrls = {} })
+P.publish({ pageUrls = {}, pages = {} })
 local before = P.state["kuma_status_request"].nonce
 find(P.tree, "add-input").props.onChange("https://Status.example.test/status/Dev/")
 find(P.tree, "btn-add-page").props.onClick()
@@ -99,19 +99,31 @@ eq(P.files["/data/status_pages.txt"], "https://status.example.test/status/dev\n"
 
 -- test: add_page_invalid_shows_error_and_saves_nothing
 P = boot()
-P.publish({ pageUrls = {}, pages = {}, addedUrls = {} })
+P.publish({ pageUrls = {}, pages = {} })
 find(P.tree, "add-input").props.onChange("ftp://x.example.test/status/dev")
 find(P.tree, "btn-add-page").props.onClick()
 eq(find(P.tree, "add-err").props.text, "panel.add_bad_url", "error shown")
 eq(P.writes, nil, "nothing written")
 
--- test: only_added_pages_can_be_removed
+-- test: every_page_can_be_removed
 P = boot()
 P.files["/data/status_pages.txt"] = URL .. "\n"
-P.publish({ pageUrls = { URL, "https://other.example.test/status/x" }, pages = { PAGE }, addedUrls = { URL } })
-eq(find(P.tree, "btn-del-page-1") ~= nil, true, "added page has a remove button")
-eq(find(P.tree, "btn-del-page-2"), nil, "settings page has none")
+P.publish({ pageUrls = { URL, "https://other.example.test/status/x" }, pages = { PAGE } })
+eq(find(P.tree, "btn-del-page-1") ~= nil, true, "remove button on a loaded page")
+eq(find(P.tree, "btn-del-page-2") ~= nil, true, "remove button on a failed page")
 find(P.tree, "btn-del-page-1").props.onClick()
 eq(P.files["/data/status_pages.txt"], "", "removed from the store")
+
+-- test: page_url_under_title_copies_and_description_beside_it
+P = boot()
+PAGE.description = "Public status"
+P.publish({ pageUrls = { URL }, pages = { PAGE } })
+eq(find(P.tree, "page-desc-1").props.text, "Public status", "description")
+eq(find(P.tree, "page-link-1").props.text, URL, "url shown")
+find(P.tree, "page-link-1").props.onClick()
+eq(P.copied, URL, "url copied")
+PAGE.description = ""
+P.publish({ pageUrls = { URL }, pages = { PAGE } })
+eq(find(P.tree, "page-desc-1"), nil, "no description, no label")
 
 print("panel_pages_test OK")
