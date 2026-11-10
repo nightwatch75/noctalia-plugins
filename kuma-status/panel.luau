@@ -25,8 +25,9 @@ local REQUEST_KEY = "kuma_status_request"
 
 local data = nil
 local tab = "dashboard"
-local collapsed = {}      -- group key -> bool; nil means "the start_collapsed default"
-local startCollapsed = false
+local collapsed = {}      -- group key -> bool; nil means "the groups_on_open default"
+local defaultCollapsed = false -- groups_on_open = "collapsed"
+local rememberGroups = false   -- groups_on_open = "last"
 local isOpen = false
 local requestNonce = math.floor(noctalia.nowMs())
 local addText, addRev, addError = "", 0, false
@@ -113,12 +114,37 @@ local render
 
 local function isCollapsed(key)
     local v = collapsed[key]
-    if v == nil then return startCollapsed end
+    if v == nil then return defaultCollapsed end
     return v
+end
+
+-- "Last state": the collapsed group names, one per line, in the plugin data
+-- folder. A group never seen before is not in the file, so it starts open.
+local function groupsFile()
+    local dir = noctalia.pluginDataDir()
+    return dir and (dir .. "/collapsed_groups.txt") or nil
+end
+
+local function loadCollapsed()
+    local f = groupsFile()
+    local text = f and noctalia.readFile(f) or nil
+    for line in (text or ""):gmatch("[^\n]+") do collapsed[line] = true end
+end
+
+local function saveCollapsed()
+    local f = groupsFile()
+    if not rememberGroups or f == nil then return end
+    local keys = {}
+    for key, v in pairs(collapsed) do
+        if v then keys[#keys + 1] = key end
+    end
+    table.sort(keys)
+    noctalia.writeFile(f, #keys > 0 and (table.concat(keys, "\n") .. "\n") or "")
 end
 
 local function toggleGroup(key)
     collapsed[key] = not isCollapsed(key)
+    saveCollapsed()
     render()
 end
 
@@ -126,6 +152,7 @@ local function setAllCollapsed(value)
     for _, g in ipairs(data and data.dashboard and data.dashboard.groups or {}) do
         collapsed[R.groupKey(g)] = value
     end
+    saveCollapsed()
     render()
 end
 
@@ -319,8 +346,11 @@ end)
 function onOpen(_context)
     isOpen = true
     data = noctalia.state.get(DATA_KEY)
-    startCollapsed = noctalia.getConfig("start_collapsed") == true
+    local mode = noctalia.getConfig("groups_on_open")
+    defaultCollapsed = mode == "collapsed"
+    rememberGroups = mode == "last"
     collapsed = {}
+    if rememberGroups then loadCollapsed() end
     tab = startTab()
     requestRefresh()
     render()

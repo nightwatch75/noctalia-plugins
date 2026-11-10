@@ -45,10 +45,6 @@
       "label": "Bar text",
       "description": "Text shown to the left of the heart icon. Leave empty to hide it."
     },
-    "start_collapsed": {
-      "label": "Start collapsed",
-      "description": "Open the Dashboard with every group collapsed."
-    },
     "start_tab": {
       "label": "Opens on",
       "description": "Tab shown when the panel opens.",
@@ -56,6 +52,15 @@
         "dashboard": "Dashboard",
         "pages": "Status pages",
         "last": "Last used"
+      }
+    },
+    "groups_on_open": {
+      "label": "Groups on open",
+      "description": "How the Dashboard groups look when the panel opens.",
+      "options": {
+        "expanded": "Expanded",
+        "collapsed": "Collapsed",
+        "last": "Last state (remembers the groups you closed)"
       }
     }
   },

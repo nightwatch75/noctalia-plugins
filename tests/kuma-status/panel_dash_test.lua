@@ -222,8 +222,8 @@ eq(find(P.tree, "row-1") ~= nil, true, "one group reopened by hand"); eq(find(P.
 find(P.tree, "btn-expand-all").props.onClick()
 eq(find(P.tree, "row-1") ~= nil and find(P.tree, "row-2") ~= nil, true, "expand all")
 
--- test: start_collapsed_setting
-P = boot({ start_collapsed = true })
+-- test: groups_on_open_collapsed
+P = boot({ groups_on_open = "collapsed" })
 P.publish({ baseUrl = "https://k.example.test", dashboard = dash("tags", { group("x", { row(1, "a", 1) }) }) })
 eq(find(P.tree, "gh-x") ~= nil, true, "header shown"); eq(find(P.tree, "row-1"), nil, "rows hidden at start")
 find(P.tree, "gh-x").props.onClick()
@@ -253,5 +253,34 @@ eq(P.state["kuma_status_request"].value, "first", "and back")
 P = boot()
 P.publish({ baseUrl = "https://k.example.test", dashboard = dash("hierarchy", {}), mode = "hierarchy" })
 eq(find(P.tree, "btn-tag-mode"), nil, "no toggle"); eq(find(P.tree, "mode-line").props.text, "panel.mode_hierarchy", "plain label")
+
+-- test: groups_on_open_last_restores_collapsed_groups
+local FILE = "/data/collapsed_groups.txt"
+local function two() return { baseUrl = "https://k.example.test", dashboard = dash("tags", { group("x", { row(1, "a", 1) }), group("y", { row(2, "b", 1) }) }) } end
+P = boot({ groups_on_open = "last" }, { [FILE] = "x\n" })
+P.publish(two())
+eq(find(P.tree, "row-1"), nil, "x was left collapsed"); eq(find(P.tree, "row-2") ~= nil, true, "y is open")
+find(P.tree, "gh-y").props.onClick()
+eq(P.files[FILE], "x\ny\n", "saved on every click, sorted")
+find(P.tree, "gh-x").props.onClick()
+eq(P.files[FILE], "y\n", "expanding removes it")
+find(P.tree, "btn-expand-all").props.onClick()
+eq(P.files[FILE], "", "expand all saved")
+find(P.tree, "btn-collapse-all").props.onClick()
+eq(P.files[FILE], "x\ny\n", "collapse all saved")
+
+-- test: groups_on_open_last_new_group_starts_open
+P = boot({ groups_on_open = "last" }, { [FILE] = "x\n" })
+local d3 = two()
+table.insert(d3.dashboard.groups, group("z", { row(3, "c", 1) }))
+P.publish(d3)
+eq(find(P.tree, "row-3") ~= nil, true, "a group never seen before is expanded")
+
+-- test: groups_on_open_expanded_default_saves_nothing
+P = boot()
+P.publish(two())
+find(P.tree, "gh-x").props.onClick()
+eq(find(P.tree, "row-1"), nil, "toggle works")
+eq(P.files[FILE], nil, "nothing written unless the mode is last")
 
 print("panel_dash_test OK")
