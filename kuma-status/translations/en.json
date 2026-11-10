@@ -63,14 +63,6 @@
     "proxy_password_file": {
       "label": "Status page password file",
       "description": "Path of a file that holds the password for the status page user. Sent only to the hosts of the listed status pages."
-    },
-    "cert_red_days": {
-      "label": "Certificate: red below",
-      "description": "Days left under which a certificate is red. Kuma does not tell us its own limits."
-    },
-    "cert_yellow_days": {
-      "label": "Certificate: yellow up to",
-      "description": "Days left up to which a certificate is yellow; beyond it is green."
     }
   },
   "error": {
@@ -123,7 +115,7 @@
     "warn_cred_perms": "A credentials file can be read by other users. Run chmod 600 on it.",
     "tab_certs": "Certificates",
     "certs_expired": "Expired",
-    "certs_red": "Expiring now (under {days} days)",
+    "certs_red": "Expiring now (up to {days} days)",
     "certs_yellow": "Expiring soon ({from} to {to} days)",
     "certs_green": "Healthy (over {days} days)",
     "certs_empty": "No certificates reported. Kuma exports the expiry only for monitors that check one.",

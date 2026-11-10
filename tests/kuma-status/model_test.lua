@@ -127,9 +127,9 @@ eq(#d.groups[2].rows, 2, "default keeps duplicates: y holds a and b")
 
 -- test: cert_level_boundaries
 eq(K.certLevel(-1), "expired", "negative"); eq(K.certLevel(0), "red", "today is red, not expired")
-eq(K.certLevel(9), "red", "9 days"); eq(K.certLevel(10), "yellow", "10 days"); eq(K.certLevel(30), "yellow", "30 days")
-eq(K.certLevel(31), "green", "31 days")
-eq(K.certLevel(5, { red = 5, yellow = 20 }), "yellow", "custom red limit"); eq(K.certLevel(21, { red = 5, yellow = 20 }), "green", "custom yellow limit")
+eq(K.certLevel(7), "red", "7 days is still red"); eq(K.certLevel(8), "yellow", "8 days")
+eq(K.certLevel(30), "yellow", "30 days is still yellow"); eq(K.certLevel(31), "green", "31 days")
+eq(K.CERT_RED_DAYS, 7, "fixed red limit"); eq(K.CERT_YELLOW_DAYS, 30, "fixed yellow limit")
 
 -- test: certificates_sorted_by_expiry_and_grouped
 local cm = set(
@@ -155,10 +155,8 @@ c = K.buildCertificates(set(metric(1, "a", 1, { certDays = 99 })))
 eq(#c.groups, 1, "only the green group"); eq(c.groups[1].level, "green", "green")
 eq(K.buildCertificates({}).total, 0, "nothing")
 
--- test: dashboard_rows_carry_cert_level_for_the_given_limits
-d = K.buildDashboard(set(metric(1, "a", 1, { certDays = 12, tags = { "t" } })), nil, {}, {}, { certLimits = { red = 15, yellow = 40 } })
-eq(d.groups[1].rows[1].certLevel, "red", "12 days is red when red < 15")
-d = K.buildDashboard(set(metric(1, "a", 1, { certDays = 12, tags = { "t" } })), nil, {}, {})
-eq(d.groups[1].rows[1].certLevel, "yellow", "default limits")
+-- test: dashboard_rows_carry_cert_level
+d = K.buildDashboard(set(metric(1, "a", 1, { certDays = 12, tags = { "t" } }), metric(2, "b", 1, { certDays = 7, tags = { "t" } })), nil, {}, {})
+eq(d.groups[1].rows[1].certLevel, "yellow", "12 days is yellow"); eq(d.groups[1].rows[2].certLevel, "red", "7 days is red")
 
 print("model_test OK")

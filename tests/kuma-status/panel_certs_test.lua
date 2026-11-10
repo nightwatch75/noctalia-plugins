@@ -54,7 +54,6 @@ local function cgroup(level, rows) return { key = level, level = level, rows = r
 local function crow(id, name, url, days, level) return { id = id, name = name, url = url, certDays = days, level = level } end
 local function certs(groups) local n = 0 for _, g in ipairs(groups) do n += #g.rows end return { groups = groups, total = n } end
 local GREEN, RED, YELLOW = "#98c379", "#e06c75", "#e5c07b"
-local LIMITS = { red = 10, yellow = 30 }
 
 local function two()
     return certs({
@@ -65,7 +64,7 @@ end
 
 -- test: certificates_tab_exists_and_shows_groups_in_order
 local P = boot()
-P.publish({ certs = two(), certLimits = LIMITS })
+P.publish({ certs = two() })
 eq(find(P.tree, "btn-tab-certs").props.glyph, "certificate", "tab glyph")
 eq(find(P.tree, "tab-certs").props.visible, false, "hidden until chosen")
 find(P.tree, "btn-tab-certs").props.onClick()
@@ -80,14 +79,14 @@ eq(find(tab, "curl-3").props.text, "farther", "no URL: the monitor name")
 eq(find(tab, "cglyph-1").props.name, "certificate", "glyph"); eq(find(tab, "cglyph-1").props.color, RED, "red")
 eq(find(tab, "cglyph-2").props.color, GREEN, "green")
 eq(find(tab, "cdays-1").props.text, "panel.cert_days_short", "days text key")
-P.publish({ certs = certs({ cgroup("expired", { crow(7, "gone", "https://gone.example.test", -2, "expired") }), cgroup("yellow", { crow(8, "mid", "https://mid.example.test", 20, "yellow") }) }), certLimits = LIMITS })
+P.publish({ certs = certs({ cgroup("expired", { crow(7, "gone", "https://gone.example.test", -2, "expired") }), cgroup("yellow", { crow(8, "mid", "https://mid.example.test", 20, "yellow") }) }) })
 tab = find(P.tree, "tab-certs")
 eq(find(tab, "cglyph-7").props.color, RED, "expired is red"); eq(find(tab, "cdays-7").props.text, "panel.cert_expired_short", "expired text")
 eq(find(tab, "cglyph-8").props.color, YELLOW, "yellow")
 
 -- test: certificate_sort_toggle_reverses_groups_and_rows
 P = boot()
-P.publish({ certs = two(), certLimits = LIMITS })
+P.publish({ certs = two() })
 tab = find(P.tree, "tab-certs")
 local function order(t)
     local keys = {}
@@ -109,7 +108,7 @@ eq(find(find(P.tree, "tab-certs"), "certs-empty").props.text, "panel.certs_empty
 
 -- test: certificate_row_click_and_menu_use_the_monitor
 P = boot()
-P.publish({ baseUrl = "https://kuma.example.test", certs = two(), certLimits = LIMITS })
+P.publish({ baseUrl = "https://kuma.example.test", certs = two() })
 find(P.tree, "curl-1").props.onClick()
 eq(table.concat(P.runs[1], "|"), "xdg-open|https://kuma.example.test/dashboard/1", "opens the monitor in Kuma")
 find(P.tree, "curl-1").props.onRightClick()
@@ -122,7 +121,7 @@ eq(find(P.tree, "tab-certs").props.visible, true, "opens on certificates")
 
 -- test: sort_hint_follows_the_order
 P = boot()
-P.publish({ certs = two(), certLimits = LIMITS })
+P.publish({ certs = two() })
 eq(find(P.tree, "certs-hint").props.text, "panel.certs_hint_asc", "shortest first")
 find(P.tree, "btn-cert-sort").props.onClick()
 eq(find(P.tree, "certs-hint").props.text, "panel.certs_hint_desc", "the text changes with the order")
@@ -140,7 +139,7 @@ eq(hasGlyph(find(P.tree, "cgh-red")), false, "no glyph in the group title row")
 
 -- test: certificate_groups_collapse_like_the_dashboard
 P = boot()
-P.publish({ certs = two(), certLimits = LIMITS })
+P.publish({ certs = two() })
 eq(find(P.tree, "crow-1") ~= nil, true, "open by default")
 find(P.tree, "cgh-red").props.onClick()
 eq(find(P.tree, "crow-1"), nil, "collapsed"); eq(find(P.tree, "crow-2") ~= nil, true, "the other group is untouched")
@@ -155,10 +154,10 @@ eq(find(P.tree, "btn-cert-collapse-all") ~= nil, true, "buttons live in the cert
 -- test: certificate_groups_follow_groups_on_open_and_remember
 local FILE = "/data/collapsed_groups.txt"
 P = boot({ groups_on_open = "collapsed" })
-P.publish({ certs = two(), certLimits = LIMITS })
+P.publish({ certs = two() })
 eq(find(P.tree, "crow-1"), nil, "collapsed setting applies"); eq(find(P.tree, "cgh-red") ~= nil, true, "headers stay")
 P = boot({ groups_on_open = "last" }, { [FILE] = "certs:red\n" })
-P.publish({ certs = two(), certLimits = LIMITS })
+P.publish({ certs = two() })
 eq(find(P.tree, "crow-1"), nil, "red restored as collapsed"); eq(find(P.tree, "crow-2") ~= nil, true, "green open")
 find(P.tree, "cgh-green").props.onClick()
 eq(P.files[FILE], "certs:green\ncerts:red\n", "choice saved with the certificates prefix")

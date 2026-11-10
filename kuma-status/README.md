@@ -51,7 +51,7 @@ noctalia msg panel-toggle nightwatch75/kuma-status:panel
   Kuma URL and the refresh button.
 - **Dashboard tab:** groups and monitors with the newest state, ping and a bar
   of the last 40 heartbeats. Under a check, in small, the certificate expiry
-  when Kuma reports it (colored glyph, same limits as the Certificates tab). Click a group to collapse it, a monitor name to open its page in
+  when Kuma reports it (colored glyph, same fixed limits as the Certificates tab: red up to 7 days, yellow up to 30, green beyond; Kuma does not expose its own notification days). Click a group to collapse it, a monitor name to open its page in
   Kuma. Right click a monitor for **Open monitor in Kuma**,
   **Open monitored URL** and **Copy monitored URL** (the URL the monitor
   tests); hovering a row shows that URL. A line of buttons above the list
@@ -62,7 +62,7 @@ noctalia msg panel-toggle nightwatch75/kuma-status:panel
   open button next to a title opens the page.
 - **Certificates tab:** every monitor for which Kuma reports a certificate
   expiry, shortest first, grouped by how close the expiry is: **Expired**,
-  **Expiring now** (under 10 days), **Expiring soon** (10 to 30 days) and
+  **Expiring now** (up to 7 days), **Expiring soon** (8 to 30 days) and
   **Healthy** (over 30 days). Each row has a certificate glyph in red, yellow
   or green, the monitored URL (the monitor name when it has none) and the days
   left. The sort button reverses the order and the line next to it says which way. Group titles are large and colored; click one to collapse it, or use expand all / collapse all. The choice follows `groups_on_open` and is remembered the same way as on the Dashboard. Click a row to open the monitor in
@@ -93,8 +93,6 @@ refresh, in memory only), so right after a start their bar is mostly empty.
 | `kuma3_support` | `bool` | `false` | Call `/api/monitors` (Kuma 3). Off means no call at all. A 404 turns it off until the settings change |
 | `groups_on_open` | `select` | `expanded` | Dashboard groups when the panel opens: `expanded`, `collapsed` or `last` (the groups you closed stay closed; a new group starts open) |
 | `start_tab` | `select` | `dashboard` | Tab the panel opens on: `dashboard`, `pages`, `certs` or `last` (the one you used last) |
-| `cert_red_days` | `int` | `10` | A certificate with fewer days left is red |
-| `cert_yellow_days` | `int` | `30` | Up to this many days it is yellow, beyond it green. Kuma does not expose its own notification days, so these limits are ours (also used for the glyph under a Dashboard row) |
 | `bar_display` | `select` | `counts` | `counts`: glyph, up and down numbers. `color`: glyph color only |
 | `refresh_seconds` | `int` | `60` | Seconds between updates, 20 to 3600. Kuma caches status pages for a minute |
 | `glyph` | `glyph` | `heartbeat` | Bar icon (per widget) |

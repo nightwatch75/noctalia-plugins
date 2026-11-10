@@ -242,29 +242,28 @@ function K.parseStatusPage(page: any, heartbeats: any, origin: string, slug: str
 end
 
 -- Certificate expiry level for a number of days left. Kuma does not expose its
--- own notification days, so the limits are ours (settings, default 10 and 30):
--- under red days is "red", up to yellow days "yellow", beyond "green"; already
--- expired (negative) is "expired".
-local DEFAULT_LIMITS = { red = 10, yellow = 30 }
-local rowLimits = nil -- limits of the buildDashboard call in progress
+-- own notification days, so the limits are fixed here: up to 7 days "red",
+-- up to 30 days "yellow", beyond "green"; already expired (negative) is
+-- "expired".
+K.CERT_RED_DAYS = 7
+K.CERT_YELLOW_DAYS = 30
 
-function K.certLevel(days, limits)
-    limits = limits or DEFAULT_LIMITS
+function K.certLevel(days)
     if days < 0 then return "expired" end
-    if days < limits.red then return "red" end
-    if days <= limits.yellow then return "yellow" end
+    if days <= K.CERT_RED_DAYS then return "red" end
+    if days <= K.CERT_YELLOW_DAYS then return "yellow" end
     return "green"
 end
 
 -- Certificates tab: every monitor that reports a certificate expiry, shortest
 -- first, in groups by level (empty groups omitted). Uses data already fetched
 -- for the Dashboard; groups of monitors and monitors without one are left out.
-function K.buildCertificates(metrics, limits)
+function K.buildCertificates(metrics)
     local all = {}
     for id, m in pairs(metrics) do
         if m.type ~= "group" and m.certDays ~= nil then
             local days = math.floor(m.certDays)
-            all[#all + 1] = { id = id, name = m.name, url = m.url, certDays = days, level = K.certLevel(days, limits) }
+            all[#all + 1] = { id = id, name = m.name, url = m.url, certDays = days, level = K.certLevel(days) }
         end
     end
     table.sort(all, function(a, b)
@@ -341,7 +340,7 @@ local function makeRow(id, m, struct, beats, buffer)
     if m ~= nil then
         return {
             id = id, name = m.name, status = m.status, ping = m.ping, beats = b, paused = false, url = m.url,
-            certDays = m.certDays, certLevel = m.certDays ~= nil and K.certLevel(math.floor(m.certDays), rowLimits) or nil,
+            certDays = m.certDays, certLevel = m.certDays ~= nil and K.certLevel(math.floor(m.certDays)) or nil,
         }
     end
     return { id = id, name = struct.name, status = -1, beats = b, paused = true }
@@ -373,7 +372,6 @@ end
 -- its first tag (tags are sorted, so alphabetical). Counts here are per group; the bar uses
 -- summarize, which counts every monitor once.
 function K.buildDashboard(metrics, structure, beats, buffer, opts)
-    rowLimits = opts and opts.certLimits or nil
     local groups = {}
     if structure ~= nil then
         local function fullName(id)

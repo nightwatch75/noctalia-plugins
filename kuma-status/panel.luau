@@ -294,11 +294,11 @@ end
 -- already fetched. Group names say what the level means (limits from settings).
 local CERT_W = 440
 
-local function certGroupName(level, limits)
+local function certGroupName(level)
     if level == "expired" then return tr("panel.certs_expired") end
-    if level == "red" then return tr("panel.certs_red", { days = limits.red }) end
-    if level == "yellow" then return tr("panel.certs_yellow", { from = limits.red, to = limits.yellow }) end
-    return tr("panel.certs_green", { days = limits.yellow })
+    if level == "red" then return tr("panel.certs_red", { days = K.CERT_RED_DAYS }) end
+    if level == "yellow" then return tr("panel.certs_yellow", { from = K.CERT_RED_DAYS + 1, to = K.CERT_YELLOW_DAYS }) end
+    return tr("panel.certs_green", { days = K.CERT_YELLOW_DAYS })
 end
 
 local function certRow(c)
@@ -322,7 +322,6 @@ local function certsView()
         out[1] = ui.label({ key = "certs-empty", text = tr("panel.certs_empty"), color = "on_surface_variant" })
         return out
     end
-    local limits = data.certLimits or { red = 10, yellow = 30 }
     local groups = certs.groups
     local first, last, step = 1, #groups, 1
     if not certAsc then first, last, step = #groups, 1, -1 end
@@ -333,7 +332,7 @@ local function certsView()
         -- section title like claude-cockpit's usage tab: big, bold, colored; no glyph
         out[#out + 1] = ui.row({ key = "cgh-" .. g.key, gap = 8, align = "center", paddingV = 6, onClick = function() toggleGroup(key) end }, {
             ui.label({ text = closed and "▶" or "▼", width = 14, color = "on_surface_variant" }),
-            ui.label({ key = "cert-group-" .. g.key, text = certGroupName(g.level, limits), fontSize = 17, fontWeight = "bold", color = R.levelColor(g.level), flexGrow = 1, maxLines = 1 }),
+            ui.label({ key = "cert-group-" .. g.key, text = certGroupName(g.level), fontSize = 17, fontWeight = "bold", color = R.levelColor(g.level), flexGrow = 1, maxLines = 1 }),
             ui.label({ text = tostring(#g.rows), color = "on_surface_variant" }),
         })
         if not closed then
