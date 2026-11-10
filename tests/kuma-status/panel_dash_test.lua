@@ -194,17 +194,18 @@ eq(P.menu.items[1].enabled ~= false, true, "Kuma page always available")
 eq(P.menu.items[2].enabled, false, "no url: tested URL disabled"); eq(P.menu.items[3].enabled, false, "no url: copy disabled")
 
 -- test: cert_line_small_glyph_colored_by_days
-local function certNode(days)
+local function certNode(days, level)
     local p = boot()
-    p.publish({ baseUrl = "https://k.example.test", dashboard = dash("tags", { group("x", { row(1, "a", 1, { certDays = days }) }) }) })
+    p.publish({ baseUrl = "https://k.example.test", dashboard = dash("tags", { group("x", { row(1, "a", 1, { certDays = days, certLevel = level }) }) }) })
     return find(p.tree, "cert-1")
 end
-local c1 = certNode(40)
+local c1 = certNode(40, "green")
 eq(find(c1, "cert-glyph-1").props.name, "certificate", "glyph"); eq(find(c1, "cert-glyph-1").props.color, GREEN, "plenty of time")
-eq(find(certNode(12), "cert-glyph-1").props.color, YELLOW, "soon")
-eq(find(certNode(3), "cert-glyph-1").props.color, RED, "very soon")
+eq(find(certNode(12, "yellow"), "cert-glyph-1").props.color, YELLOW, "soon")
+eq(find(certNode(3, "red"), "cert-glyph-1").props.color, RED, "very soon")
 eq(find(c1, "cert-text-1").props.text, "panel.cert_days", "text key")
-eq(find(certNode(-1), "cert-text-1").props.text, "panel.cert_expired", "expired")
+eq(find(certNode(-1, "expired"), "cert-text-1").props.text, "panel.cert_expired", "expired")
+eq(find(certNode(-1, "expired"), "cert-glyph-1").props.color, RED, "expired is red")
 eq(certNode(nil), nil, "no cert data, no line")
 
 -- test: mode_line_has_no_kuma3_hint

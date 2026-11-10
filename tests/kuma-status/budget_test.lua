@@ -50,5 +50,8 @@ for _, m in ipairs(sp.groups[1].monitors) do beatsById[m.id] = m.beats end
 timed("summarize", function() return K.summarize(metrics) end)
 local d = timed("buildDashboard", function() return K.buildDashboard(metrics, nil, beatsById, {}) end)
 assert(#d.groups[1].rows == 52, "52 rows in the tag group")
+for _, m in pairs(metrics) do m.certDays = 40 end
+local certs = timed("buildCertificates", function() return K.buildCertificates(metrics) end)
+assert(certs.total == 52, "52 certificates")
 
 print("budget_test OK")

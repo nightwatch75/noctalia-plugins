@@ -42,10 +42,16 @@ local function pingText(row)
     return string.format("%d ms", math.floor(row.ping + 0.5))
 end
 
--- Days left to colors: more than 30 green, more than 7 yellow, else red.
+-- Level (computed in kuma.luau from the cert limits) to color; expired is red.
+function R.levelColor(level)
+    if level == "green" then return R.COLORS[1] end
+    if level == "yellow" then return R.COLORS[2] end
+    return R.COLORS[0]
+end
+
 local function certLine(row)
     local days = math.floor(row.certDays)
-    local color = days > 30 and R.COLORS[1] or (days > 7 and R.COLORS[2] or R.COLORS[0])
+    local color = R.levelColor(row.certLevel)
     local text = days < 0 and noctalia.tr("panel.cert_expired") or noctalia.tr("panel.cert_days", { days = days })
     return ui.row({ key = "cert-" .. row.id, gap = 4, align = "center" }, {
         ui.box({ width = 18 }),

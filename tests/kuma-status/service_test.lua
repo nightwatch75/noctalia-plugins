@@ -340,4 +340,25 @@ h.refresh(2)
 eq(h.count("/metrics"), 2, "a new secret is tried")
 eq(h.data().errors.metrics, nil, "and accepted")
 
+-- test: certificates_published_with_limits_from_settings
+local function certMetrics(req)
+    if req.url:sub(-8) == "/metrics" then
+        return ok(table.concat({
+            series("monitor_status", 1, "svc-a", 1), series("monitor_status", 2, "svc-b", 1),
+            series("monitor_cert_days_remaining", 1, "svc-a", 8), series("monitor_cert_days_remaining", 2, "svc-b", 60),
+        }, "\n"))
+    end
+    return standard(req)
+end
+h = boot({}, certMetrics)
+eq(h.data().certLimits.red, 10, "default red limit"); eq(h.data().certLimits.yellow, 30, "default yellow limit")
+eq(h.data().certs.groups[1].level, "red", "8 days is red"); eq(h.data().certs.groups[2].level, "green", "60 days is green")
+eq(h.data().dashboard.groups[1].rows[1].certLevel ~= nil, true, "dashboard rows have a level")
+h = boot({ cert_red_days = 7, cert_yellow_days = 20 }, certMetrics)
+eq(h.data().certs.groups[1].level, "yellow", "8 days is yellow when red < 7")
+
+-- test: certificate_limits_are_kept_ordered
+h = boot({ cert_red_days = 40, cert_yellow_days = 30 }, certMetrics)
+eq(h.data().certLimits.red, 40, "red as set"); eq(h.data().certLimits.yellow, 41, "yellow is pushed above red")
+
 print("service_test OK")

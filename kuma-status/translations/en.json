@@ -43,7 +43,8 @@
       "options": {
         "dashboard": "Dashboard",
         "pages": "Status pages",
-        "last": "Last used"
+        "last": "Last used",
+        "certs": "Certificates"
       }
     },
     "groups_on_open": {
@@ -62,6 +63,14 @@
     "proxy_password_file": {
       "label": "Status page password file",
       "description": "Path of a file that holds the password for the status page user. Sent only to the hosts of the listed status pages."
+    },
+    "cert_red_days": {
+      "label": "Certificate: red below",
+      "description": "Days left under which a certificate is red. Kuma does not tell us its own limits."
+    },
+    "cert_yellow_days": {
+      "label": "Certificate: yellow up to",
+      "description": "Days left up to which a certificate is yellow; beyond it is green."
     }
   },
   "error": {
@@ -111,7 +120,18 @@
     "tip_tag_all": "A monitor with several tags appears under each. Click to show it once, under its first tag.",
     "tip_expand_all": "Expand all groups",
     "tip_collapse_all": "Collapse all groups",
-    "warn_cred_perms": "A credentials file can be read by other users. Run chmod 600 on it."
+    "warn_cred_perms": "A credentials file can be read by other users. Run chmod 600 on it.",
+    "tab_certs": "Certificates",
+    "certs_expired": "Expired",
+    "certs_red": "Expiring now (under {days} days)",
+    "certs_yellow": "Expiring soon ({from} to {to} days)",
+    "certs_green": "Healthy (over {days} days)",
+    "certs_empty": "No certificates reported. Kuma exports the expiry only for monitors that check one.",
+    "certs_hint": "Shortest expiry first",
+    "tip_sort_asc": "Shortest first. Click to show the longest first.",
+    "tip_sort_desc": "Longest first. Click to show the shortest first.",
+    "cert_days_short": "{days} days",
+    "cert_expired_short": "Expired"
   },
   "tooltip_down": "DOWN",
   "tooltip_more": "+{count} more",

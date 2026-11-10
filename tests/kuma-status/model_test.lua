@@ -125,4 +125,40 @@ eq(d.groups[3].name, "", "untagged last")
 d = K.buildDashboard(multi, nil, {}, {})
 eq(#d.groups[2].rows, 2, "default keeps duplicates: y holds a and b")
 
+-- test: cert_level_boundaries
+eq(K.certLevel(-1), "expired", "negative"); eq(K.certLevel(0), "red", "today is red, not expired")
+eq(K.certLevel(9), "red", "9 days"); eq(K.certLevel(10), "yellow", "10 days"); eq(K.certLevel(30), "yellow", "30 days")
+eq(K.certLevel(31), "green", "31 days")
+eq(K.certLevel(5, { red = 5, yellow = 20 }), "yellow", "custom red limit"); eq(K.certLevel(21, { red = 5, yellow = 20 }), "green", "custom yellow limit")
+
+-- test: certificates_sorted_by_expiry_and_grouped
+local cm = set(
+    metric(1, "far", 1, { certDays = 45, url = "https://far.example.test" }),
+    metric(2, "near", 1, { certDays = 5, url = "https://near.example.test" }),
+    metric(3, "mid", 1, { certDays = 20 }),
+    metric(4, "gone", 0, { certDays = -2 }),
+    metric(5, "nocert", 1),
+    metric(9, "grp", 1, { type = "group", certDays = 1 })
+)
+local c = K.buildCertificates(cm)
+eq(#c.groups, 4, "expired, red, yellow, green")
+eq(c.groups[1].level, "expired", "first group"); eq(c.groups[2].level, "red", "second"); eq(c.groups[3].level, "yellow", "third"); eq(c.groups[4].level, "green", "fourth")
+eq(c.groups[1].rows[1].name, "gone", "expired row"); eq(c.groups[2].rows[1].name, "near", "red row")
+eq(c.groups[2].rows[1].url, "https://near.example.test", "url on the row"); eq(c.groups[2].rows[1].certDays, 5, "days on the row")
+eq(c.total, 4, "monitors without a certificate and groups are left out")
+local flat = {}
+for _, g in ipairs(c.groups) do for _, r in ipairs(g.rows) do flat[#flat + 1] = r.name end end
+eq(list(flat), "gone,near,mid,far", "shortest first overall")
+
+-- test: certificates_empty_groups_are_omitted
+c = K.buildCertificates(set(metric(1, "a", 1, { certDays = 99 })))
+eq(#c.groups, 1, "only the green group"); eq(c.groups[1].level, "green", "green")
+eq(K.buildCertificates({}).total, 0, "nothing")
+
+-- test: dashboard_rows_carry_cert_level_for_the_given_limits
+d = K.buildDashboard(set(metric(1, "a", 1, { certDays = 12, tags = { "t" } })), nil, {}, {}, { certLimits = { red = 15, yellow = 40 } })
+eq(d.groups[1].rows[1].certLevel, "red", "12 days is red when red < 15")
+d = K.buildDashboard(set(metric(1, "a", 1, { certDays = 12, tags = { "t" } })), nil, {}, {})
+eq(d.groups[1].rows[1].certLevel, "yellow", "default limits")
+
 print("model_test OK")

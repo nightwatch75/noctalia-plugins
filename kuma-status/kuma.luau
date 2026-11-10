@@ -241,6 +241,50 @@ function K.parseStatusPage(page: any, heartbeats: any, origin: string, slug: str
     return sp
 end
 
+-- Certificate expiry level for a number of days left. Kuma does not expose its
+-- own notification days, so the limits are ours (settings, default 10 and 30):
+-- under red days is "red", up to yellow days "yellow", beyond "green"; already
+-- expired (negative) is "expired".
+local DEFAULT_LIMITS = { red = 10, yellow = 30 }
+local rowLimits = nil -- limits of the buildDashboard call in progress
+
+function K.certLevel(days, limits)
+    limits = limits or DEFAULT_LIMITS
+    if days < 0 then return "expired" end
+    if days < limits.red then return "red" end
+    if days <= limits.yellow then return "yellow" end
+    return "green"
+end
+
+-- Certificates tab: every monitor that reports a certificate expiry, shortest
+-- first, in groups by level (empty groups omitted). Uses data already fetched
+-- for the Dashboard; groups of monitors and monitors without one are left out.
+function K.buildCertificates(metrics, limits)
+    local all = {}
+    for id, m in pairs(metrics) do
+        if m.type ~= "group" and m.certDays ~= nil then
+            local days = math.floor(m.certDays)
+            all[#all + 1] = { id = id, name = m.name, url = m.url, certDays = days, level = K.certLevel(days, limits) }
+        end
+    end
+    table.sort(all, function(a, b)
+        if a.certDays ~= b.certDays then return a.certDays < b.certDays end
+        if a.name:lower() ~= b.name:lower() then return a.name:lower() < b.name:lower() end
+        return a.id < b.id
+    end)
+    local groups, byLevel = {}, {}
+    for _, row in ipairs(all) do
+        local g = byLevel[row.level]
+        if g == nil then
+            g = { key = row.level, level = row.level, rows = {} }
+            byLevel[row.level] = g
+            groups[#groups + 1] = g -- rows are sorted, so groups come out in order
+        end
+        g.rows[#g.rows + 1] = row
+    end
+    return { groups = groups, total = #all }
+end
+
 -- Samples kept for monitors that no status page covers: the last `cap`
 -- statuses, oldest first.
 function K.pushSample(buffer, id: number, status: number, cap: number)
@@ -295,7 +339,10 @@ local function makeRow(id, m, struct, beats, buffer)
     local b = beats[id]
     if b == nil or #b == 0 then b = buffer[id] or {} end
     if m ~= nil then
-        return { id = id, name = m.name, status = m.status, ping = m.ping, beats = b, paused = false, url = m.url, certDays = m.certDays }
+        return {
+            id = id, name = m.name, status = m.status, ping = m.ping, beats = b, paused = false, url = m.url,
+            certDays = m.certDays, certLevel = m.certDays ~= nil and K.certLevel(math.floor(m.certDays), rowLimits) or nil,
+        }
     end
     return { id = id, name = struct.name, status = -1, beats = b, paused = true }
 end
@@ -326,6 +373,7 @@ end
 -- its first tag (tags are sorted, so alphabetical). Counts here are per group; the bar uses
 -- summarize, which counts every monitor once.
 function K.buildDashboard(metrics, structure, beats, buffer, opts)
+    rowLimits = opts and opts.certLimits or nil
     local groups = {}
     if structure ~= nil then
         local function fullName(id)

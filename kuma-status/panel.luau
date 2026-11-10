@@ -1,5 +1,5 @@
 --!nonstrict
--- kuma-status — panel with two tabs: Dashboard and Status pages.
+-- kuma-status — panel with three tabs: Dashboard, Status pages and Certificates.
 --
 -- Pure renderer over the "kuma_status_data" state published by service.luau,
 -- plus two small writes: the refresh request ("kuma_status_request", nonce from
@@ -32,6 +32,7 @@ local isOpen = false
 local requestNonce = math.floor(noctalia.nowMs())
 local addText, addRev, addError = "", 0, false
 local menuUrl = nil
+local certAsc = true -- Certificates tab: shortest expiry first
 
 local function tr(key, args)
     return noctalia.tr(key, args)
@@ -54,11 +55,12 @@ end
 
 local function startTab()
     local setting = noctalia.getConfig("start_tab")
-    if setting == "pages" then return "pages" end
+    if setting == "pages" or setting == "certs" then return setting end
     if setting == "last" then
         local f = tabFile()
         local saved = f and noctalia.readFile(f) or nil
         if saved ~= nil and saved:match("^%s*pages") then return "pages" end
+        if saved ~= nil and saved:match("^%s*certs") then return "certs" end
     end
     return "dashboard"
 end
@@ -280,6 +282,58 @@ local function pagesView()
     return out
 end
 
+-- Certificates tab: the groups kuma.luau built from the data the Dashboard
+-- already fetched. Group names say what the level means (limits from settings).
+local CERT_W = 440
+
+local function certGroupName(level, limits)
+    if level == "expired" then return tr("panel.certs_expired") end
+    if level == "red" then return tr("panel.certs_red", { days = limits.red }) end
+    if level == "yellow" then return tr("panel.certs_yellow", { from = limits.red, to = limits.yellow }) end
+    return tr("panel.certs_green", { days = limits.yellow })
+end
+
+local function certRow(c)
+    local color = R.levelColor(c.level)
+    local days = c.level == "expired" and tr("panel.cert_expired_short") or tr("panel.cert_days_short", { days = c.certDays })
+    return ui.row({ key = "crow-" .. c.id, gap = 8, align = "center", tooltip = c.name }, {
+        ui.glyph({ key = "cglyph-" .. c.id, name = "certificate", size = 14, color = color }),
+        ui.button({
+            key = "curl-" .. c.id, text = c.url or c.name, variant = "ghost", contentAlign = "start", width = CERT_W,
+            onClick = function() openMonitor(c.id) end,
+            onRightClick = function() openRowMenu({ id = c.id, url = c.url }) end,
+        }),
+        ui.label({ key = "cdays-" .. c.id, text = days, width = 90, textAlign = "end", color = "on_surface_variant" }),
+    })
+end
+
+local function certsView()
+    local out = {}
+    local certs = data and data.certs
+    if certs == nil or certs.total == 0 then
+        out[1] = ui.label({ key = "certs-empty", text = tr("panel.certs_empty"), color = "on_surface_variant" })
+        return out
+    end
+    local limits = data.certLimits or { red = 10, yellow = 30 }
+    local groups = certs.groups
+    local first, last, step = 1, #groups, 1
+    if not certAsc then first, last, step = #groups, 1, -1 end
+    for gi = first, last, step do
+        local g = groups[gi]
+        out[#out + 1] = ui.row({ key = "cgh-" .. g.key, gap = 8, align = "center", paddingV = 4, paddingH = 8, fill = "surface_variant", radius = 6 }, {
+            ui.glyph({ name = "certificate", size = 12, color = R.levelColor(g.level) }),
+            ui.label({ key = "cert-group-" .. g.key, text = certGroupName(g.level, limits), flexGrow = 1, maxLines = 1, fontWeight = "semibold" }),
+            ui.label({ text = tostring(#g.rows), color = "on_surface_variant" }),
+        })
+        local rf, rl, rs = 1, #g.rows, 1
+        if not certAsc then rf, rl, rs = #g.rows, 1, -1 end
+        for ri = rf, rl, rs do
+            out[#out + 1] = certRow(g.rows[ri])
+        end
+    end
+    return out
+end
+
 local function notices()
     local out = {}
     local errors = data and data.errors or {}
@@ -332,12 +386,24 @@ function render()
         ui.row({ key = "tabs", gap = 6, align = "center" }, {
             ui.button({ key = "btn-tab-dashboard", glyph = "layout-dashboard", text = tr("panel.tab_dashboard"), variant = tab == "dashboard" and "primary" or "ghost", onClick = function() setTab("dashboard"); render() end }),
             ui.button({ key = "btn-tab-pages", glyph = "world-www", text = tr("panel.tab_pages"), variant = tab == "pages" and "primary" or "ghost", onClick = function() setTab("pages"); render() end }),
+            ui.button({ key = "btn-tab-certs", glyph = "certificate", text = tr("panel.tab_certs"), variant = tab == "certs" and "primary" or "ghost", onClick = function() setTab("certs"); render() end }),
             ui.label({ key = "kuma-url", text = data and data.baseUrl or "", flexGrow = 1, textAlign = "end", maxLines = 1, fontSize = 12, color = "on_surface_variant" }),
             ui.button({ key = "btn-refresh", glyph = "refresh", variant = "ghost", tooltip = tr("panel.tip_refresh") .. (stamp and (" · " .. stamp) or ""), onClick = requestRefresh }),
         }),
         ui.column({ key = "notices", gap = 2 }, notices()),
         ui.column({ key = "tab-dashboard", visible = tab == "dashboard", flexGrow = 1, gap = 6 }, dashChildren),
         ui.column({ key = "tab-pages", visible = tab == "pages", flexGrow = 1, gap = 6 }, pagesChildren),
+        ui.column({ key = "tab-certs", visible = tab == "certs", flexGrow = 1, gap = 6 }, {
+            ui.row({ key = "certs-bar", gap = 4, align = "center" }, {
+                ui.label({ key = "certs-hint", text = tr("panel.certs_hint"), flexGrow = 1, color = "on_surface_variant" }),
+                ui.button({
+                    key = "btn-cert-sort", glyph = certAsc and "sort-ascending" or "sort-descending", variant = "ghost",
+                    tooltip = certAsc and tr("panel.tip_sort_asc") or tr("panel.tip_sort_desc"),
+                    onClick = function() certAsc = not certAsc; render() end,
+                }),
+            }),
+            ui.scroll({ key = "scroll-certs", flexGrow = 1, gap = 4 }, certsView()),
+        }),
     }))
 end
 

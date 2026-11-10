@@ -9,6 +9,7 @@
 --                       addedUrls (the panel-added ones), errors = { metrics?, monitors?, pages = {[url]=msg} },
 --                       mode = "hierarchy"|"tags", baseUrl, plainHttp }
 --                     summary.color is "offline" when /metrics is unusable.
+--                     certs (Certificates tab: groups by expiry level) and certLimits.
 --   UI entries send   "kuma_status_request" = { nonce, action = "refresh" }
 --                     or { nonce, action = "tag_mode", value = "first"|"all" }
 --                     (rebuilds the grouping from the last data, no network;
@@ -72,6 +73,13 @@ local function tr(key, args)
     return noctalia.tr(key, args)
 end
 
+-- Certificate limits from the settings, kept ordered (yellow above red).
+local function certLimits()
+    local red = math.max(1, math.floor(tonumber(noctalia.getConfig("cert_red_days")) or 10))
+    local yellow = math.floor(tonumber(noctalia.getConfig("cert_yellow_days")) or 30)
+    return { red = red, yellow = math.max(yellow, red + 1) }
+end
+
 local function readConfig()
     -- the setting first, then pages added from the panel; one entry per page
     local pages, seen = {}, {}
@@ -98,6 +106,7 @@ local function readConfig()
         added = added,
         v3 = noctalia.getConfig("kuma3_support") == true,
         interval = math.min(3600, math.max(20, interval)),
+        certLimits = certLimits(),
     }
 end
 
@@ -155,7 +164,7 @@ function publish(cfg, metrics, structure, beatsById, pages, errors)
     last = { cfg, metrics, structure, beatsById, pages, errors }
     local dashboard = nil
     if metrics ~= nil then
-        dashboard = K.buildDashboard(metrics, structure, beatsById, buffer, { firstTagOnly = tagMode == "first" })
+        dashboard = K.buildDashboard(metrics, structure, beatsById, buffer, { firstTagOnly = tagMode == "first", certLimits = cfg.certLimits })
     end
     -- from the configured URLs, so a page that failed still flags clear text
     local plain = cfg.base ~= nil and cfg.base:sub(1, 7) == "http://"
@@ -174,6 +183,8 @@ function publish(cfg, metrics, structure, beatsById, pages, errors)
         mode = structure ~= nil and "hierarchy" or "tags",
         tagMode = tagMode,
         credWarn = credWarn,
+        certLimits = cfg.certLimits,
+        certs = metrics ~= nil and K.buildCertificates(metrics, cfg.certLimits) or nil,
         baseUrl = cfg.base or "",
         plainHttp = plain,
     })
