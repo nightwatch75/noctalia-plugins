@@ -64,7 +64,10 @@
     "group_none": "No group",
     "warn_http": "This server is reached over plain http: the API key and passwords travel in clear text.",
     "tip_bar": "{up} of {total} checks up",
-    "no_xdg_open": "xdg-open is not installed."
+    "no_xdg_open": "xdg-open is not installed.",
+    "pages_empty": "No status pages configured. Add their URLs in the plugin settings.",
+    "page_no_data": "No data.",
+    "tip_open_page": "Open the status page"
   },
   "tooltip_down": "DOWN",
   "tooltip_more": "+{count} more"

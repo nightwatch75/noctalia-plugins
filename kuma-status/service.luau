@@ -4,7 +4,8 @@
 -- Runs once however many bars show the widget. The widget and the panel are
 -- pure renderers wired through the plugin's shared state:
 --   engine publishes  "kuma_status_data"    = { nonce, ts, summary, dashboard?,
---                       pages, errors = { metrics?, monitors?, pages = {[url]=msg} },
+--                       pages (each with .source = the URL as configured),
+--                       pageUrls (configured URLs in order), errors = { metrics?, monitors?, pages = {[url]=msg} },
 --                       mode = "hierarchy"|"tags", baseUrl, plainHttp }
 --                     summary.color is "offline" when /metrics is unusable.
 --   UI entries send   "kuma_status_request" = { nonce, action = "refresh" }
@@ -85,6 +86,7 @@ local function publish(cfg, metrics, structure, beatsById, pages, errors)
         summary = summary,
         dashboard = dashboard,
         pages = pages,
+        pageUrls = cfg.pages,
         errors = errors,
         mode = structure ~= nil and "hierarchy" or "tags",
         baseUrl = cfg.base or "",
@@ -222,6 +224,7 @@ local function refresh()
                 local hb = noctalia.json.decode(got.hb)
                 if type(page) == "table" and type(hb) == "table" then
                     pageResults[i] = K.parseStatusPage(page, hb, origin, slug)
+                    pageResults[i].source = url
                 else
                     errors.pages[url] = tr("error.bad_json")
                 end

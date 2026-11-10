@@ -31,14 +31,20 @@ local function requestRefresh()
     noctalia.state.set(REQUEST_KEY, { nonce = requestNonce, action = "refresh" })
 end
 
-local function openMonitor(id)
-    local base = data and data.baseUrl or ""
-    if base == "" or tonumber(id) == nil then return end
+-- Only http(s) URLs built by this plugin reach xdg-open.
+local function openUrl(url)
+    if not url:match("^https?://") then return end
     if not noctalia.commandExists("xdg-open") then
         noctalia.notifyError(tr("tooltip"), tr("panel.no_xdg_open"))
         return
     end
-    noctalia.runAsync({ "xdg-open", base .. "/dashboard/" .. math.floor(tonumber(id)) })
+    noctalia.runAsync({ "xdg-open", url })
+end
+
+local function openMonitor(id)
+    local base = data and data.baseUrl or ""
+    if base == "" or tonumber(id) == nil then return end
+    openUrl(base .. "/dashboard/" .. math.floor(tonumber(id)))
 end
 
 local render
@@ -67,8 +73,48 @@ local function dashboardView()
     return children
 end
 
+-- A status page row is the newest heartbeat plus the bar; ping is not in the
+-- public heartbeat list, so the ping column stays empty.
+local function pageRow(m, open)
+    local status = m.beats[#m.beats]
+    return R.monitorRow({ id = m.id, name = m.name, status = status or -1, beats = m.beats, paused = false, noPing = true }, open)
+end
+
 local function pagesView()
-    return {}
+    local out = {}
+    local urls = data and data.pageUrls or {}
+    if #urls == 0 then
+        out[1] = ui.label({ key = "pages-empty", text = tr("panel.pages_empty"), color = "on_surface_variant" })
+        return out
+    end
+    local bySource = {}
+    for _, sp in ipairs(data.pages or {}) do bySource[sp.source] = sp end
+    local pageErrors = data.errors and data.errors.pages or {}
+    for i, url in ipairs(urls) do
+        local sp = bySource[url]
+        if sp == nil then
+            out[#out + 1] = ui.column({ key = "page-" .. i, gap = 2 }, {
+                ui.label({ key = "page-url-" .. i, text = url, fontWeight = "semibold", maxLines = 1 }),
+                ui.label({ key = "page-err-" .. i, text = pageErrors[url] or tr("panel.page_no_data"), color = "error" }),
+            })
+        else
+            local function open() openUrl(sp.url) end
+            local children = {
+                ui.row({ key = "page-head-" .. i, gap = 6, align = "center" }, {
+                    ui.label({ key = "page-title-" .. i, text = sp.title, flexGrow = 1, maxLines = 1, fontWeight = "bold" }),
+                    ui.button({ key = "btn-open-page-" .. i, glyph = "external-link", variant = "ghost", tooltip = tr("panel.tip_open_page"), onClick = open }),
+                }),
+            }
+            for j, g in ipairs(sp.groups) do
+                children[#children + 1] = ui.label({ key = "page-group-" .. i .. "-" .. j, text = g.name, fontWeight = "semibold", color = "on_surface_variant" })
+                for _, m in ipairs(g.monitors) do
+                    children[#children + 1] = pageRow(m, open)
+                end
+            end
+            out[#out + 1] = ui.column({ key = "page-" .. i, gap = 4 }, children)
+        end
+    end
+    return out
 end
 
 local function notices()

@@ -166,4 +166,10 @@ h = boot({}, standard)
 h.refresh(5); h.refresh(5)
 eq(h.count("/metrics"), 2, "initial + one refresh, second nonce ignored")
 
+-- test: state_lists_page_urls_and_sources
+local U = "https://status.example.test/status/Dev"
+h = boot({ status_pages = { U } }, standard)
+eq(h.data().pageUrls[1], U, "configured URL kept as typed")
+eq(h.data().pages[1].source, U, "page remembers the URL it came from")
+
 print("service_test OK")

@@ -33,7 +33,7 @@ function R.beatBar(beats, key)
 end
 
 local function pingText(row)
-    if row.paused then return "" end
+    if row.paused or row.noPing then return "" end
     if row.ping == nil then return "—" end
     return string.format("%d ms", math.floor(row.ping + 0.5))
 end
