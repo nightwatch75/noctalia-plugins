@@ -76,36 +76,62 @@ local function parseSeries(l: string)
     return metric, labels, value
 end
 
+-- Hot path (a production /metrics is ~250 KB and the host gives a callback
+-- ~25 ms): lines of series we do not use are skipped on a cheap prefix test,
+-- and labels are parsed only on the first line of each monitor (the label set
+-- is the same on all its series). Lines holding a backslash (escaped quote or
+-- newline in a value) take the slow character scanner above.
+local USED = {
+    monitor_status = true, monitor_response_time = true,
+    monitor_uptime_ratio = true, monitor_cert_days_remaining = true,
+}
+
+local function labelsOf(l)
+    if l:find("\\", 1, true) == nil then
+        local labels = {}
+        for k, v in l:gmatch('([%w_]+)="([^"]*)"') do labels[k] = v end
+        return labels
+    end
+    local _, labels = parseSeries(l)
+    return labels
+end
+
 function K.parseMetrics(text: string)
     local byId = {}
     for l in (text or ""):gmatch("[^\n]+") do
-        if l:sub(1, 1) ~= "#" then
-            local metric, labels, value = parseSeries(l)
-            local id = labels and tonumber(labels.monitor_id)
-            if id ~= nil and metric:sub(1, 8) == "monitor_" then
+        local metric = l:match("^([%w_]+){")
+        if metric ~= nil and USED[metric] and (metric ~= "monitor_uptime_ratio" or l:find('window="1d"', 1, true)) then
+            local id = tonumber(l:match('monitor_id="(%d+)"'))
+            local value = tonumber(l:match("}%s+(%S+)%s*$"))
+            if id ~= nil and value ~= nil and value == value then
                 local m = byId[id]
                 if m == nil then
-                    local tags = {}
-                    for key in pairs(labels) do
-                        if not RESERVED[key] then tags[#tags + 1] = K.safeText(key, MAX_NAME) end
+                    local labels = labelsOf(l)
+                    if labels ~= nil then
+                        local tags = {}
+                        for key in pairs(labels) do
+                            if not RESERVED[key] then tags[#tags + 1] = K.safeText(key, MAX_NAME) end
+                        end
+                        table.sort(tags)
+                        m = {
+                            id = id,
+                            name = K.safeText(labels.monitor_name or "", MAX_NAME),
+                            type = K.safeText(labels.monitor_type or "", 40),
+                            tags = tags,
+                        }
+                        byId[id] = m
                     end
-                    table.sort(tags)
-                    m = {
-                        id = id,
-                        name = K.safeText(labels.monitor_name or "", MAX_NAME),
-                        type = K.safeText(labels.monitor_type or "", 40),
-                        tags = tags,
-                    }
-                    byId[id] = m
                 end
-                if metric == "monitor_status" then
-                    m.status = value
-                elseif metric == "monitor_response_time" then
-                    if value >= 0 then m.ping = value end
-                elseif metric == "monitor_uptime_ratio" then
-                    if labels.window == "1d" then m.uptime1d = value end
-                elseif metric == "monitor_cert_days_remaining" then
-                    m.certDays = value
+                if m ~= nil then
+                    if metric == "monitor_status" then
+                        m.status = value
+                    elseif metric == "monitor_response_time" then
+                        if value >= 0 then m.ping = value end
+                    elseif metric == "monitor_uptime_ratio" then
+                        m.uptime1d = value
+                    else
+                        m.certDays = value
+                    end
                 end
             end
         end
