@@ -1,6 +1,6 @@
 id = "nightwatch75/kuma-status"
-name = "kuma-status"
-version = "0.1.1"
+name = "Kuma Status"
+version = "0.2.0"
 plugin_api = 32
 author = "nightwatch75"
 license = "MIT"
@@ -93,3 +93,10 @@ entry = "kuma-status.luau"
   label_key = "settings.glyph.label"
   description_key = "settings.glyph.description"
   default = "heartbeat"
+
+  [[widget.setting]]
+  key = "bar_label"
+  type = "string"
+  label_key = "settings.bar_label.label"
+  description_key = "settings.bar_label.description"
+  default = "Kuma"

@@ -1,4 +1,4 @@
--- module: service.luau kuma.luau
+-- module: service.luau kuma.luau pages_store.luau
 -- service.luau against a fake noctalia host: recorded http calls, canned
 -- responses, in-memory shared state. All data synthetic. Run through
 -- tests/kuma-status/run.sh.
@@ -28,7 +28,7 @@ local DECODED = {
 -- Boots service.luau with fake globals. cfg overrides defaults; respond(req)
 -- returns a response table or nil (= network failure).
 local function boot(cfg, respond)
-    local H = { calls = {}, state = {}, watchers = {}, cfg = cfg }
+    local H = { calls = {}, state = {}, watchers = {}, cfg = cfg, files = {} }
     local defaults = {
         kuma_url = "https://kuma.example.test", api_key = "KEY-SECRET", proxy_user = "", proxy_password = "",
         status_pages = {}, kuma3_support = false, refresh_seconds = 60,
@@ -38,6 +38,8 @@ local function boot(cfg, respond)
     noctalia = {
         getConfig = function(k) return H.cfg[k] end,
         tr = function(k) return k end,
+        pluginDataDir = function() return "/data" end,
+        readFile = function(p) return H.files[p] end,
         setUpdateInterval = function() end,
         json = { decode = function(s) return DECODED[s], DECODED[s] == nil and "bad json" or nil end },
         http = function(req, cb)
@@ -58,7 +60,8 @@ local function boot(cfg, respond)
         },
     }
     local kuma = loadstring(MODULES["kuma.luau"])()
-    require = function() return kuma end
+    local store = loadstring(MODULES["pages_store.luau"])()
+    require = function(p) if p:find("pages_store") then return store end return kuma end
     onConfigChanged = nil
     update = nil
     loadstring(MODULE_SRC)()
@@ -217,5 +220,14 @@ h = boot({ status_pages = { "http://status.example.test/status/dev" } }, functio
     return standard(req)
 end)
 eq(h.data().plainHttp, true, "a failed http page still sent the proxy password in clear")
+
+-- test: added_pages_are_merged_with_settings_without_duplicates
+local SET, ADD = "https://a.example.test/status/dev", "https://b.example.test/status/dev"
+h = boot({ status_pages = { SET } }, function(req) return standard(req) end)
+eq(h.count("/api/status-page/dev"), 1, "settings page only")
+h.files["/data/status_pages.txt"] = ADD .. "\n" .. SET .. "\n"
+h.refresh(1)
+eq(h.data().pageUrls[1], SET, "settings first"); eq(h.data().pageUrls[2], ADD, "then added"); eq(#h.data().pageUrls, 2, "duplicate dropped")
+eq(h.data().addedUrls[1], ADD, "added list published for the panel")
 
 print("service_test OK")

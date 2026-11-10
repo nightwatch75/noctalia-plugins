@@ -3,13 +3,15 @@
 --
 -- Pure renderer: service.luau publishes "kuma_status_data" (summary, errors,
 -- ts) and this entry only draws it, so the glyph is right before the panel
--- has ever been opened. bar_display "counts" adds "<up> ▲  <down> ▼" next to
--- the glyph, "color" shows the glyph color alone. Colors are theme roles:
--- up primary, pending tertiary, down error, idle/offline on_surface_variant.
--- The tick only re-reads settings (glyph, bar_display) like the other plugins.
+-- has ever been opened. The widget is a declarative tree (barWidget.render):
+-- [bar_label text] [heart glyph] and, with bar_display "counts",
+-- "<up> ▲ <down> ▼" with a green up arrow and a red down arrow. "color" shows
+-- the glyph alone. Glyph colors are theme roles: up primary, pending tertiary,
+-- down error, idle/offline on_surface_variant. The tick re-reads the settings.
 local PANEL_ID = "nightwatch75/kuma-status:panel"
 local DATA_KEY = "kuma_status_data"
 local MAX_DOWN_NAMES = 8
+local GREEN, RED = "#98c379", "#e06c75"
 
 local ROLE = {
     up = "primary",
@@ -41,17 +43,26 @@ end
 local function render()
     local summary = data and data.summary
     local color = summary and summary.color or "offline"
-    barWidget.setGlyph(noctalia.getConfig("glyph") or "heartbeat")
-    barWidget.setGlyphColor(ROLE[color] or ROLE.offline)
+    local children = {}
+    local label = noctalia.getConfig("bar_label")
+    if label == nil then label = "Kuma" end
+    if label ~= "" then
+        children[#children + 1] = ui.label({ key = "bar-label", text = label, color = "on_surface" })
+    end
+    children[#children + 1] = ui.glyph({
+        key = "bar-glyph", name = noctalia.getConfig("glyph") or "heartbeat", size = 16, color = ROLE[color] or ROLE.offline,
+    })
     if noctalia.getConfig("bar_display") == "counts" then
         if summary == nil or color == "offline" then
-            barWidget.setText("—")
+            children[#children + 1] = ui.label({ key = "bar-dash", text = "—", color = "on_surface_variant" })
         else
-            barWidget.setText(summary.up .. " ▲  " .. summary.down .. " ▼")
+            children[#children + 1] = ui.label({ key = "bar-up", text = tostring(summary.up), color = "on_surface" })
+            children[#children + 1] = ui.label({ key = "bar-up-arrow", text = "▲", color = GREEN })
+            children[#children + 1] = ui.label({ key = "bar-down", text = tostring(summary.down), color = "on_surface" })
+            children[#children + 1] = ui.label({ key = "bar-down-arrow", text = "▼", color = RED })
         end
-    else
-        barWidget.setText("")
     end
+    barWidget.render(ui.row({ gap = 4, align = "center" }, children))
     barWidget.setTooltip(tooltip(summary, data and data.errors))
 end
 

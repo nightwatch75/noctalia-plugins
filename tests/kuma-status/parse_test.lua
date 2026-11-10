@@ -119,4 +119,15 @@ eq(sp.groups[1].monitors[1].beats[1], 1, "oldest kept is beat 21")
 eq(sp.groups[1].monitors[2].id, 2, "id is a number")
 eq(#sp.groups[1].monitors[2].beats, 0, "no beats, no error")
 
+-- test: metrics_url_from_label_or_host_port
+local custom = table.concat({
+    'monitor_status{monitor_id="21",monitor_name="has-url",monitor_type="http",monitor_url="https://svc.example.test/health",monitor_hostname="null",monitor_port="null"} 1',
+    'monitor_status{monitor_id="22",monitor_name="host-only",monitor_type="port",monitor_url="null",monitor_hostname="h.example.test",monitor_port="8883"} 1',
+    'monitor_status{monitor_id="23",monitor_name="none",monitor_type="group",monitor_url="null",monitor_hostname="null",monitor_port="null"} 1',
+}, "\n")
+local cm = K.parseMetrics(custom)
+eq(cm[21].url, "https://svc.example.test/health", "url label")
+eq(cm[22].url, "h.example.test:8883", "hostname:port fallback")
+eq(cm[23].url, nil, "nothing to show")
+
 print("parse_test OK")

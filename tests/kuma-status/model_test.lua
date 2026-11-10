@@ -106,4 +106,9 @@ local buf = {}
 for i = 1, 5 do K.pushSample(buf, 7, i, 3) end
 eq(list(buf[7]), "3,4,5", "last 3 kept in order")
 
+-- test: rows_carry_url_and_cert_days
+d = K.buildDashboard(set(metric(1, "a", 1, { url = "https://u.example.test/", certDays = 12, tags = { "t" } })), nil, {}, {})
+eq(d.groups[1].rows[1].url, "https://u.example.test/", "row url")
+eq(d.groups[1].rows[1].certDays, 12, "row cert days")
+
 print("model_test OK")

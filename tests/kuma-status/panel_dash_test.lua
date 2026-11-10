@@ -1,4 +1,4 @@
--- module: panel.luau rows.luau kuma.luau
+-- module: panel.luau rows.luau kuma.luau pages_store.luau
 -- Dashboard tab of panel.luau against a recording fake of ui.* / panel.* /
 -- noctalia.*. Nodes are { kind, props, children }. Synthetic data. Run
 -- through tests/kuma-status/run.sh.
@@ -19,7 +19,7 @@ local GREEN, RED, YELLOW, BLUE = "#98c379", "#e06c75", "#e5c07b", "#61afef"
 
 local function boot()
     local P = { state = {}, watchers = {}, runs = {}, tree = nil }
-    ui = { column = node("column"), row = node("row"), scroll = node("scroll"), label = node("label"), button = node("button"), box = node("box"), separator = node("separator") }
+    ui = { column = node("column"), row = node("row"), scroll = node("scroll"), label = node("label"), button = node("button"), box = node("box"), input = node("input"), glyph = node("glyph"), separator = node("separator") }
     panel = { render = function(t) P.tree = t end, setWantsSecondTicks = function() end }
     noctalia = {
         tr = function(k) return k end,
@@ -37,9 +37,18 @@ local function boot()
             watch = function(k, w) P.watchers[k] = P.watchers[k] or {}; table.insert(P.watchers[k], w) end,
         },
     }
+    P.files = {}
+    noctalia.pluginDataDir = function() return "/data" end
+    noctalia.readFile = function(p) return P.files[p] end
+    noctalia.writeFile = function(p, c) P.files[p] = c; P.writes = (P.writes or 0) + 1; return true end
+    noctalia.copyToClipboard = function(t) P.copied = t; return true end
+    noctalia.openSettings = function() P.settingsOpened = true end
+    panel.openContextMenu = function(r) P.menu = r; return true end
+    panel.close = function() P.closed = true end
     local kuma = loadstring(MODULES["kuma.luau"])()
     local rows = loadstring(MODULES["rows.luau"])()
-    require = function(p) if p:find("rows") then return rows end return kuma end
+    local store = loadstring(MODULES["pages_store.luau"])()
+    require = function(p) if p:find("rows") then return rows elseif p:find("pages_store") then return store end return kuma end
     onOpen, onClose = nil, nil
     loadstring(MODULE_SRC)()
     function P.publish(d)
@@ -110,7 +119,7 @@ eq(find(P.tree, "mode-line").props.text, "panel.mode_hierarchy", "hierarchy")
 -- test: open_monitor_runs_xdg_open_with_https_url
 P = boot()
 P.publish({ baseUrl = "https://kuma.example.test", dashboard = dash("tags", { group("x", { row(7, "$(evil); rm -rf ~", 1) }) }) })
-find(P.tree, "row-7").props.onClick()
+find(P.tree, "name-7").props.onClick()
 eq(#P.runs, 1, "one command")
 eq(table.concat(P.runs[1], "|"), "xdg-open|https://kuma.example.test/dashboard/7", "argv is xdg-open + built URL only")
 
@@ -119,7 +128,7 @@ P = boot()
 P.publish({ baseUrl = "https://k.example.test", dashboard = dash("hierarchy", { group("g", { row(3, "p", -1, { paused = true }) }, 10) }) })
 local dot = find(P.tree, "dot-3")
 eq(dot.props.fill ~= GREEN and dot.props.fill ~= RED and dot.props.fill ~= YELLOW, true, "grey dot")
-eq(find(P.tree, "name-3").props.color, "on_surface_variant", "dim name")
+eq(find(P.tree, "row-3").props.opacity < 1, true, "dim row")
 
 -- test: error_line_for_metrics_401
 P = boot()
@@ -145,5 +154,58 @@ eq(P.state["kuma_status_request"].nonce, before + 1, "nonce increments")
 P = boot()
 P.publish({ baseUrl = "https://k.example.test", dashboard = dash("tags", {}) })
 eq(find(P.tree, "dash-empty").props.text, "panel.empty_groups", "hint when nothing to list")
+
+-- test: header_has_title_and_settings_glyph
+P = boot()
+P.publish({ baseUrl = "https://kuma.example.test" })
+eq(find(P.tree, "title").props.text, "title", "plugin title")
+find(P.tree, "btn-settings").props.onClick()
+eq(P.settingsOpened, true, "settings opened")
+eq(find(P.tree, "btn-settings").props.glyph, "settings", "settings glyph")
+find(P.tree, "btn-close").props.onClick()
+eq(P.closed, true, "close")
+
+-- test: tabs_have_glyphs_and_show_the_kuma_url
+eq(find(P.tree, "btn-tab-dashboard").props.glyph ~= nil, true, "dashboard glyph")
+eq(find(P.tree, "btn-tab-pages").props.glyph ~= nil, true, "pages glyph")
+eq(find(P.tree, "kuma-url").props.text, "https://kuma.example.test", "url next to the tabs")
+
+-- test: row_tooltip_is_the_test_url
+P = boot()
+P.publish({ baseUrl = "https://kuma.example.test", dashboard = dash("tags", { group("x", { row(7, "a", 1, { url = "https://svc.example.test/health" }), row(8, "b", 1) }) }) })
+eq(find(P.tree, "row-7").props.tooltip, "https://svc.example.test/health", "tooltip is the url")
+eq(find(P.tree, "row-8").props.tooltip, nil, "no url, no tooltip")
+
+-- test: right_click_menu_open_browser_and_copy_url
+find(P.tree, "name-7").props.onRightClick()
+eq(P.menu.items[1].id, "open", "first item"); eq(P.menu.items[2].id, "copy", "second item")
+eq(P.menu.context, "7", "monitor id rides along")
+eq(P.menu.onActivate, "onRowMenu", "named global")
+onRowMenu("copy", "7")
+eq(P.copied, "https://svc.example.test/health", "copied url")
+onRowMenu("open", "7")
+eq(table.concat(P.runs[#P.runs], "|"), "xdg-open|https://svc.example.test/health", "browser opens the test url")
+P.menu = nil
+find(P.tree, "name-8").props.onRightClick()
+eq(P.menu, nil, "no url, no menu")
+
+-- test: cert_line_small_glyph_colored_by_days
+local function certNode(days)
+    local p = boot()
+    p.publish({ baseUrl = "https://k.example.test", dashboard = dash("tags", { group("x", { row(1, "a", 1, { certDays = days }) }) }) })
+    return find(p.tree, "cert-1")
+end
+local c1 = certNode(40)
+eq(find(c1, "cert-glyph-1").props.name, "certificate", "glyph"); eq(find(c1, "cert-glyph-1").props.color, GREEN, "plenty of time")
+eq(find(certNode(12), "cert-glyph-1").props.color, YELLOW, "soon")
+eq(find(certNode(3), "cert-glyph-1").props.color, RED, "very soon")
+eq(find(c1, "cert-text-1").props.text, "panel.cert_days", "text key")
+eq(find(certNode(-1), "cert-text-1").props.text, "panel.cert_expired", "expired")
+eq(certNode(nil), nil, "no cert data, no line")
+
+-- test: mode_line_has_no_kuma3_hint
+P = boot()
+P.publish({ baseUrl = "https://k.example.test", dashboard = dash("tags", {}), mode = "tags" })
+eq(find(P.tree, "mode-line").props.text, "panel.mode_tags", "plain key; the wording lives in en.json")
 
 print("panel_dash_test OK")

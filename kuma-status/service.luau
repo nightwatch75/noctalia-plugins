@@ -5,7 +5,8 @@
 -- pure renderers wired through the plugin's shared state:
 --   engine publishes  "kuma_status_data"    = { nonce, ts, summary, dashboard?,
 --                       pages (each with .source = the URL as configured),
---                       pageUrls (configured URLs in order), errors = { metrics?, monitors?, pages = {[url]=msg} },
+--                       pageUrls (setting + panel-added URLs, deduped),
+--                       addedUrls (the panel-added ones), errors = { metrics?, monitors?, pages = {[url]=msg} },
 --                       mode = "hierarchy"|"tags", baseUrl, plainHttp }
 --                     summary.color is "offline" when /metrics is unusable.
 --   UI entries send   "kuma_status_request" = { nonce, action = "refresh" }
@@ -26,6 +27,7 @@
 -- 40-sample buffer fed by /metrics; it lives in memory only.
 
 local K = require("./kuma.luau")
+local store = require("./pages_store.luau")
 
 local STATE_KEY = "kuma_status_data"
 local REQUEST_KEY = "kuma_status_request"
@@ -46,14 +48,29 @@ local function tr(key, args)
 end
 
 local function readConfig()
-    local pages = noctalia.getConfig("status_pages")
+    -- the setting first, then pages added from the panel; one entry per page
+    local pages, seen = {}, {}
+    local function add(url)
+        if type(url) ~= "string" then return end
+        local origin, slug = K.statusPageUrl(url)
+        local key = origin and (origin .. "/status/" .. slug) or url
+        if not seen[key] then
+            seen[key] = true
+            pages[#pages + 1] = url
+        end
+    end
+    local setting = noctalia.getConfig("status_pages")
+    for _, url in ipairs(type(setting) == "table" and setting or {}) do add(url) end
+    local added = store.load()
+    for _, url in ipairs(added) do add(url) end
     local interval = tonumber(noctalia.getConfig("refresh_seconds")) or 60
     return {
         base = K.baseUrl(noctalia.getConfig("kuma_url") or ""),
         key = noctalia.getConfig("api_key") or "",
         proxyUser = noctalia.getConfig("proxy_user") or "",
         proxyPassword = noctalia.getConfig("proxy_password") or "",
-        pages = type(pages) == "table" and pages or {},
+        pages = pages,
+        added = added,
         v3 = noctalia.getConfig("kuma3_support") == true,
         interval = math.min(3600, math.max(20, interval)),
     }
@@ -89,6 +106,7 @@ local function publish(cfg, metrics, structure, beatsById, pages, errors)
         dashboard = dashboard,
         pages = pages,
         pageUrls = cfg.pages,
+        addedUrls = cfg.added,
         errors = errors,
         mode = structure ~= nil and "hierarchy" or "tags",
         baseUrl = cfg.base or "",

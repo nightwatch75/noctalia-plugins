@@ -1,5 +1,5 @@
 {
-  "tooltip": "Uptime Kuma",
+  "tooltip": "Kuma Status",
   "settings": {
     "glyph": {
       "label": "Bar icon",
@@ -40,6 +40,10 @@
     "refresh_seconds": {
       "label": "Refresh interval",
       "description": "Seconds between updates (20 to 3600)."
+    },
+    "bar_label": {
+      "label": "Bar text",
+      "description": "Text shown to the left of the heart icon. Leave empty to hide it."
     }
   },
   "error": {
@@ -60,7 +64,7 @@
     "tip_refresh": "Refresh now",
     "updated": "Updated {time}",
     "empty": "No data yet.",
-    "mode_tags": "Grouped by tag (Kuma 3 shows the real groups)",
+    "mode_tags": "Grouped by tag",
     "mode_hierarchy": "Groups as in Kuma",
     "group_none": "No group",
     "warn_http": "This server is reached over plain http: the API key and passwords travel in clear text.",
@@ -69,8 +73,19 @@
     "pages_empty": "No status pages configured. Add their URLs in the plugin settings.",
     "page_no_data": "No data.",
     "tip_open_page": "Open the status page",
-    "empty_groups": "No monitors to show."
+    "empty_groups": "No monitors to show.",
+    "tip_settings": "Plugin settings",
+    "tip_close": "Close",
+    "add_placeholder": "https://host/status/<slug>",
+    "add_bad_url": "Not a valid status page URL (https://host/status/<slug>).",
+    "tip_add": "Add status page",
+    "tip_remove_page": "Remove this page (added from here)",
+    "menu_open": "Open Browser",
+    "menu_copy": "Copy URL",
+    "cert_days": "Certificate expires in {days}d",
+    "cert_expired": "Certificate expired"
   },
   "tooltip_down": "DOWN",
-  "tooltip_more": "+{count} more"
+  "tooltip_more": "+{count} more",
+  "title": "Kuma Status"
 }

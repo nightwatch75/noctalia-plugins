@@ -5,7 +5,7 @@
 -- passes through safeText: monitor names are untrusted text.
 --
 -- Types (informal):
---   Metric     = { id, name, type, status, ping?, uptime1d?, certDays?, tags }
+--   Metric     = { id, name, type, url?, status, ping?, uptime1d?, certDays?, tags }
 --   Structure  = { id, name, type, parent?, children, tags, active }
 --   StatusPage = { slug, title, url, groups = { { name, monitors = { { id, name, beats } } } } }
 -- Status codes everywhere: 0 down, 1 up, 2 pending, 3 maintenance.
@@ -113,10 +113,22 @@ function K.parseMetrics(text: string)
                             if not RESERVED[key] then tags[#tags + 1] = K.safeText(key, MAX_NAME) end
                         end
                         table.sort(tags)
+                        -- what the check hits: the URL, else host[:port]
+                        local url = labels.monitor_url
+                        if url == nil or url == "" or url == "null" then
+                            url = nil
+                            local host = labels.monitor_hostname
+                            if host ~= nil and host ~= "" and host ~= "null" then
+                                url = host
+                                local port = labels.monitor_port
+                                if port ~= nil and port ~= "" and port ~= "null" then url = host .. ":" .. port end
+                            end
+                        end
                         m = {
                             id = id,
                             name = K.safeText(labels.monitor_name or "", MAX_NAME),
                             type = K.safeText(labels.monitor_type or "", 40),
+                            url = url and K.safeText(url, 200) or nil,
                             tags = tags,
                         }
                         byId[id] = m
@@ -181,6 +193,7 @@ local function splitUrl(url)
     if scheme ~= "http" and scheme ~= "https" then return nil end
     local host, path = rest:match("^([^/]*)(.*)$")
     if host == "" or not host:match("^[%w%.%-%[%]:]+$") then return nil end
+    host = host:lower()
     return scheme, host, (path:gsub("/+$", ""))
 end
 
@@ -282,7 +295,7 @@ local function makeRow(id, m, struct, beats, buffer)
     local b = beats[id]
     if b == nil or #b == 0 then b = buffer[id] or {} end
     if m ~= nil then
-        return { id = id, name = m.name, status = m.status, ping = m.ping, beats = b, paused = false }
+        return { id = id, name = m.name, status = m.status, ping = m.ping, beats = b, paused = false, url = m.url, certDays = m.certDays }
     end
     return { id = id, name = struct.name, status = -1, beats = b, paused = true }
 end

@@ -1,4 +1,4 @@
--- module: panel.luau rows.luau kuma.luau
+-- module: panel.luau rows.luau kuma.luau pages_store.luau
 -- Status pages tab of panel.luau, same recording fakes as panel_dash_test.
 -- Synthetic data. Run through tests/kuma-status/run.sh.
 
@@ -15,7 +15,7 @@ end
 
 local function boot()
     local P = { state = {}, watchers = {}, runs = {}, tree = nil }
-    ui = { column = node("column"), row = node("row"), scroll = node("scroll"), label = node("label"), button = node("button"), box = node("box") }
+    ui = { column = node("column"), row = node("row"), scroll = node("scroll"), label = node("label"), button = node("button"), box = node("box"), input = node("input"), glyph = node("glyph") }
     panel = { render = function(t) P.tree = t end }
     noctalia = {
         tr = function(k) return k end, formatTime = function() return "12:00" end, nowMs = function() return 1000 end,
@@ -27,9 +27,18 @@ local function boot()
             watch = function(k, w) P.watchers[k] = P.watchers[k] or {}; table.insert(P.watchers[k], w) end,
         },
     }
+    P.files = {}
+    noctalia.pluginDataDir = function() return "/data" end
+    noctalia.readFile = function(p) return P.files[p] end
+    noctalia.writeFile = function(p, c) P.files[p] = c; P.writes = (P.writes or 0) + 1; return true end
+    noctalia.copyToClipboard = function(t) P.copied = t; return true end
+    noctalia.openSettings = function() P.settingsOpened = true end
+    panel.openContextMenu = function(r) P.menu = r; return true end
+    panel.close = function() P.closed = true end
     local kuma = loadstring(MODULES["kuma.luau"])()
     local rows = loadstring(MODULES["rows.luau"])()
-    require = function(p) if p:find("rows") then return rows end return kuma end
+    local store = loadstring(MODULES["pages_store.luau"])()
+    require = function(p) if p:find("rows") then return rows elseif p:find("pages_store") then return store end return kuma end
     onOpen, onClose = nil, nil
     loadstring(MODULE_SRC)()
     function P.publish(d)
@@ -75,5 +84,34 @@ P = boot()
 P.publish({ pageUrls = { URL }, pages = { PAGE } })
 eq(#find(find(P.tree, "tab-pages"), "bar-1").children, 40, "40 cells")
 eq(#find(find(P.tree, "tab-pages"), "bar-2").children, 40, "40 cells without beats")
+
+-- test: add_page_valid_is_saved_normalized_and_refreshes
+P = boot()
+P.publish({ pageUrls = {}, pages = {}, addedUrls = {} })
+local before = P.state["kuma_status_request"].nonce
+find(P.tree, "add-input").props.onChange("https://Status.example.test/status/Dev/")
+find(P.tree, "btn-add-page").props.onClick()
+eq(P.files["/data/status_pages.txt"], "https://status.example.test/status/dev\n", "normalized and saved")
+eq(P.state["kuma_status_request"].nonce, before + 1, "service asked to refresh")
+find(P.tree, "add-input").props.onChange("https://status.example.test/status/dev")
+find(P.tree, "btn-add-page").props.onClick()
+eq(P.files["/data/status_pages.txt"], "https://status.example.test/status/dev\n", "no duplicate")
+
+-- test: add_page_invalid_shows_error_and_saves_nothing
+P = boot()
+P.publish({ pageUrls = {}, pages = {}, addedUrls = {} })
+find(P.tree, "add-input").props.onChange("ftp://x.example.test/status/dev")
+find(P.tree, "btn-add-page").props.onClick()
+eq(find(P.tree, "add-err").props.text, "panel.add_bad_url", "error shown")
+eq(P.writes, nil, "nothing written")
+
+-- test: only_added_pages_can_be_removed
+P = boot()
+P.files["/data/status_pages.txt"] = URL .. "\n"
+P.publish({ pageUrls = { URL, "https://other.example.test/status/x" }, pages = { PAGE }, addedUrls = { URL } })
+eq(find(P.tree, "btn-del-page-1") ~= nil, true, "added page has a remove button")
+eq(find(P.tree, "btn-del-page-2"), nil, "settings page has none")
+find(P.tree, "btn-del-page-1").props.onClick()
+eq(P.files["/data/status_pages.txt"], "", "removed from the store")
 
 print("panel_pages_test OK")
