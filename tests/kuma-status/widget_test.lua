@@ -105,3 +105,12 @@ onClick()
 eq(w.toggled, "nightwatch75/kuma-status:panel", "panel id")
 
 print("widget_test OK")
+
+-- test: tooltip_warns_about_clear_text_and_tls_off
+w = boot()
+w.publish(sum(1, 0, 0, "up"))
+eq(#w.tooltip, 1, "no warning by default")
+noctalia.state.set("kuma_status_data", { summary = sum(1, 0, 0, "up"), errors = { pages = {} }, ts = 1, plainHttp = true, insecureTls = true })
+local keys = {}
+for _, r in ipairs(w.tooltip) do keys[#keys + 1] = r.key end
+eq(table.concat(keys, ","), "tooltip,tooltip_warn_http,tooltip_warn_tls", "both warnings listed")

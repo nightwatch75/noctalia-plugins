@@ -37,6 +37,12 @@ local function tooltip(summary, errors)
             rows[#rows + 1] = { key = noctalia.tr("tooltip_more", { count = more }), value = "" }
         end
     end
+    if data and data.plainHttp then
+        rows[#rows + 1] = { key = noctalia.tr("tooltip_warn_http"), value = "" }
+    end
+    if data and data.insecureTls then
+        rows[#rows + 1] = { key = noctalia.tr("tooltip_warn_tls"), value = "" }
+    end
     return rows
 end
 
