@@ -1,0 +1,280 @@
+--!nonstrict
+-- kuma-status — singleton engine: all network, parsing and buffering.
+--
+-- Runs once however many bars show the widget. The widget and the panel are
+-- pure renderers wired through the plugin's shared state:
+--   engine publishes  "kuma_status_data"    = { nonce, ts, summary, dashboard?,
+--                       pages, errors = { metrics?, monitors?, pages = {[url]=msg} },
+--                       mode = "hierarchy"|"tags", baseUrl, plainHttp }
+--                     summary.color is "offline" when /metrics is unusable.
+--   UI entries send   "kuma_status_request" = { nonce, action = "refresh" }
+--                     (a nonce already seen is ignored).
+--
+-- Sources per cycle (refresh_seconds, default 60):
+--   /metrics            Basic, user "kuma", password = api_key (status, ping, tags)
+--   /api/monitors       Bearer api_key, only with kuma3_support (Kuma 3 hierarchy)
+--   status pages        <origin>/api/status-page/<slug> and .../heartbeat/<slug>,
+--                       Basic with the global proxy user/password when set
+-- The api_key goes to kuma_url only; the proxy pair goes to the hosts of the
+-- listed status pages only. A 401/403 blocks that source until the settings
+-- change; a 404 on /api/monitors switches Kuma 3 support off for the session;
+-- any other failure is retried on the next cycle. A source that fails never
+-- clears the others. Callbacks decode and parse inline: the host budget is
+-- ~25 ms per callback (measured in the budget test, Task 7).
+-- Monitors that no listed status page covers get their history from a
+-- 40-sample buffer fed by /metrics; it lives in memory only.
+
+local K = require("./kuma.luau")
+
+local STATE_KEY = "kuma_status_data"
+local REQUEST_KEY = "kuma_status_request"
+local BUFFER_CAP = 40
+
+local gen = 0        -- bumps per cycle and on config change; stale callbacks drop themselves
+local nonce = 0
+local seenRequest = nil
+local elapsed = 0
+local v3Off = false  -- /api/monitors answered 404: stop asking this session
+local blocked = { metrics = false, monitors = false, pages = {} }
+local reasons = { pages = {} } -- text shown for blocked sources
+local buffer = {}
+
+local function tr(key, args)
+    return noctalia.tr(key, args)
+end
+
+local function readConfig()
+    local pages = noctalia.getConfig("status_pages")
+    local interval = tonumber(noctalia.getConfig("refresh_seconds")) or 60
+    return {
+        base = K.baseUrl(noctalia.getConfig("kuma_url") or ""),
+        key = noctalia.getConfig("api_key") or "",
+        proxyUser = noctalia.getConfig("proxy_user") or "",
+        proxyPassword = noctalia.getConfig("proxy_password") or "",
+        pages = type(pages) == "table" and pages or {},
+        v3 = noctalia.getConfig("kuma3_support") == true,
+        interval = math.min(3600, math.max(20, interval)),
+    }
+end
+
+-- Maps an http response to (body) or (nil, message, hard) where `hard` marks a
+-- 401/403 that should block the source.
+local function classify(r)
+    if not r.ok then return nil, tr("error.offline"), false end
+    if r.status == 401 or r.status == 403 then return nil, tr("error.unauthorized"), true end
+    if r.status == 404 then return nil, tr("error.not_found"), false end
+    if r.status ~= 200 then return nil, tr("error.http", { status = r.status }), false end
+    return r.body, nil, false
+end
+
+local function publish(cfg, metrics, structure, beatsById, pages, errors)
+    nonce += 1
+    local summary = K.summarize(metrics or {})
+    if metrics == nil then summary.color = "offline" end
+    local dashboard = nil
+    if metrics ~= nil then
+        dashboard = K.buildDashboard(metrics, structure, beatsById, buffer)
+    end
+    local plain = cfg.base ~= nil and cfg.base:sub(1, 7) == "http://"
+    for _, p in ipairs(pages) do
+        if p.url:sub(1, 7) == "http://" then plain = true end
+    end
+    noctalia.state.set(STATE_KEY, {
+        nonce = nonce,
+        ts = os.time(),
+        summary = summary,
+        dashboard = dashboard,
+        pages = pages,
+        errors = errors,
+        mode = structure ~= nil and "hierarchy" or "tags",
+        baseUrl = cfg.base or "",
+        plainHttp = plain,
+    })
+end
+
+local function refresh()
+    gen += 1
+    local mine = gen
+    elapsed = 0
+    local cfg = readConfig()
+    local errors = { pages = {} }
+    if cfg.base == nil then
+        errors.metrics = tr("error.no_url")
+        publish(cfg, nil, nil, {}, {}, errors)
+        return
+    end
+
+    local metrics, structure = nil, nil
+    local pageResults = {} -- [index] = StatusPage
+    local pending = 1      -- guard: held until every request is issued
+
+    local function finish()
+        pending -= 1
+        if pending > 0 or mine ~= gen then return end
+        local pages, beatsById = {}, {}
+        for i = 1, #cfg.pages do
+            local sp = pageResults[i]
+            if sp ~= nil then
+                pages[#pages + 1] = sp
+                for _, g in ipairs(sp.groups) do
+                    for _, m in ipairs(g.monitors) do
+                        if beatsById[m.id] == nil and #m.beats > 0 then beatsById[m.id] = m.beats end
+                    end
+                end
+            end
+        end
+        if metrics ~= nil then
+            for id, m in pairs(metrics) do
+                if m.type ~= "group" and beatsById[id] == nil then
+                    K.pushSample(buffer, id, m.status, BUFFER_CAP)
+                end
+            end
+        end
+        publish(cfg, metrics, structure, beatsById, pages, errors)
+    end
+
+    local function request(req, cb)
+        pending += 1
+        local sent = noctalia.http(req, function(r)
+            if mine == gen then cb(r) end
+            finish()
+        end)
+        if not sent then
+            pending -= 1
+            cb({ ok = false, status = 0, body = "" })
+        end
+    end
+
+    -- /metrics
+    if blocked.metrics then
+        errors.metrics = reasons.metrics
+    elseif cfg.key == "" then
+        errors.metrics = tr("error.no_key")
+    else
+        request({ url = cfg.base .. "/metrics", basic_username = "kuma", basic_password = cfg.key }, function(r)
+            local body, msg, hard = classify(r)
+            if body == nil then
+                errors.metrics = msg
+                if hard then
+                    blocked.metrics = true
+                    reasons.metrics = msg
+                end
+            else
+                metrics = K.parseMetrics(body)
+            end
+        end)
+    end
+
+    -- /api/monitors (Kuma 3)
+    if cfg.v3 then
+        if v3Off then
+            errors.monitors = reasons.monitors
+        elseif blocked.monitors then
+            errors.monitors = reasons.monitors
+        elseif cfg.key ~= "" then
+            request({ url = cfg.base .. "/api/monitors", headers = { "Authorization: Bearer " .. cfg.key } }, function(r)
+                if r.ok and r.status == 404 then
+                    v3Off = true
+                    reasons.monitors = tr("error.v3_api_off")
+                    errors.monitors = reasons.monitors
+                    return
+                end
+                local body, msg, hard = classify(r)
+                if body == nil then
+                    errors.monitors = msg
+                    if hard then
+                        blocked.monitors = true
+                        reasons.monitors = msg
+                    end
+                    return
+                end
+                local decoded = noctalia.json.decode(body)
+                if type(decoded) == "table" then
+                    structure = K.parseMonitors(decoded)
+                else
+                    errors.monitors = tr("error.bad_json")
+                end
+            end)
+        end
+    end
+
+    -- status pages
+    for i, url in ipairs(cfg.pages) do
+        local origin, slug = K.statusPageUrl(url)
+        if origin == nil then
+            errors.pages[url] = tr("error.bad_url")
+        elseif blocked.pages[url] then
+            errors.pages[url] = reasons.pages[url]
+        else
+            local got = { left = 2 }
+            local function done()
+                got.left -= 1
+                if got.left > 0 then return end
+                if got.err ~= nil then
+                    errors.pages[url] = got.err
+                    if got.hard then
+                        blocked.pages[url] = true
+                        reasons.pages[url] = got.err
+                    end
+                    return
+                end
+                local page = noctalia.json.decode(got.page)
+                local hb = noctalia.json.decode(got.hb)
+                if type(page) == "table" and type(hb) == "table" then
+                    pageResults[i] = K.parseStatusPage(page, hb, origin, slug)
+                else
+                    errors.pages[url] = tr("error.bad_json")
+                end
+            end
+            local function pageRequest(path, field)
+                local req = { url = origin .. path .. slug }
+                if cfg.proxyUser ~= "" then
+                    req.basic_username = cfg.proxyUser
+                    req.basic_password = cfg.proxyPassword
+                end
+                request(req, function(r)
+                    local body, msg, hard = classify(r)
+                    if body == nil then
+                        got.err, got.hard = got.err or msg, got.hard or hard
+                    else
+                        got[field] = body
+                    end
+                    done()
+                end)
+            end
+            pageRequest("/api/status-page/", "page")
+            pageRequest("/api/status-page/heartbeat/", "hb")
+        end
+    end
+
+    finish()
+end
+
+local request0 = noctalia.state.get(REQUEST_KEY)
+if type(request0) == "table" then seenRequest = request0.nonce end
+noctalia.state.watch(REQUEST_KEY, function(req)
+    if type(req) == "table" and req.action == "refresh" and req.nonce ~= seenRequest then
+        seenRequest = req.nonce
+        refresh()
+    end
+end)
+
+function update()
+    elapsed += 1
+    if elapsed >= readConfig().interval then refresh() end
+end
+
+-- Settings changed: forget every block and the 404 verdict, ask again now.
+function onConfigChanged()
+    blocked = { metrics = false, monitors = false, pages = {} }
+    reasons = { pages = {} }
+    v3Off = false
+    refresh()
+end
+
+function onExit()
+    gen += 1
+end
+
+noctalia.setUpdateInterval(1000)
+refresh()

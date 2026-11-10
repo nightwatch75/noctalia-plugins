@@ -4,7 +4,54 @@
     "glyph": {
       "label": "Bar icon",
       "description": "Glyph shown on the bar."
+    },
+    "kuma_url": {
+      "label": "Kuma URL",
+      "description": "Base URL of your Uptime Kuma server, http:// or https://. With http:// the key and password travel in clear text."
+    },
+    "api_key": {
+      "label": "API key",
+      "description": "A Kuma API key, used for /metrics and /api/monitors. Stored in clear text in the noctalia settings file: create a key just for this plugin."
+    },
+    "proxy_user": {
+      "label": "Status page user",
+      "description": "Basic auth user in front of your status pages (for example a reverse proxy). Leave empty if they are public."
+    },
+    "proxy_password": {
+      "label": "Status page password",
+      "description": "Password for the status page user. Sent only to the hosts of the status pages listed below."
+    },
+    "status_pages": {
+      "label": "Status pages",
+      "description": "One URL per page, like https://host/status/<slug>."
+    },
+    "kuma3_support": {
+      "label": "Kuma 3 support",
+      "description": "Use /api/monitors (Kuma 3, API enabled) to show the real groups. Leave off on Kuma 2: the plugin then groups by tag."
+    },
+    "bar_display": {
+      "label": "Bar display",
+      "description": "What the bar widget shows next to the icon.",
+      "options": {
+        "counts": "Color and counts (up and down)",
+        "color": "Color only"
+      }
+    },
+    "refresh_seconds": {
+      "label": "Refresh interval",
+      "description": "Seconds between updates (20 to 3600)."
     }
+  },
+  "error": {
+    "no_url": "Set the Kuma URL in the plugin settings.",
+    "no_key": "Set the API key in the plugin settings.",
+    "unauthorized": "Access denied (401/403). Check the credentials.",
+    "not_found": "Not found (404).",
+    "offline": "Server not reachable.",
+    "http": "Unexpected answer: HTTP {status}.",
+    "v3_api_off": "The Kuma 3 API is not enabled on this server.",
+    "bad_json": "Unreadable answer.",
+    "bad_url": "Not a valid status page URL."
   },
   "panel": {
     "placeholder": "Dashboard and status pages: work in progress."

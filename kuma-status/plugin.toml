@@ -1,13 +1,78 @@
 id = "nightwatch75/kuma-status"
 name = "kuma-status"
-version = "0.0.3"
+version = "0.0.4"
 plugin_api = 32
 author = "nightwatch75"
 license = "MIT"
-dependencies = []
+dependencies = ["xdg-open"]
 tags = ["bar", "panel", "monitoring"]
 icon = "heartbeat"
 description = "Uptime Kuma monitors on the bar: a glyph shows the overall state, a panel lists monitors and status pages."
+
+[[setting]]
+key = "kuma_url"
+type = "string"
+label_key = "settings.kuma_url.label"
+description_key = "settings.kuma_url.description"
+default = ""
+
+[[setting]]
+key = "api_key"
+type = "string"
+label_key = "settings.api_key.label"
+description_key = "settings.api_key.description"
+default = ""
+
+[[setting]]
+key = "proxy_user"
+type = "string"
+label_key = "settings.proxy_user.label"
+description_key = "settings.proxy_user.description"
+default = ""
+
+[[setting]]
+key = "proxy_password"
+type = "string"
+label_key = "settings.proxy_password.label"
+description_key = "settings.proxy_password.description"
+default = ""
+
+[[setting]]
+key = "status_pages"
+type = "string_list"
+label_key = "settings.status_pages.label"
+description_key = "settings.status_pages.description"
+
+[[setting]]
+key = "kuma3_support"
+type = "bool"
+label_key = "settings.kuma3_support.label"
+description_key = "settings.kuma3_support.description"
+default = false
+
+[[setting]]
+key = "bar_display"
+type = "select"
+label_key = "settings.bar_display.label"
+description_key = "settings.bar_display.description"
+default = "counts"
+options = [
+  { value = "counts", label_key = "settings.bar_display.options.counts" },
+  { value = "color", label_key = "settings.bar_display.options.color" },
+]
+
+[[setting]]
+key = "refresh_seconds"
+type = "int"
+label_key = "settings.refresh_seconds.label"
+description_key = "settings.refresh_seconds.description"
+default = 60
+min = 20
+max = 3600
+
+[[service]]
+id = "service"
+entry = "service.luau"
 
 [[panel]]
 id = "panel"

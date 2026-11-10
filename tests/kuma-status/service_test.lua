@@ -1,0 +1,169 @@
+-- module: service.luau kuma.luau
+-- service.luau against a fake noctalia host: recorded http calls, canned
+-- responses, in-memory shared state. All data synthetic. Run through
+-- tests/kuma-status/run.sh.
+
+local function eq(a, b, m) if a ~= b then error(m .. ": got " .. tostring(a) .. " want " .. tostring(b), 2) end end
+
+local function series(metric, id, name, value, extra)
+    return metric .. '{monitor_id="' .. id .. '",monitor_name="' .. name .. '",monitor_type="http",monitor_url="https://x.example.test/",monitor_hostname="null",monitor_port="null"' .. (extra or "") .. "} " .. value
+end
+local METRICS = table.concat({
+    series("monitor_status", 1, "svc-a", 1), series("monitor_status", 2, "svc-b", 0),
+    series("monitor_response_time", 1, "svc-a", 12),
+}, "\n")
+
+local DECODED = {
+    monitors = { monitors = {
+        { id = 10, name = "grp", type = "group", active = true, childrenIDs = { 1, 2 }, tags = {} },
+        { id = 1, name = "svc-a", type = "http", active = true, parent = 10, childrenIDs = {}, tags = {} },
+        { id = 2, name = "svc-b", type = "http", active = true, parent = 10, childrenIDs = {}, tags = {} },
+    } },
+    page = { config = { title = "Board" }, publicGroupList = { { name = "G", monitorList = { { id = 1, name = "svc-a" } } } } },
+    beats = { heartbeatList = { ["1"] = { { status = 1 }, { status = 0 } } } },
+}
+
+-- Boots service.luau with fake globals. cfg overrides defaults; respond(req)
+-- returns a response table or nil (= network failure).
+local function boot(cfg, respond)
+    local H = { calls = {}, state = {}, watchers = {}, cfg = cfg }
+    local defaults = {
+        kuma_url = "https://kuma.example.test", api_key = "KEY-SECRET", proxy_user = "", proxy_password = "",
+        status_pages = {}, kuma3_support = false, refresh_seconds = 60,
+    }
+    for k, v in pairs(cfg) do defaults[k] = v end
+    H.cfg = defaults
+    noctalia = {
+        getConfig = function(k) return H.cfg[k] end,
+        tr = function(k) return k end,
+        setUpdateInterval = function() end,
+        json = { decode = function(s) return DECODED[s], DECODED[s] == nil and "bad json" or nil end },
+        http = function(req, cb)
+            H.calls[#H.calls + 1] = req
+            local r = respond(req)
+            if r == nil then r = { ok = false, status = 0, body = "" } end
+            cb(r)
+            return true
+        end,
+        state = {
+            set = function(k, v)
+                H.state[k] = v
+                for _, w in ipairs(H.watchers[k] or {}) do w(v) end
+            end,
+            get = function(k) return H.state[k] end,
+            watch = function(k, w) H.watchers[k] = H.watchers[k] or {}; table.insert(H.watchers[k], w) end,
+        },
+    }
+    local kuma = loadstring(MODULES["kuma.luau"])()
+    require = function() return kuma end
+    onConfigChanged = nil
+    update = nil
+    loadstring(MODULE_SRC)()
+    function H.refresh(n) noctalia.state.set("kuma_status_request", { nonce = n, action = "refresh" }) end
+    function H.data() return H.state["kuma_status_data"] end
+    function H.count(suffix)
+        local n = 0
+        for _, c in ipairs(H.calls) do if c.url:sub(-#suffix) == suffix then n += 1 end end
+        return n
+    end
+    return H
+end
+
+local function ok(body) return { ok = true, status = 200, body = body } end
+local function standard(req)
+    if req.url:sub(-8) == "/metrics" then return ok(METRICS) end
+    if req.url:sub(-13) == "/api/monitors" then return ok("monitors") end
+    if req.url:find("/api/status%-page/heartbeat/") then return ok("beats") end
+    if req.url:find("/api/status%-page/") then return ok("page") end
+    return { ok = true, status = 404, body = "" }
+end
+
+-- test: no_calls_without_url
+local h = boot({ kuma_url = "", status_pages = {} }, standard)
+eq(#h.calls, 0, "no calls without a URL")
+eq(h.data().summary.color, "offline", "unconfigured is offline")
+eq(h.data().errors.metrics, "error.no_url", "reason shown")
+
+-- test: metrics_uses_basic_with_key
+h = boot({}, standard)
+eq(h.calls[1].url, "https://kuma.example.test/metrics", "metrics url")
+eq(h.calls[1].basic_username, "kuma", "basic user")
+eq(h.calls[1].basic_password, "KEY-SECRET", "basic password is the key")
+eq(h.data().summary.up, 1, "parsed up"); eq(h.data().summary.down, 1, "parsed down")
+eq(h.data().mode, "tags", "tags mode without kuma 3")
+
+-- test: api_monitors_skipped_when_kuma3_off
+eq(h.count("/api/monitors"), 0, "no /api/monitors when the toggle is off")
+
+-- test: api_monitors_bearer_when_on
+h = boot({ kuma3_support = true }, standard)
+local mon
+for _, c in ipairs(h.calls) do if c.url:sub(-13) == "/api/monitors" then mon = c end end
+eq(mon ~= nil, true, "called")
+eq(mon.headers[1], "Authorization: Bearer KEY-SECRET", "bearer header")
+eq(h.data().mode, "hierarchy", "hierarchy mode")
+eq(h.data().dashboard.groups[1].name, "grp", "group from structure")
+
+-- test: api_monitors_404_disables_for_session
+h = boot({ kuma3_support = true }, function(req)
+    if req.url:sub(-13) == "/api/monitors" then return { ok = true, status = 404, body = "" } end
+    return standard(req)
+end)
+eq(h.data().errors.monitors, "error.v3_api_off", "reason shown")
+eq(h.data().mode, "tags", "falls back to tags")
+h.refresh(1)
+eq(h.count("/api/monitors"), 1, "not called again this session")
+
+-- test: status_page_gets_proxy_pair_only_for_listed_hosts
+h = boot({ status_pages = { "https://status.example.test/status/dev" }, proxy_user = "pu", proxy_password = "pp" }, standard)
+local pageCalls = 0
+for _, c in ipairs(h.calls) do
+    if c.url:find("^https://status.example.test/") then
+        pageCalls += 1
+        eq(c.basic_username, "pu", "proxy user on status page"); eq(c.basic_password, "pp", "proxy password on status page")
+    else
+        eq(c.basic_password, "KEY-SECRET", "kuma call carries the key, never the proxy pair")
+    end
+end
+eq(pageCalls, 2, "page + heartbeat")
+eq(h.data().pages[1].title, "Board", "page parsed")
+eq(table.concat(h.data().dashboard.groups[1].rows[1].beats, ","), "1,0", "beats from the status page")
+
+-- test: key_never_sent_to_status_page_host
+for _, c in ipairs(h.calls) do
+    if c.url:find("^https://status.example.test/") then
+        eq(c.basic_password == "KEY-SECRET", false, "key on status page host")
+        for _, line in ipairs(c.headers or {}) do eq(line:find("KEY-SECRET", 1, true), nil, "key in header") end
+    end
+end
+
+-- test: 401_on_one_page_does_not_stop_others
+local A, B = "https://a.example.test/status/dev", "https://b.example.test/status/dev"
+h = boot({ status_pages = { A, B } }, function(req)
+    if req.url:find("^https://a.example.test/") then return { ok = true, status = 401, body = "" } end
+    return standard(req)
+end)
+eq(h.data().errors.pages[A], "error.unauthorized", "A reported")
+eq(#h.data().pages, 1, "B still parsed")
+eq(h.data().pages[1].url, "https://b.example.test/status/dev", "B")
+local aBefore = h.count("/api/status-page/dev")
+h.refresh(1)
+eq(h.count("/api/status-page/dev"), aBefore + 1, "only B is requested again")
+
+-- test: 401_on_metrics_stops_calls_until_config_changes
+h = boot({}, function(req)
+    if req.url:sub(-8) == "/metrics" then return { ok = true, status = 401, body = "" } end
+    return standard(req)
+end)
+eq(h.data().errors.metrics, "error.unauthorized", "reason shown"); eq(h.data().summary.color, "offline", "offline")
+h.refresh(1)
+eq(h.count("/metrics"), 1, "blocked: no second call")
+onConfigChanged()
+eq(h.count("/metrics"), 2, "config change retries")
+
+-- test: refresh_request_nonce_ignored_twice
+h = boot({}, standard)
+h.refresh(5); h.refresh(5)
+eq(h.count("/metrics"), 2, "initial + one refresh, second nonce ignored")
+
+print("service_test OK")
