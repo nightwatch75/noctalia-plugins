@@ -58,7 +58,7 @@ How groups are built:
 | Server | Groups |
 | --- | --- |
 | Kuma 3 with **Kuma 3 support** on | The real groups, nested ones as `Parent / Child`; paused monitors are grey |
-| Kuma 2 | One group per tag. By default a monitor appears once, under its first tag (tags sorted alphabetically). The view button switches to **All tags (duplicates)**: a monitor with two tags then appears twice; the bar counts it once either way. Paused monitors are not listed: Kuma exports nothing for them |
+| Kuma 2 | One group per tag. By default a monitor appears once, under its first tag (tags sorted alphabetically). The view button switches to **All tags (duplicates)** (the choice is remembered): a monitor with two tags then appears twice; the bar counts it once either way. Paused monitors are not listed: Kuma exports nothing for them |
 
 The history bar uses the status page data for monitors that are on one of your
 listed pages. The others fill from the plugin's own polls (one cell per

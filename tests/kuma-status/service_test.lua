@@ -27,8 +27,8 @@ local DECODED = {
 
 -- Boots service.luau with fake globals. cfg overrides defaults; respond(req)
 -- returns a response table or nil (= network failure).
-local function boot(cfg, respond)
-    local H = { calls = {}, state = {}, watchers = {}, cfg = cfg, files = {} }
+local function boot(cfg, respond, files)
+    local H = { calls = {}, state = {}, watchers = {}, cfg = cfg, files = files or {} }
     local defaults = {
         kuma_url = "https://kuma.example.test", api_key = "KEY-SECRET", proxy_user = "", proxy_password = "",
         status_pages = {}, kuma3_support = false, refresh_seconds = 60,
@@ -40,6 +40,7 @@ local function boot(cfg, respond)
         tr = function(k) return k end,
         pluginDataDir = function() return "/data" end,
         readFile = function(p) return H.files[p] end,
+        writeFile = function(p, c) H.files[p] = c; return true end,
         setUpdateInterval = function() end,
         json = { decode = function(s) return DECODED[s], DECODED[s] == nil and "bad json" or nil end },
         http = function(req, cb)
@@ -248,5 +249,14 @@ noctalia.state.set("kuma_status_request", { nonce = 9, action = "tag_mode", valu
 eq(h.data().tagMode, "all", "switched")
 eq(#h.data().dashboard.groups[2].rows, 2, "duplicates back: y holds both")
 eq(#h.calls, calls, "no new network call")
+
+-- test: tag_view_choice_is_remembered
+h = boot({}, multiTag)
+noctalia.state.set("kuma_status_request", { nonce = 3, action = "tag_mode", value = "all" })
+eq(h.files["/data/tag_mode.txt"], "all", "choice saved")
+h = boot({}, multiTag, { ["/data/tag_mode.txt"] = "all" })
+eq(h.data().tagMode, "all", "restored at start")
+h = boot({}, multiTag, { ["/data/tag_mode.txt"] = "junk" })
+eq(h.data().tagMode, "first", "unknown content falls back to the default")
 
 print("service_test OK")

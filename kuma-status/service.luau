@@ -44,7 +44,18 @@ local v3Off = false  -- /api/monitors answered 404: stop asking this session
 local blocked = { metrics = false, monitors = false, pages = {} }
 local reasons = { pages = {} } -- text shown for blocked sources
 local buffer = {}
-local tagMode = "first"  -- "first": a monitor in its first tag only; "all": in every tag
+-- "first": a monitor in its first tag only; "all": in every tag. The choice is
+-- kept in the plugin data folder (tag_mode.txt) across restarts.
+local function modeFile()
+    local dir = noctalia.pluginDataDir()
+    return dir and (dir .. "/tag_mode.txt") or nil
+end
+local function loadTagMode()
+    local f = modeFile()
+    local saved = f and noctalia.readFile(f) or nil
+    return (saved ~= nil and saved:match("^%s*all")) and "all" or "first"
+end
+local tagMode = "first"
 local last = nil         -- inputs of the last publish, to rebuild the view without network
 
 local function tr(key, args)
@@ -289,6 +300,7 @@ local function refresh()
     finish()
 end
 
+tagMode = loadTagMode()
 local request0 = noctalia.state.get(REQUEST_KEY)
 if type(request0) == "table" then seenRequest = request0.nonce end
 noctalia.state.watch(REQUEST_KEY, function(req)
@@ -298,6 +310,8 @@ noctalia.state.watch(REQUEST_KEY, function(req)
         refresh()
     elseif req.action == "tag_mode" and (req.value == "first" or req.value == "all") then
         tagMode = req.value
+        local f = modeFile()
+        if f then noctalia.writeFile(f, tagMode) end
         if last ~= nil then publish(table.unpack(last)) end
     end
 end)
