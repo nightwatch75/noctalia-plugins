@@ -428,6 +428,7 @@ end)
 
 function onOpen(_context)
     isOpen = true
+    noctalia.state.set("kuma_status_seen", os.time())
     data = noctalia.state.get(DATA_KEY)
     local mode = noctalia.getConfig("groups_on_open")
     defaultCollapsed = mode == "collapsed"

@@ -186,4 +186,37 @@ eq(names(d), "produzione,", "the list spelling names the group"); eq(rowsOf(d, "
 d = K.buildDashboard(gt, nil, {}, {}, { firstTagOnly = true, groupTags = {} })
 eq(rowsOf(d, "A2A"), "stage-a2a", "empty list: first tag alphabetically, as before")
 
+-- test: track_changes_rules
+local function ms(a, b) return { [1] = { id = 1, name = "svc-a", type = "http", status = a }, [2] = { id = 2, name = "svc-b", type = "http", status = b } } end
+local tr0 = K.newTrack()
+local ev = K.trackChanges(tr0, ms(1, 0), 0)
+eq(#ev.down + #ev.restored, 0, "first cycle is only a baseline (svc-b was already down)")
+ev = K.trackChanges(tr0, ms(0, 0), 60)
+eq(#ev.down, 0, "one cycle down is not enough")
+ev = K.trackChanges(tr0, ms(0, 0), 120)
+eq(#ev.down, 1, "two cycles down notify"); eq(ev.down[1], "svc-a", "the name")
+ev = K.trackChanges(tr0, ms(0, 0), 180)
+eq(#ev.down, 0, "no repeat while it stays down")
+ev = K.trackChanges(tr0, ms(2, 0), 240)
+eq(#ev.restored, 0, "pending is not restored")
+ev = K.trackChanges(tr0, ms(1, 0), 300)
+eq(#ev.restored, 1, "back up notifies once"); eq(ev.restored[1], "svc-a", "restored name")
+ev = K.trackChanges(tr0, ms(1, 0), 360)
+eq(#ev.restored, 0, "no second restore")
+
+-- test: track_changes_blip_and_flapping
+tr0 = K.newTrack()
+K.trackChanges(tr0, ms(1, 1), 0)
+K.trackChanges(tr0, ms(0, 1), 60); ev = K.trackChanges(tr0, ms(1, 1), 120)
+eq(#ev.down + #ev.restored, 0, "a one-cycle blip says nothing")
+K.trackChanges(tr0, ms(0, 1), 180); ev = K.trackChanges(tr0, ms(0, 1), 240)
+eq(#ev.down, 1, "down notified at 240")
+K.trackChanges(tr0, ms(1, 1), 300)
+K.trackChanges(tr0, ms(0, 1), 360); ev = K.trackChanges(tr0, ms(0, 1), 420)
+eq(#ev.down, 0, "same monitor inside the cooldown stays quiet")
+ev = K.trackChanges(tr0, ms(1, 1), 480)
+eq(#ev.restored, 0, "and its recovery is not announced either")
+K.trackChanges(tr0, ms(0, 1), 900); ev = K.trackChanges(tr0, ms(0, 1), 960)
+eq(#ev.down, 1, "after the cooldown it notifies again")
+
 print("model_test OK")

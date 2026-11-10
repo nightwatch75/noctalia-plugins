@@ -5,7 +5,7 @@
 --   publishes "kuma_status_data" = { nonce, ts, summary, dashboard?, certs?,
 --       pages (each with .source), pageUrls, errors = { metrics?,
 --       monitors?, pages = {[url]=msg} }, mode, tagMode, credWarn, baseUrl,
---       plainHttp, insecureTls }; summary.color is "offline" without /metrics.
+--       plainHttp, insecureTls, alertTs }; summary.color is "offline" without /metrics.
 --   reads "kuma_status_request" = { nonce, action = "refresh" }
 --       or { nonce, action = "tag_mode", value = "first"|"all" }; a nonce
 --       already seen is ignored.
@@ -19,6 +19,7 @@
 -- logs. A file readable by group/other raises credWarn.
 -- The API key goes to kuma_url only. The proxy user/password pair (Basic on
 -- status pages) goes to the kuma_url host and proxy_hosts only.
+-- Toasts: a monitor down for 2 cycles, then its recovery (see K.trackChanges).
 -- Bodies over 1 MiB (4 MiB for status pages) are refused. insecure_tls skips
 -- certificate checks on every request.
 -- A 401/403 blocks a source until the secret or the settings change; a 404 on
@@ -44,6 +45,8 @@ local v3Off = false  -- /api/monitors answered 404: stop asking this session
 local blocked = { metrics = false, monitors = false, pages = {} }
 local reasons = { pages = {} } -- text shown for blocked sources
 local buffer = {}
+local track = K.newTrack()
+local alertTs = nil -- when the last "down" toast went out, for the bar blink
 local credWarn = false -- a credentials file is readable by group/other
 local publish -- defined below; checkPermissions republishes through it
 -- tag_mode.txt in the plugin data folder: "first" (monitor in its first tag) or "all"
@@ -101,6 +104,7 @@ local function readConfig()
         proxyHosts = proxyHostSet(),
         insecure = noctalia.getConfig("insecure_tls") == true,
         v3 = noctalia.getConfig("kuma3_support") == true,
+        notify = noctalia.getConfig("notify_changes") or "toast_blink",
         interval = math.min(3600, math.max(20, interval))
     }
 end
@@ -155,6 +159,24 @@ local function classify(r, max)
     return r.body, nil, false
 end
 
+local MAX_NAMES = 5
+
+local function toast(titleKey, list)
+    local shown = table.concat(list, ", ", 1, math.min(#list, MAX_NAMES))
+    if #list > MAX_NAMES then shown = shown .. " " .. tr("tooltip_more", { count = #list - MAX_NAMES }) end
+    noctalia.notify(tr(titleKey, { count = #list }), shown)
+end
+
+local function announce(cfg, metrics)
+    local ev = K.trackChanges(track, metrics, os.time())
+    if cfg.notify == "off" then return end
+    if #ev.down > 0 then
+        toast("notify.down", ev.down)
+        if cfg.notify == "toast_blink" then alertTs = os.time() end
+    end
+    if #ev.restored > 0 then toast("notify.restored", ev.restored) end
+end
+
 function publish(cfg, metrics, structure, beatsById, pages, errors)
     nonce += 1
     local summary = K.summarize(metrics or {})
@@ -180,6 +202,7 @@ function publish(cfg, metrics, structure, beatsById, pages, errors)
         mode = structure ~= nil and "hierarchy" or "tags",
         tagMode = tagMode,
         credWarn = credWarn,
+        alertTs = alertTs,
         certs = metrics ~= nil and K.buildCertificates(metrics) or nil,
         baseUrl = cfg.base or "",
         plainHttp = plain,
@@ -234,6 +257,7 @@ local function refresh()
             end
         end
         if metrics ~= nil then
+            announce(cfg, metrics)
             for id, m in pairs(metrics) do
                 if m.type ~= "group" and beatsById[id] == nil then
                     K.pushSample(buffer, id, m.status, BUFFER_CAP)

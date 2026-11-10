@@ -41,6 +41,7 @@ local function boot(cfg, respond, files)
     H.files["/secrets/api-key"] = H.files["/secrets/api-key"] or "KEY-SECRET\n"
     H.files["/secrets/proxy"] = H.files["/secrets/proxy"] or "pp\n"
     H.runs = {}
+    H.toasts = {}
     H.stat = "600\n"
     noctalia = {
         getConfig = function(k) return H.cfg[k] end,
@@ -59,6 +60,7 @@ local function boot(cfg, respond, files)
             return true
         end,
         setUpdateInterval = function() end,
+        notify = function(t, b) H.toasts[#H.toasts + 1] = { t, b } end,
         json = { decode = function(s) return DECODED[s], DECODED[s] == nil and "bad json" or nil end },
         http = function(req, cb)
             H.calls[#H.calls + 1] = req
@@ -280,6 +282,37 @@ eq(#h.data().pageUrls, 0, "no pages by default")
 h.files["/data/status_pages.txt"] = ADD .. "\n" .. ADD .. "\n"
 h.refresh(1)
 eq(#h.data().pageUrls, 1, "duplicate dropped"); eq(h.data().pageUrls[1], ADD, "page listed")
+
+-- test: state_changes_raise_toasts_and_alert
+local down1 = false
+local function flip(req)
+    if req.url:sub(-8) == "/metrics" then
+        return ok(table.concat({ series("monitor_status", 1, "svc-a", down1 and 0 or 1), series("monitor_status", 2, "svc-b", 0) }, "\n"))
+    end
+    return standard(req)
+end
+h = boot({ notify_changes = "toast_blink" }, flip)
+eq(#h.toasts, 0, "svc-b was down at start: silent")
+down1 = true
+h.refresh(1); eq(#h.toasts, 0, "first down cycle: silent")
+h.refresh(2)
+eq(#h.toasts, 1, "second down cycle: one toast"); eq(h.toasts[1][1], "notify.down", "title"); eq(h.toasts[1][2], "svc-a", "body names the monitor")
+eq(h.data().alertTs ~= nil, true, "alert time published for the bar")
+down1 = false
+h.refresh(3)
+eq(#h.toasts, 2, "recovery toast"); eq(h.toasts[2][1], "notify.restored", "restored title")
+
+-- test: notify_modes
+down1 = false
+h = boot({ notify_changes = "toast" }, flip)
+down1 = true
+h.refresh(1); h.refresh(2)
+eq(#h.toasts, 1, "toast mode notifies"); eq(h.data().alertTs, nil, "but no blink")
+down1 = false
+h = boot({ notify_changes = "off" }, flip)
+down1 = true
+h.refresh(1); h.refresh(2)
+eq(#h.toasts, 0, "off: no toast"); eq(h.data().alertTs, nil, "off: no blink")
 
 -- test: tag_view_defaults_to_first_tag_and_switches_without_network
 local function multiTag(req)

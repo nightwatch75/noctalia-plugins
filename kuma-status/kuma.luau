@@ -288,6 +288,54 @@ function K.buildCertificates(metrics)
     return { groups = groups, total = #all }
 end
 
+-- State-change alerts. A monitor must be down for NOTIFY_CYCLES cycles in a row
+-- to alert, the same monitor alerts at most once per NOTIFY_COOLDOWN seconds,
+-- and a recovery is announced only for a monitor that was announced down.
+-- The first cycle is a baseline: monitors already down are silent.
+K.NOTIFY_CYCLES = 2
+K.NOTIFY_COOLDOWN = 600
+
+function K.newTrack()
+    return { started = false, mon = {} }
+end
+
+-- Returns { down = { names }, restored = { names } } for this cycle.
+function K.trackChanges(track, metrics, now)
+    local ev = { down = {}, restored = {} }
+    local seen = {}
+    for id, m in pairs(metrics) do
+        if m.type ~= "group" then
+            seen[id] = true
+            local t = track.mon[id]
+            if t == nil then
+                t = { count = 0, notified = false }
+                track.mon[id] = t
+            end
+            if m.status == 0 then
+                if not track.started then
+                    t.count = K.NOTIFY_CYCLES
+                else
+                    t.count += 1
+                    if t.count == K.NOTIFY_CYCLES and (t.last == nil or now - t.last >= K.NOTIFY_COOLDOWN) then
+                        t.notified, t.last = true, now
+                        ev.down[#ev.down + 1] = m.name
+                    end
+                end
+            elseif m.status == 1 or m.status == 3 then
+                if t.notified then ev.restored[#ev.restored + 1] = m.name end
+                t.notified, t.count = false, 0
+            end
+        end
+    end
+    for id in pairs(track.mon) do
+        if not seen[id] then track.mon[id] = nil end
+    end
+    track.started = true
+    table.sort(ev.down)
+    table.sort(ev.restored)
+    return ev
+end
+
 -- Keeps the last `cap` statuses of a monitor no status page covers, oldest first.
 function K.pushSample(buffer, id: number, status: number, cap: number)
     local b = buffer[id]

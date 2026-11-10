@@ -95,6 +95,7 @@ refresh, in memory only), so right after a start their bar is mostly empty.
 | `groups_on_open` | `select` | `expanded` | Dashboard groups when the panel opens: `expanded`, `collapsed` or `last` (the groups you closed stay closed; a new group starts open) |
 | `start_tab` | `select` | `dashboard` | Tab the panel opens on: `dashboard`, `pages`, `certs` or `last` (the one you used last) |
 | `group_tags` | `string_list` | empty | Kuma 2 only. Tags that make the Dashboard groups, in priority order and spelling (matched ignoring case). A monitor goes to the first listed tag it has, or under every one it has in the **All tags** view. Other tags are ignored; a monitor with none is listed last without a group name. Empty: every tag is a group |
+| `notify_changes` | `select` | `toast_blink` | Toast when a monitor has been down for 2 cycles in a row and when it recovers; `toast_blink` also blinks the bar for 10 s or until you open the panel. No alert on the first cycle after start; the same monitor alerts at most every 10 minutes |
 | `bar_display` | `select` | `counts` | `counts`: glyph, up and down numbers. `color`: glyph color only |
 | `refresh_seconds` | `int` | `60` | Seconds between updates, 20 to 3600. Kuma caches status pages for a minute |
 | `glyph` | `glyph` | `heartbeat` | Bar icon (per widget) |

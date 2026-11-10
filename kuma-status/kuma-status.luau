@@ -3,6 +3,7 @@
 --
 -- Renders "kuma_status_data" (from service.luau): [bar_label] [glyph] and, with
 -- bar_display "counts", "<up> ▲ <down> ▼". Glyph colors are theme roles.
+-- After a down toast the glyph and the down count blink until the panel opens.
 -- The tooltip lists the down monitors and the http / TLS warnings.
 local PANEL_ID = "nightwatch75/kuma-status:panel"
 local DATA_KEY = "kuma_status_data"
@@ -17,7 +18,20 @@ local ROLE = {
     offline = "on_surface_variant",
 }
 
+local SEEN_KEY = "kuma_status_seen" -- set by the panel when it opens
+local BLINK_SECONDS = 10
+
 local data = noctalia.state.get(DATA_KEY)
+local seen = noctalia.state.get(SEEN_KEY)
+
+-- After a "down" toast, until the panel is opened or BLINK_SECONDS pass.
+local function blinkOpacity()
+    local at = data and data.alertTs
+    if at == nil or (seen or 0) >= at then return nil end
+    local age = os.time() - at
+    if age < 0 or age >= BLINK_SECONDS then return nil end
+    return os.time() % 2 == 0 and 1 or 0.25
+end
 
 local function tooltip(summary, errors)
     local rows = {}
@@ -46,13 +60,14 @@ local function render()
     local summary = data and data.summary
     local color = summary and summary.color or "offline"
     local children = {}
+    local blink = blinkOpacity()
     local label = noctalia.getConfig("bar_label")
     if label == nil then label = "Kuma" end
     if label ~= "" then
         children[#children + 1] = ui.label({ key = "bar-label", text = label, color = "on_surface" })
     end
     children[#children + 1] = ui.glyph({
-        key = "bar-glyph", name = noctalia.getConfig("glyph") or "heartbeat", size = 16, color = ROLE[color] or ROLE.offline,
+        key = "bar-glyph", name = noctalia.getConfig("glyph") or "heartbeat", size = 16, color = ROLE[color] or ROLE.offline, opacity = blink,
     })
     if noctalia.getConfig("bar_display") == "counts" then
         if summary == nil or color == "offline" then
@@ -60,8 +75,8 @@ local function render()
         else
             children[#children + 1] = ui.label({ key = "bar-up", text = tostring(summary.up), color = "on_surface" })
             children[#children + 1] = ui.label({ key = "bar-up-arrow", text = "▲", color = GREEN })
-            children[#children + 1] = ui.label({ key = "bar-down", text = tostring(summary.down), color = "on_surface" })
-            children[#children + 1] = ui.label({ key = "bar-down-arrow", text = "▼", color = RED })
+            children[#children + 1] = ui.label({ key = "bar-down", text = tostring(summary.down), color = "on_surface", opacity = blink })
+            children[#children + 1] = ui.label({ key = "bar-down-arrow", text = "▼", color = RED, opacity = blink })
         end
     end
     barWidget.render(ui.row({ gap = 4, align = "center" }, children))
@@ -70,6 +85,11 @@ end
 
 noctalia.state.watch(DATA_KEY, function(value)
     data = value
+    render()
+end)
+
+noctalia.state.watch(SEEN_KEY, function(value)
+    seen = value
     render()
 end)
 

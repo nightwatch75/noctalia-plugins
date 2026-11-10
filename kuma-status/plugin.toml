@@ -1,6 +1,6 @@
 id = "nightwatch75/kuma-status"
 name = "Kuma Status"
-version = "0.9.6"
+version = "0.10.0"
 plugin_api = 32
 author = "nightwatch75"
 license = "MIT"
@@ -72,6 +72,18 @@ default = "counts"
 options = [
   { value = "counts", label_key = "settings.bar_display.options.counts" },
   { value = "color", label_key = "settings.bar_display.options.color" },
+]
+
+[[setting]]
+key = "notify_changes"
+type = "select"
+label_key = "settings.notify_changes.label"
+description_key = "settings.notify_changes.description"
+default = "toast_blink"
+options = [
+  { value = "off", label_key = "settings.notify_changes.options.off" },
+  { value = "toast", label_key = "settings.notify_changes.options.toast" },
+  { value = "toast_blink", label_key = "settings.notify_changes.options.toast_blink" },
 ]
 
 [[setting]]

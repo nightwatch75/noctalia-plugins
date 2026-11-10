@@ -104,6 +104,24 @@ eq(w.tooltip[1].value, "Server not reachable.", "reason in tooltip")
 onClick()
 eq(w.toggled, "nightwatch75/kuma-status:panel", "panel id")
 
+-- test: down_arrow_blinks_after_an_alert_until_the_panel_is_seen
+local realTime = os.time
+local T = 1000
+os.time = function() return T end
+w = boot()
+noctalia.state.set("kuma_status_data", { summary = sum(1, 1, 0, "down", { "a" }), errors = { pages = {} }, ts = 1, alertTs = 1000 })
+local o1 = find(w.tree, "bar-down-arrow").props.opacity
+T = 1001; update()
+local o2 = find(w.tree, "bar-down-arrow").props.opacity
+eq(o1 ~= o2, true, "opacity alternates each second")
+T = 1011; update()
+eq(find(w.tree, "bar-down-arrow").props.opacity, nil, "blink stops after 10 s")
+T = 1001; update()
+noctalia.state.set("kuma_status_seen", 1001)
+update()
+eq(find(w.tree, "bar-down-arrow").props.opacity, nil, "blink stops once the panel is opened")
+os.time = realTime
+
 print("widget_test OK")
 
 -- test: tooltip_warns_about_clear_text_and_tls_off

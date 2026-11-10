@@ -17,6 +17,15 @@
       "label": "Kuma 3 support",
       "description": "Show the real groups from /api/monitors. Leave off on Kuma 2."
     },
+    "notify_changes": {
+      "label": "State change alerts",
+      "description": "Toast when a monitor goes down (2 cycles in a row) and when it recovers.",
+      "options": {
+        "off": "Off",
+        "toast": "Toast",
+        "toast_blink": "Toast and blinking bar"
+      }
+    },
     "bar_display": {
       "label": "Bar display",
       "description": "What the bar widget shows next to the icon.",
@@ -139,6 +148,10 @@
     "certs_hint_desc": "Sorted by expiry: longest first"
   },
   "tooltip_down": "DOWN",
+  "notify": {
+    "down": "{count} monitor(s) down",
+    "restored": "{count} monitor(s) back up"
+  },
   "tooltip_more": "+{count} more",
   "tooltip_warn_http": "Plain http: credentials in clear text",
   "tooltip_warn_tls": "TLS checks off",
