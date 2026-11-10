@@ -127,11 +127,12 @@
     "certs_yellow": "Expiring soon ({from} to {to} days)",
     "certs_green": "Healthy (over {days} days)",
     "certs_empty": "No certificates reported. Kuma exports the expiry only for monitors that check one.",
-    "certs_hint": "Shortest expiry first",
     "tip_sort_asc": "Shortest first. Click to show the longest first.",
     "tip_sort_desc": "Longest first. Click to show the shortest first.",
     "cert_days_short": "{days} days",
-    "cert_expired_short": "Expired"
+    "cert_expired_short": "Expired",
+    "certs_hint_asc": "Sorted by expiry: shortest first",
+    "certs_hint_desc": "Sorted by expiry: longest first"
   },
   "tooltip_down": "DOWN",
   "tooltip_more": "+{count} more",

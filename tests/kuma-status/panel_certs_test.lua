@@ -120,4 +120,47 @@ eq(find(P.tree, "crow-1").props.tooltip, "near", "tooltip is the monitor name")
 P = boot({ start_tab = "certs" })
 eq(find(P.tree, "tab-certs").props.visible, true, "opens on certificates")
 
+-- test: sort_hint_follows_the_order
+P = boot()
+P.publish({ certs = two(), certLimits = LIMITS })
+eq(find(P.tree, "certs-hint").props.text, "panel.certs_hint_asc", "shortest first")
+find(P.tree, "btn-cert-sort").props.onClick()
+eq(find(P.tree, "certs-hint").props.text, "panel.certs_hint_desc", "the text changes with the order")
+
+-- test: group_titles_stand_out_and_have_no_glyph
+local title = find(P.tree, "cert-group-red")
+eq(title.props.fontSize >= 16, true, "big title"); eq(title.props.fontWeight, "bold", "bold")
+eq(title.props.color, RED, "colored by level")
+local function hasGlyph(n)
+    if n.kind == "glyph" then return true end
+    for _, c in ipairs(n.children or {}) do if hasGlyph(c) then return true end end
+    return false
+end
+eq(hasGlyph(find(P.tree, "cgh-red")), false, "no glyph in the group title row")
+
+-- test: certificate_groups_collapse_like_the_dashboard
+P = boot()
+P.publish({ certs = two(), certLimits = LIMITS })
+eq(find(P.tree, "crow-1") ~= nil, true, "open by default")
+find(P.tree, "cgh-red").props.onClick()
+eq(find(P.tree, "crow-1"), nil, "collapsed"); eq(find(P.tree, "crow-2") ~= nil, true, "the other group is untouched")
+find(P.tree, "cgh-red").props.onClick()
+eq(find(P.tree, "crow-1") ~= nil, true, "open again")
+find(P.tree, "btn-cert-collapse-all").props.onClick()
+eq(find(P.tree, "crow-1") == nil and find(P.tree, "crow-2") == nil, true, "collapse all")
+find(P.tree, "btn-cert-expand-all").props.onClick()
+eq(find(P.tree, "crow-1") ~= nil and find(P.tree, "crow-2") ~= nil, true, "expand all")
+eq(find(P.tree, "btn-cert-collapse-all") ~= nil, true, "buttons live in the certificates tab")
+
+-- test: certificate_groups_follow_groups_on_open_and_remember
+local FILE = "/data/collapsed_groups.txt"
+P = boot({ groups_on_open = "collapsed" })
+P.publish({ certs = two(), certLimits = LIMITS })
+eq(find(P.tree, "crow-1"), nil, "collapsed setting applies"); eq(find(P.tree, "cgh-red") ~= nil, true, "headers stay")
+P = boot({ groups_on_open = "last" }, { [FILE] = "certs:red\n" })
+P.publish({ certs = two(), certLimits = LIMITS })
+eq(find(P.tree, "crow-1"), nil, "red restored as collapsed"); eq(find(P.tree, "crow-2") ~= nil, true, "green open")
+find(P.tree, "cgh-green").props.onClick()
+eq(P.files[FILE], "certs:green\ncerts:red\n", "choice saved with the certificates prefix")
+
 print("panel_certs_test OK")

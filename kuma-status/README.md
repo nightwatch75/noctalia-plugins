@@ -65,7 +65,7 @@ noctalia msg panel-toggle nightwatch75/kuma-status:panel
   **Expiring now** (under 10 days), **Expiring soon** (10 to 30 days) and
   **Healthy** (over 30 days). Each row has a certificate glyph in red, yellow
   or green, the monitored URL (the monitor name when it has none) and the days
-  left. The sort button reverses the order. Click a row to open the monitor in
+  left. The sort button reverses the order and the line next to it says which way. Group titles are large and colored; click one to collapse it, or use expand all / collapse all. The choice follows `groups_on_open` and is remembered the same way as on the Dashboard. Click a row to open the monitor in
   Kuma, right click for the same menu as the Dashboard. The data is the one
   already fetched for the Dashboard: no extra request.
 - The refresh button asks the service for new data now.

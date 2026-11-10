@@ -150,9 +150,17 @@ local function toggleGroup(key)
     render()
 end
 
-local function setAllCollapsed(value)
-    for _, g in ipairs(data and data.dashboard and data.dashboard.groups or {}) do
-        collapsed[R.groupKey(g)] = value
+-- Expand/collapse all for one list ("certs" or "dashboard"). Certificate
+-- groups share the collapsed table under a "certs:" prefix.
+local function setAllCollapsed(which, value)
+    if which == "certs" then
+        for _, g in ipairs(data and data.certs and data.certs.groups or {}) do
+            collapsed["certs:" .. g.key] = value
+        end
+    else
+        for _, g in ipairs(data and data.dashboard and data.dashboard.groups or {}) do
+            collapsed[R.groupKey(g)] = value
+        end
     end
     saveCollapsed()
     render()
@@ -320,15 +328,20 @@ local function certsView()
     if not certAsc then first, last, step = #groups, 1, -1 end
     for gi = first, last, step do
         local g = groups[gi]
-        out[#out + 1] = ui.row({ key = "cgh-" .. g.key, gap = 8, align = "center", paddingV = 4, paddingH = 8, fill = "surface_variant", radius = 6 }, {
-            ui.glyph({ name = "certificate", size = 12, color = R.levelColor(g.level) }),
-            ui.label({ key = "cert-group-" .. g.key, text = certGroupName(g.level, limits), flexGrow = 1, maxLines = 1, fontWeight = "semibold" }),
+        local key = "certs:" .. g.key
+        local closed = isCollapsed(key)
+        -- section title like claude-cockpit's usage tab: big, bold, colored; no glyph
+        out[#out + 1] = ui.row({ key = "cgh-" .. g.key, gap = 8, align = "center", paddingV = 6, onClick = function() toggleGroup(key) end }, {
+            ui.label({ text = closed and "▶" or "▼", width = 14, color = "on_surface_variant" }),
+            ui.label({ key = "cert-group-" .. g.key, text = certGroupName(g.level, limits), fontSize = 17, fontWeight = "bold", color = R.levelColor(g.level), flexGrow = 1, maxLines = 1 }),
             ui.label({ text = tostring(#g.rows), color = "on_surface_variant" }),
         })
-        local rf, rl, rs = 1, #g.rows, 1
-        if not certAsc then rf, rl, rs = #g.rows, 1, -1 end
-        for ri = rf, rl, rs do
-            out[#out + 1] = certRow(g.rows[ri])
+        if not closed then
+            local rf, rl, rs = 1, #g.rows, 1
+            if not certAsc then rf, rl, rs = #g.rows, 1, -1 end
+            for ri = rf, rl, rs do
+                out[#out + 1] = certRow(g.rows[ri])
+            end
         end
     end
     return out
@@ -370,8 +383,8 @@ function render()
         end
         dashChildren[1] = ui.row({ key = "view-row", gap = 4, align = "center" }, {
             left,
-            ui.button({ key = "btn-expand-all", glyph = "chevrons-down", variant = "ghost", tooltip = tr("panel.tip_expand_all"), onClick = function() setAllCollapsed(false) end }),
-            ui.button({ key = "btn-collapse-all", glyph = "chevrons-up", variant = "ghost", tooltip = tr("panel.tip_collapse_all"), onClick = function() setAllCollapsed(true) end }),
+            ui.button({ key = "btn-expand-all", glyph = "chevrons-down", variant = "ghost", tooltip = tr("panel.tip_expand_all"), onClick = function() setAllCollapsed("dashboard", false) end }),
+            ui.button({ key = "btn-collapse-all", glyph = "chevrons-up", variant = "ghost", tooltip = tr("panel.tip_collapse_all"), onClick = function() setAllCollapsed("dashboard", true) end }),
         })
     end
     dashChildren[#dashChildren + 1] = ui.scroll({ key = "scroll-dash", flexGrow = 1, gap = 4 }, dashboardView())
@@ -395,7 +408,9 @@ function render()
         ui.column({ key = "tab-pages", visible = tab == "pages", flexGrow = 1, gap = 6 }, pagesChildren),
         ui.column({ key = "tab-certs", visible = tab == "certs", flexGrow = 1, gap = 6 }, {
             ui.row({ key = "certs-bar", gap = 4, align = "center" }, {
-                ui.label({ key = "certs-hint", text = tr("panel.certs_hint"), flexGrow = 1, color = "on_surface_variant" }),
+                ui.label({ key = "certs-hint", text = certAsc and tr("panel.certs_hint_asc") or tr("panel.certs_hint_desc"), flexGrow = 1, color = "on_surface_variant" }),
+                ui.button({ key = "btn-cert-expand-all", glyph = "chevrons-down", variant = "ghost", tooltip = tr("panel.tip_expand_all"), onClick = function() setAllCollapsed("certs", false) end }),
+                ui.button({ key = "btn-cert-collapse-all", glyph = "chevrons-up", variant = "ghost", tooltip = tr("panel.tip_collapse_all"), onClick = function() setAllCollapsed("certs", true) end }),
                 ui.button({
                     key = "btn-cert-sort", glyph = certAsc and "sort-ascending" or "sort-descending", variant = "ghost",
                     tooltip = certAsc and tr("panel.tip_sort_asc") or tr("panel.tip_sort_desc"),
