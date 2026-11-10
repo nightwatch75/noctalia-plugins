@@ -159,4 +159,31 @@ eq(K.buildCertificates({}).total, 0, "nothing")
 d = K.buildDashboard(set(metric(1, "a", 1, { certDays = 12, tags = { "t" } }), metric(2, "b", 1, { certDays = 7, tags = { "t" } })), nil, {}, {})
 eq(d.groups[1].rows[1].certLevel, "yellow", "12 days is yellow"); eq(d.groups[1].rows[2].certLevel, "red", "7 days is red")
 
+-- test: group_tags_group_by_listed_tags_in_priority_order
+local gt = set(
+    metric(1, "stage-a2a", 1, { tags = { "A2A", "Collaudo" } }),
+    metric(2, "prod-iotron", 1, { tags = { "IoTron", "Produzione" } }),
+    metric(3, "dev-prod", 1, { tags = { "DEV", "Produzione" } }),
+    metric(4, "other", 1, { tags = { "Leonardo" } }),
+    metric(5, "bare", 1)
+)
+local function names(dd) local out = {} for _, g in ipairs(dd.groups) do out[#out + 1] = g.name end return table.concat(out, ",") end
+local function rowsOf(dd, name) for _, g in ipairs(dd.groups) do if g.name == name then local r = {} for _, x in ipairs(g.rows) do r[#r + 1] = x.name end return table.concat(r, ",") end end end
+d = K.buildDashboard(gt, nil, {}, {}, { firstTagOnly = true, groupTags = { "Produzione", "Collaudo", "DEV" } })
+eq(names(d), "Produzione,Collaudo,", "list order; DEV is empty because dev-prod goes to its first listed tag; unlisted last")
+eq(rowsOf(d, "Collaudo"), "stage-a2a", "STAGE-A2A lands in Collaudo, not under A2A")
+eq(rowsOf(d, "Produzione"), "dev-prod,prod-iotron", "first listed tag wins")
+eq(rowsOf(d, ""), "bare,other", "no listed tag: the unnamed group; other tags are ignored")
+
+-- test: group_tags_all_mode_duplicates_only_across_listed_tags
+d = K.buildDashboard(gt, nil, {}, {}, { firstTagOnly = false, groupTags = { "Produzione", "Collaudo", "DEV" } })
+eq(names(d), "Produzione,Collaudo,DEV,", "DEV is back")
+eq(rowsOf(d, "DEV"), "dev-prod", "dev-prod also under DEV")
+
+-- test: group_tags_match_case_insensitively_and_empty_means_every_tag
+d = K.buildDashboard(gt, nil, {}, {}, { firstTagOnly = true, groupTags = { "produzione" } })
+eq(names(d), "produzione,", "the list spelling names the group"); eq(rowsOf(d, "produzione"), "dev-prod,prod-iotron", "matched ignoring case")
+d = K.buildDashboard(gt, nil, {}, {}, { firstTagOnly = true, groupTags = {} })
+eq(rowsOf(d, "A2A"), "stage-a2a", "empty list: first tag alphabetically, as before")
+
 print("model_test OK")

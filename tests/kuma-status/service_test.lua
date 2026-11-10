@@ -356,4 +356,9 @@ eq(h.data().certs.groups[1].level, "red", "7 days is red"); eq(h.data().certs.gr
 eq(h.data().certs.groups[3].level, "green", "60 days is green")
 eq(h.data().dashboard.groups[1].rows[1].certLevel ~= nil, true, "dashboard rows have a level")
 
+-- test: group_tags_setting_drives_the_tag_groups
+h = boot({ group_tags = { "x" } }, multiTag)
+eq(h.data().dashboard.groups[1].name, "x", "listed tag first"); eq(#h.data().dashboard.groups[1].rows, 1, "svc-a only")
+eq(h.data().dashboard.groups[2].name, "", "svc-b has no listed tag"); eq(h.data().dashboard.groups[2].rows[1].name, "svc-b", "svc-b")
+
 print("service_test OK")

@@ -63,6 +63,10 @@
     "proxy_password_file": {
       "label": "Status page password file",
       "description": "Path of a file that holds the password for the status page user. Sent only to the hosts of the listed status pages."
+    },
+    "group_tags": {
+      "label": "Group by these tags",
+      "description": "Kuma 2 only. Tag names that make the Dashboard groups, in priority order, one per line (for example Production, Staging, DEV). A monitor goes to the first one it has. Empty: every tag is a group."
     }
   },
   "error": {

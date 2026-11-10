@@ -1,6 +1,6 @@
 id = "nightwatch75/kuma-status"
 name = "Kuma Status"
-version = "0.7.1"
+version = "0.8.0"
 plugin_api = 32
 author = "nightwatch75"
 license = "MIT"
@@ -49,6 +49,12 @@ type = "bool"
 label_key = "settings.kuma3_support.label"
 description_key = "settings.kuma3_support.description"
 default = false
+
+[[setting]]
+key = "group_tags"
+type = "string_list"
+label_key = "settings.group_tags.label"
+description_key = "settings.group_tags.description"
 
 [[setting]]
 key = "bar_display"

@@ -73,6 +73,19 @@ local function tr(key, args)
     return noctalia.tr(key, args)
 end
 
+-- Ordered tag names from the group_tags setting (blank entries dropped).
+local function groupTagList()
+    local setting = noctalia.getConfig("group_tags")
+    local out = {}
+    for _, t in ipairs(type(setting) == "table" and setting or {}) do
+        if type(t) == "string" then
+            t = t:match("^%s*(.-)%s*$")
+            if t ~= "" then out[#out + 1] = t end
+        end
+    end
+    return out
+end
+
 local function readConfig()
     -- the setting first, then pages added from the panel; one entry per page
     local pages, seen = {}, {}
@@ -97,6 +110,7 @@ local function readConfig()
         proxyFile = noctalia.getConfig("proxy_password_file") or "",
         pages = pages,
         added = added,
+        groupTags = groupTagList(),
         v3 = noctalia.getConfig("kuma3_support") == true,
         interval = math.min(3600, math.max(20, interval))
     }
@@ -156,7 +170,7 @@ function publish(cfg, metrics, structure, beatsById, pages, errors)
     last = { cfg, metrics, structure, beatsById, pages, errors }
     local dashboard = nil
     if metrics ~= nil then
-        dashboard = K.buildDashboard(metrics, structure, beatsById, buffer, { firstTagOnly = tagMode == "first" })
+        dashboard = K.buildDashboard(metrics, structure, beatsById, buffer, { firstTagOnly = tagMode == "first", groupTags = cfg.groupTags })
     end
     -- from the configured URLs, so a page that failed still flags clear text
     local plain = cfg.base ~= nil and cfg.base:sub(1, 7) == "http://"

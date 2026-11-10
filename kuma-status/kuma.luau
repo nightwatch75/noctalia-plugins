@@ -369,7 +369,8 @@ end
 -- real group monitors (nested ones named "Parent / Child"); without it, one
 -- group per tag (a multi-tag monitor appears in several) and an unnamed group
 -- last for what has no group or tag; opts.firstTagOnly puts a monitor only in
--- its first tag (tags are sorted, so alphabetical). Counts here are per group; the bar uses
+-- its first tag (tags are sorted, so alphabetical); opts.groupTags (list) limits
+-- the groups to those tags, see below. Counts here are per group; the bar uses
 -- summarize, which counts every monitor once.
 function K.buildDashboard(metrics, structure, beats, buffer, opts)
     local groups = {}
@@ -417,24 +418,63 @@ function K.buildDashboard(metrics, structure, beats, buffer, opts)
     end
     local byTag, untagged, names = {}, {}, {}
     local firstOnly = opts ~= nil and opts.firstTagOnly == true
+    -- group_tags: only the listed tags make groups, in the list's order and
+    -- spelling; a monitor goes to the first listed tag it has (every one it has
+    -- when firstOnly is off). Other tags are ignored; no listed tag = unnamed group.
+    local groupTags = opts and opts.groupTags or nil
+    local rank = {}
+    if groupTags ~= nil then
+        for i, t in ipairs(groupTags) do
+            if rank[t:lower()] == nil then rank[t:lower()] = i end
+        end
+    end
+    local listed = next(rank) ~= nil
+    local function put(name, r)
+        if byTag[name] == nil then
+            byTag[name] = {}
+            names[#names + 1] = name
+        end
+        table.insert(byTag[name], r)
+    end
     for id, m in pairs(metrics) do
         if m.type ~= "group" then
             local r = makeRow(id, m, nil, beats, buffer)
-            if #m.tags == 0 then
-                untagged[#untagged + 1] = r
-            end
-            for i, t in ipairs(m.tags) do
-                if i == 1 or not firstOnly then
-                    if byTag[t] == nil then
-                        byTag[t] = {}
-                        names[#names + 1] = t
+            if listed then
+                local picked = {}
+                for _, t in ipairs(m.tags) do
+                    local i = rank[t:lower()]
+                    if i ~= nil then picked[#picked + 1] = i end
+                end
+                table.sort(picked)
+                if #picked == 0 then
+                    untagged[#untagged + 1] = r
+                else
+                    for n, i in ipairs(picked) do
+                        if n == 1 or not firstOnly then put(groupTags[i], r) end
                     end
-                    table.insert(byTag[t], r)
+                end
+            else
+                if #m.tags == 0 then
+                    untagged[#untagged + 1] = r
+                end
+                for i, t in ipairs(m.tags) do
+                    if i == 1 or not firstOnly then put(t, r) end
                 end
             end
         end
     end
-    table.sort(names, function(a, b) return a:lower() < b:lower() end)
+    if listed then
+        local ordered, seen = {}, {}
+        for _, t in ipairs(groupTags) do
+            if byTag[t] ~= nil and not seen[t] then
+                seen[t] = true
+                ordered[#ordered + 1] = t
+            end
+        end
+        names = ordered
+    else
+        table.sort(names, function(a, b) return a:lower() < b:lower() end)
+    end
     for _, t in ipairs(names) do groups[#groups + 1] = makeGroup(nil, t, byTag[t], metrics) end
     if #untagged > 0 then groups[#groups + 1] = makeGroup(nil, "", untagged, metrics) end
     return { mode = "tags", groups = groups }
