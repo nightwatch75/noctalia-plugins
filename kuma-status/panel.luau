@@ -260,21 +260,22 @@ local function pagesView()
             })
         else
             local function open() openUrl(sp.url) end
-            local head = { ui.label({ key = "page-title-" .. i, text = sp.title, maxLines = 1, fontWeight = "bold" }) }
-            if sp.description ~= "" then
-                head[#head + 1] = ui.label({ key = "page-desc-" .. i, text = sp.description, fontSize = 11, flexGrow = 1, textAlign = "end", maxLines = 1, color = "on_surface_variant" })
-            else
-                head[#head + 1] = ui.box({ flexGrow = 1 })
-            end
-            head[#head + 1] = ui.button({ key = "btn-open-page-" .. i, glyph = "external-link", variant = "ghost", tooltip = tr("panel.tip_open_page"), onClick = open })
-            head[#head + 1] = removeBtn
             local children = {
-                ui.row({ key = "page-head-" .. i, gap = 6, align = "center" }, head),
-                ui.button({
-                    key = "page-link-" .. i, text = sp.url, variant = "ghost", contentAlign = "start", tooltip = tr("panel.tip_copy_url"),
-                    onClick = function() noctalia.copyToClipboard(sp.url, "text/plain") end,
+                ui.row({ key = "page-head-" .. i, gap = 6, align = "center" }, {
+                    ui.label({ key = "page-title-" .. i, text = sp.title, maxLines = 1, fontWeight = "bold" }),
+                    ui.row({
+                        key = "page-link-" .. i, flexGrow = 1, justify = "end", tooltip = tr("panel.tip_copy_url"),
+                        onClick = function() noctalia.copyToClipboard(sp.url, "text/plain") end,
+                    }, {
+                        ui.label({ key = "page-link-text-" .. i, text = sp.url, fontSize = 11, maxLines = 1, color = "on_surface_variant" }),
+                    }),
+                    ui.button({ key = "btn-open-page-" .. i, glyph = "external-link", variant = "ghost", tooltip = tr("panel.tip_open_page"), onClick = open }),
+                    removeBtn,
                 }),
             }
+            if sp.description ~= "" then
+                children[2] = ui.label({ key = "page-desc-" .. i, text = sp.description, fontSize = 11, maxLines = 1, color = "on_surface_variant" })
+            end
             for j, g in ipairs(sp.groups) do
                 children[#children + 1] = ui.label({ key = "page-group-" .. i .. "-" .. j, text = g.name, fontWeight = "semibold", color = "on_surface_variant" })
                 for _, m in ipairs(g.monitors) do

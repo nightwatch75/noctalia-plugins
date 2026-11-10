@@ -114,12 +114,12 @@ eq(find(P.tree, "btn-del-page-2") ~= nil, true, "remove button on a failed page"
 find(P.tree, "btn-del-page-1").props.onClick()
 eq(P.files["/data/status_pages.txt"], "", "removed from the store")
 
--- test: page_url_under_title_copies_and_description_beside_it
+-- test: page_url_beside_title_copies_and_description_under_it
 P = boot()
 PAGE.description = "Public status"
 P.publish({ pageUrls = { URL }, pages = { PAGE } })
 eq(find(P.tree, "page-desc-1").props.text, "Public status", "description")
-eq(find(P.tree, "page-link-1").props.text, URL, "url shown")
+eq(find(P.tree, "page-link-text-1").props.text, URL, "url shown")
 find(P.tree, "page-link-1").props.onClick()
 eq(P.copied, URL, "url copied")
 PAGE.description = ""
