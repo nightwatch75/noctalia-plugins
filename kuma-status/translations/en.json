@@ -9,17 +9,9 @@
       "label": "Kuma URL",
       "description": "Base URL of your Uptime Kuma server, http:// or https://. With http:// the key and password travel in clear text."
     },
-    "api_key": {
-      "label": "API key",
-      "description": "A Kuma API key, used for /metrics and /api/monitors. Stored in clear text in the noctalia settings file: create a key just for this plugin."
-    },
     "proxy_user": {
       "label": "Status page user",
       "description": "Basic auth user in front of your status pages (for example a reverse proxy). Leave empty if they are public."
-    },
-    "proxy_password": {
-      "label": "Status page password",
-      "description": "Password for the status page user. Sent only to the hosts of the status pages listed below."
     },
     "status_pages": {
       "label": "Status pages",
@@ -62,11 +54,19 @@
         "collapsed": "Collapsed",
         "last": "Last state (remembers the groups you closed)"
       }
+    },
+    "api_key_file": {
+      "label": "API key file",
+      "description": "Path of a file that holds the Kuma API key (one line, readable only by you: chmod 600). The key itself is never stored in the settings."
+    },
+    "proxy_password_file": {
+      "label": "Status page password file",
+      "description": "Path of a file that holds the password for the status page user. Sent only to the hosts of the listed status pages."
     }
   },
   "error": {
     "no_url": "Set the Kuma URL in the plugin settings.",
-    "no_key": "Set the API key in the plugin settings.",
+    "no_key": "Set the API key file in the plugin settings.",
     "unauthorized": "Access denied (401/403). Check the credentials.",
     "not_found": "Not found (404).",
     "offline": "Server not reachable.",
@@ -74,7 +74,10 @@
     "v3_api_off": "The Kuma 3 API is not enabled on this server.",
     "bad_json": "Unreadable answer.",
     "bad_url": "Not a valid status page URL.",
-    "bad_metrics": "The server did not answer with Kuma metrics. Check the URL and that /metrics is enabled."
+    "bad_metrics": "The server did not answer with Kuma metrics. Check the URL and that /metrics is enabled.",
+    "cred_path": "A credentials file must be an absolute path.",
+    "cred_unreadable": "Cannot read the credentials file.",
+    "cred_invalid": "The credentials file is empty, larger than 64 KiB or not text."
   },
   "panel": {
     "tab_dashboard": "Dashboard",
@@ -107,7 +110,8 @@
     "tip_tag_first": "Each monitor appears once, under its first tag. Click to show it under every tag.",
     "tip_tag_all": "A monitor with several tags appears under each. Click to show it once, under its first tag.",
     "tip_expand_all": "Expand all groups",
-    "tip_collapse_all": "Collapse all groups"
+    "tip_collapse_all": "Collapse all groups",
+    "warn_cred_perms": "A credentials file can be read by other users. Run chmod 600 on it."
   },
   "tooltip_down": "DOWN",
   "tooltip_more": "+{count} more",

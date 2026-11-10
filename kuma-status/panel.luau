@@ -285,6 +285,9 @@ local function notices()
     local errors = data and data.errors or {}
     if errors.metrics then out[#out + 1] = ui.label({ key = "err-metrics", text = errors.metrics, color = "error" }) end
     if errors.monitors then out[#out + 1] = ui.label({ key = "err-monitors", text = errors.monitors, color = "error" }) end
+    if data and data.credWarn then
+        out[#out + 1] = ui.label({ key = "warn-cred", text = tr("panel.warn_cred_perms"), color = "tertiary" })
+    end
     if data and data.plainHttp then
         out[#out + 1] = ui.label({ key = "warn-http", text = tr("panel.warn_http"), color = "tertiary" })
     end

@@ -30,17 +30,31 @@ local DECODED = {
 local function boot(cfg, respond, files)
     local H = { calls = {}, state = {}, watchers = {}, cfg = cfg, files = files or {} }
     local defaults = {
-        kuma_url = "https://kuma.example.test", api_key = "KEY-SECRET", proxy_user = "", proxy_password = "",
+        kuma_url = "https://kuma.example.test", api_key_file = "/secrets/api-key", proxy_user = "", proxy_password_file = "",
         status_pages = {}, kuma3_support = false, refresh_seconds = 60,
     }
     for k, v in pairs(cfg) do defaults[k] = v end
     H.cfg = defaults
+    H.files["/secrets/api-key"] = H.files["/secrets/api-key"] or "KEY-SECRET\n"
+    H.files["/secrets/proxy"] = H.files["/secrets/proxy"] or "pp\n"
+    H.runs = {}
+    H.stat = "600\n"
     noctalia = {
         getConfig = function(k) return H.cfg[k] end,
         tr = function(k) return k end,
         pluginDataDir = function() return "/data" end,
         readFile = function(p) return H.files[p] end,
         writeFile = function(p, c) H.files[p] = c; return true end,
+        fileInfo = function(p)
+            local c = H.files[p]
+            if c == nil then return nil, "missing" end
+            return { size = #c, mtime = 0, isDir = false }
+        end,
+        runAsync = function(argv, cb)
+            H.runs[#H.runs + 1] = argv
+            if cb then cb({ exitCode = 0, stdout = H.stat }) end
+            return true
+        end,
         setUpdateInterval = function() end,
         json = { decode = function(s) return DECODED[s], DECODED[s] == nil and "bad json" or nil end },
         http = function(req, cb)
@@ -122,7 +136,7 @@ h.refresh(1)
 eq(h.count("/api/monitors"), 1, "not called again this session")
 
 -- test: status_page_gets_proxy_pair_only_for_listed_hosts
-h = boot({ status_pages = { "https://status.example.test/status/dev" }, proxy_user = "pu", proxy_password = "pp" }, standard)
+h = boot({ status_pages = { "https://status.example.test/status/dev" }, proxy_user = "pu", proxy_password_file = "/secrets/proxy" }, standard)
 local pageCalls = 0
 for _, c in ipairs(h.calls) do
     if c.url:find("^https://status.example.test/") then
@@ -258,5 +272,72 @@ h = boot({}, multiTag, { ["/data/tag_mode.txt"] = "all" })
 eq(h.data().tagMode, "all", "restored at start")
 h = boot({}, multiTag, { ["/data/tag_mode.txt"] = "junk" })
 eq(h.data().tagMode, "first", "unknown content falls back to the default")
+
+-- test: credential_file_one_trailing_newline_stripped
+for _, content in ipairs({ "K1\n", "K1\r\n", "K1" }) do
+    h = boot({}, standard, { ["/secrets/api-key"] = content })
+    eq(h.calls[1].basic_password, "K1", "key read from " .. string.format("%q", content))
+end
+
+-- test: credential_file_must_be_absolute_regular_and_sane
+local function metricsError(path, files)
+    local hh = boot({ api_key_file = path }, standard, files)
+    eq(hh.count("/metrics"), 0, "no call with a bad key file: " .. path)
+    return hh.data().errors.metrics
+end
+eq(metricsError("rel/key", {}), "error.cred_path", "relative path")
+eq(metricsError("/secrets/none", { ["/secrets/api-key"] = "x" }), "error.cred_unreadable", "missing file")
+eq(metricsError("/secrets/e", { ["/secrets/e"] = "\n" }), "error.cred_invalid", "empty after the newline")
+eq(metricsError("/secrets/n", { ["/secrets/n"] = "a\0b" }), "error.cred_invalid", "NUL byte")
+eq(metricsError("/secrets/big", { ["/secrets/big"] = string.rep("x", 65537) }), "error.cred_invalid", "over 64 KiB")
+eq(metricsError("", {}), "error.no_key", "no file configured")
+
+-- test: secrets_never_reach_the_published_state
+h = boot({ status_pages = { "https://status.example.test/status/dev" }, proxy_user = "pu", proxy_password_file = "/secrets/proxy", kuma3_support = true }, standard)
+local function leaks(v, depth)
+    if depth > 8 then return false end
+    if type(v) == "string" then return v:find("KEY-SECRET", 1, true) ~= nil or v == "pp" end
+    if type(v) == "table" then
+        for k, x in pairs(v) do
+            if leaks(k, depth + 1) or leaks(x, depth + 1) then return true end
+        end
+    end
+    return false
+end
+eq(leaks(h.data(), 0), false, "no secret in the shared state")
+
+-- test: credential_file_is_reread_every_cycle
+h = boot({}, standard)
+h.files["/secrets/api-key"] = "ROTATED\n"
+h.refresh(1)
+eq(h.calls[#h.calls].basic_password, "ROTATED", "rotated key used on the next cycle")
+
+-- test: bad_proxy_password_file_blocks_pages_not_metrics
+local PU = "https://status.example.test/status/dev"
+h = boot({ status_pages = { PU }, proxy_user = "pu", proxy_password_file = "/secrets/none" }, standard)
+eq(h.count("/api/status-page/dev"), 0, "no page request without the password")
+eq(h.data().errors.pages[PU], "error.cred_unreadable", "reason on the page")
+eq(h.data().summary.up, 1, "metrics unaffected")
+
+-- test: permission_warning_for_files_readable_by_others
+h = boot({}, standard)
+eq(h.data().credWarn, false, "600 is fine")
+eq(table.concat(h.runs[1], " "), "stat -c %a /secrets/api-key", "mode read with stat")
+h.stat = "644\n"
+onConfigChanged()
+eq(h.data().credWarn, true, "644 warns")
+
+-- test: rotating_the_secret_unblocks_a_401_source
+h = boot({}, function(req)
+    if req.url:sub(-8) == "/metrics" and req.basic_password == "KEY-SECRET" then return { ok = true, status = 401, body = "" } end
+    return standard(req)
+end)
+eq(h.data().errors.metrics, "error.unauthorized", "refused")
+h.refresh(1)
+eq(h.count("/metrics"), 1, "same secret stays blocked")
+h.files["/secrets/api-key"] = "NEW\n"
+h.refresh(2)
+eq(h.count("/metrics"), 2, "a new secret is tried")
+eq(h.data().errors.metrics, nil, "and accepted")
 
 print("service_test OK")

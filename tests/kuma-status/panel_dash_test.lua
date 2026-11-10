@@ -283,4 +283,11 @@ find(P.tree, "gh-x").props.onClick()
 eq(find(P.tree, "row-1"), nil, "toggle works")
 eq(P.files[FILE], nil, "nothing written unless the mode is last")
 
+-- test: credential_permission_warning_shown
+P = boot()
+P.publish({ baseUrl = "https://k.example.test", credWarn = true })
+eq(find(P.tree, "warn-cred") ~= nil, true, "warning when a credentials file is readable by others")
+P.publish({ baseUrl = "https://k.example.test", credWarn = false })
+eq(find(P.tree, "warn-cred"), nil, "no warning otherwise")
+
 print("panel_dash_test OK")

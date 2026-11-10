@@ -22,11 +22,21 @@ a monitor.
   enable the **Prometheus API** (`/metrics`) and the API section
   (`/api/monitors`); both are off by default.
 - `xdg-open` on `PATH`, to open a monitor or a status page in the browser.
+- `stat` (coreutils), to warn when a credentials file is readable by others.
 
 ## Usage
 
-Add **kuma-status** to a bar from the Add-widget picker, set the Kuma URL and
-the API key in the plugin settings, and click the glyph. Or:
+Put the API key in a file only you can read, add **kuma-status** to a bar from
+the Add-widget picker, set the Kuma URL and the key file in the plugin
+settings, and click the glyph:
+
+```sh
+umask 077
+mkdir -p ~/.config/kuma-status
+printf '%s' 'uk1_xxxxxxxx' > ~/.config/kuma-status/api-key
+```
+
+Or open the panel from a terminal:
 
 ```sh
 noctalia msg panel-toggle nightwatch75/kuma-status:panel
@@ -69,8 +79,9 @@ refresh, in memory only), so right after a start their bar is mostly empty.
 | Setting | Type | Default | Description |
 | --- | --- | --- | --- |
 | `kuma_url` | `string` | empty | Base URL, `http://` or `https://`. Over `http://` the panel shows a warning: the key and password travel in clear text |
-| `api_key` | `string` | empty | Kuma API key. Sent only to `kuma_url`: as Basic password on `/metrics`, as Bearer on `/api/monitors` |
-| `proxy_user`, `proxy_password` | `string` | empty | One Basic auth pair for status pages behind a reverse proxy. Sent only to the hosts of the listed status pages |
+| `api_key_file` | `file` | empty | Path of a file holding the Kuma API key (see Credentials below). Sent only to `kuma_url`: as Basic password on `/metrics`, as Bearer on `/api/monitors` |
+| `proxy_user` | `string` | empty | Basic auth user for status pages behind a reverse proxy. Not a secret |
+| `proxy_password_file` | `file` | empty | Path of a file holding that user's password. Sent, with the user, only to the hosts of the listed status pages |
 | `status_pages` | `string_list` | empty | One URL per page, `https://host/status/<slug>`. Pages added from the panel are kept in the plugin data folder and merged with this list |
 | `kuma3_support` | `bool` | `false` | Call `/api/monitors` (Kuma 3). Off means no call at all. A 404 turns it off until the settings change |
 | `groups_on_open` | `select` | `expanded` | Dashboard groups when the panel opens: `expanded`, `collapsed` or `last` (the groups you closed stay closed; a new group starts open) |
@@ -80,15 +91,34 @@ refresh, in memory only), so right after a start their bar is mostly empty.
 | `glyph` | `glyph` | `heartbeat` | Bar icon (per widget) |
 | `bar_label` | `string` | `Kuma` | Text to the left of the glyph (per widget). Empty hides it |
 
+## Credentials
+
+The settings never hold a secret, only the **path** of a file that does. The
+plugin reads the file the way noctalia reads its own `credential_source =
+"file"`: an absolute path to a regular file, 1 byte to 64 KiB, no NUL bytes, one
+trailing newline (LF or CRLF) ignored, and the file is never written or deleted
+by the plugin. It is read again on every refresh, so a secret manager (agenix,
+sops-nix, systemd credentials) can rotate it: a source refused with 401 is
+tried again as soon as the file holds a different secret.
+
+If the file is readable by group or other, the panel shows a warning: run
+`chmod 600` on it. The plugin does not stop, it only warns.
+
+Why files and not the keyring: noctalia stores its own secrets in the desktop
+Secret Service, but gives plugins no API for it and no secret setting type.
+A file path keeps the secret out of `settings.toml`.
+
 ## Notes
 
-- The API key and the proxy password are stored in clear text in the noctalia
-  settings file, because settings have no secret type. Create a key just for
-  this plugin and a read-only proxy user.
-- A 401 or 403 on a source stops calls to it until you change the settings.
+- Create a key just for this plugin and a read-only proxy user. A secret in a
+  file protects it from `settings.toml` backups and screenshots, not from
+  other programs running as you.
+- A 401 or 403 on a source stops calls to it until the settings change or the
+  secret in its file changes.
 - Monitor names come from the server: control characters are removed and the
   text is cut to 80 characters. Names never reach a command.
 - Commands spawned: `xdg-open <url>` on click or from the right-click menu,
-  with a URL the plugin builds or validates (`http://` or `https://` only).
+  with a URL the plugin builds or validates (`http://` or `https://` only), and
+  `stat -c %a <file>` to check a credentials file.
 - Kuma exposes the certificate expiry in `/metrics` but not the domain
   expiry: the plugin cannot show the latter.

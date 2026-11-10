@@ -1,10 +1,10 @@
 id = "nightwatch75/kuma-status"
 name = "Kuma Status"
-version = "0.4.0"
+version = "0.5.0"
 plugin_api = 32
 author = "nightwatch75"
 license = "MIT"
-dependencies = ["xdg-open"]
+dependencies = ["xdg-open", "stat"]
 tags = ["bar", "panel", "monitoring"]
 icon = "heartbeat"
 description = "Uptime Kuma monitors on the bar: a glyph shows the overall state, a panel lists monitors and status pages."
@@ -17,10 +17,10 @@ description_key = "settings.kuma_url.description"
 default = ""
 
 [[setting]]
-key = "api_key"
-type = "string"
-label_key = "settings.api_key.label"
-description_key = "settings.api_key.description"
+key = "api_key_file"
+type = "file"
+label_key = "settings.api_key_file.label"
+description_key = "settings.api_key_file.description"
 default = ""
 
 [[setting]]
@@ -31,10 +31,10 @@ description_key = "settings.proxy_user.description"
 default = ""
 
 [[setting]]
-key = "proxy_password"
-type = "string"
-label_key = "settings.proxy_password.label"
-description_key = "settings.proxy_password.description"
+key = "proxy_password_file"
+type = "file"
+label_key = "settings.proxy_password_file.label"
+description_key = "settings.proxy_password_file.description"
 default = ""
 
 [[setting]]

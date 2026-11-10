@@ -15,11 +15,18 @@
 --                     a nonce already seen is ignored).
 --
 -- Sources per cycle (refresh_seconds, default 60):
---   /metrics            Basic, user "kuma", password = api_key (status, ping, tags)
---   /api/monitors       Bearer api_key, only with kuma3_support (Kuma 3 hierarchy)
+--   /metrics            Basic, user "kuma", password = the API key (status, ping, tags)
+--   /api/monitors       Bearer API key, only with kuma3_support (Kuma 3 hierarchy)
 --   status pages        <origin>/api/status-page/<slug> and .../heartbeat/<slug>,
 --                       Basic with the global proxy user/password when set
--- The api_key goes to kuma_url only; the proxy pair goes to the hosts of the
+-- Secrets never live in the settings: api_key_file and proxy_password_file hold
+-- the PATH of a file, read like noctalia's own credential_source = "file" (absolute
+-- path, regular file, 1 byte to 64 KiB, no NUL, one trailing LF/CRLF ignored, never
+-- written here) and re-read every cycle, so a secret manager can rotate it. A file
+-- readable by group/other raises credWarn (checked with stat at start and on
+-- settings changes). Values stay in locals: never in the shared state, logs or
+-- notifications.
+-- The API key goes to kuma_url only; the proxy pair goes to the hosts of the
 -- listed status pages only. A 401/403 blocks that source until the settings
 -- change; a 404 on /api/monitors switches Kuma 3 support off for the session;
 -- any other failure is retried on the next cycle. A source that fails never
@@ -31,6 +38,7 @@
 local K = require("./kuma.luau")
 local store = require("./pages_store.luau")
 
+local MAX_CRED = 65536 -- noctalia rejects larger credential files
 local STATE_KEY = "kuma_status_data"
 local REQUEST_KEY = "kuma_status_request"
 local BUFFER_CAP = 40
@@ -44,6 +52,8 @@ local v3Off = false  -- /api/monitors answered 404: stop asking this session
 local blocked = { metrics = false, monitors = false, pages = {} }
 local reasons = { pages = {} } -- text shown for blocked sources
 local buffer = {}
+local credWarn = false -- a credentials file is readable by group/other
+local publish           -- defined below; checkPermissions republishes through it
 -- "first": a monitor in its first tag only; "all": in every tag. The choice is
 -- kept in the plugin data folder (tag_mode.txt) across restarts.
 local function modeFile()
@@ -81,14 +91,51 @@ local function readConfig()
     local interval = tonumber(noctalia.getConfig("refresh_seconds")) or 60
     return {
         base = K.baseUrl(noctalia.getConfig("kuma_url") or ""),
-        key = noctalia.getConfig("api_key") or "",
+        keyFile = noctalia.getConfig("api_key_file") or "",
         proxyUser = noctalia.getConfig("proxy_user") or "",
-        proxyPassword = noctalia.getConfig("proxy_password") or "",
+        proxyFile = noctalia.getConfig("proxy_password_file") or "",
         pages = pages,
         added = added,
         v3 = noctalia.getConfig("kuma3_support") == true,
         interval = math.min(3600, math.max(20, interval)),
     }
+end
+
+-- Reads a credential file: (value) or (nil, errorKey). "empty" means no path set.
+local function readCredential(path)
+    if path == "" then return nil, "empty" end
+    if path:sub(1, 1) ~= "/" then return nil, "error.cred_path" end
+    local info = noctalia.fileInfo(path)
+    if info == nil or info.isDir then return nil, "error.cred_unreadable" end
+    if info.size < 1 or info.size > MAX_CRED then return nil, "error.cred_invalid" end
+    local text = noctalia.readFile(path)
+    if text == nil then return nil, "error.cred_unreadable" end
+    if text:find("\0", 1, true) then return nil, "error.cred_invalid" end
+    text = (text:gsub("\r?\n$", ""))
+    if text == "" then return nil, "error.cred_invalid" end
+    return text, nil
+end
+
+-- Warn when a configured credentials file is readable by group or other.
+local function checkPermissions(cfg)
+    local warn, pending, started = false, 0, 0
+    local function check(path)
+        if path:sub(1, 1) ~= "/" then return end
+        pending += 1
+        started += 1
+        noctalia.runAsync({ "stat", "-c", "%a", path }, function(r)
+            local mode = r and r.exitCode == 0 and tostring(r.stdout or ""):match("%d+") or nil
+            if mode ~= nil and #mode >= 2 and mode:sub(-2) ~= "00" then warn = true end
+            pending -= 1
+            if pending == 0 and warn ~= credWarn then
+                credWarn = warn
+                if last ~= nil then publish(table.unpack(last)) end
+            end
+        end)
+    end
+    check(cfg.keyFile)
+    check(cfg.proxyFile)
+    if started == 0 then credWarn = false end
 end
 
 -- Maps an http response to (body) or (nil, message, hard) where `hard` marks a
@@ -101,7 +148,7 @@ local function classify(r)
     return r.body, nil, false
 end
 
-local function publish(cfg, metrics, structure, beatsById, pages, errors)
+function publish(cfg, metrics, structure, beatsById, pages, errors)
     nonce += 1
     local summary = K.summarize(metrics or {})
     if metrics == nil then summary.color = "offline" end
@@ -126,6 +173,7 @@ local function publish(cfg, metrics, structure, beatsById, pages, errors)
         errors = errors,
         mode = structure ~= nil and "hierarchy" or "tags",
         tagMode = tagMode,
+        credWarn = credWarn,
         baseUrl = cfg.base or "",
         plainHttp = plain,
     })
@@ -144,6 +192,15 @@ local function refresh()
         return
     end
     inFlight = true
+
+    -- Credentials come from files, fresh every cycle. A source blocked by a 401
+    -- stays blocked only while the secret that was refused is still the one in
+    -- the file, so rotating the secret unblocks it without touching settings.
+    local key, keyErr = readCredential(cfg.keyFile)
+    local proxyPw, proxyErr = "", nil
+    if cfg.proxyUser ~= "" and cfg.proxyFile ~= "" then
+        proxyPw, proxyErr = readCredential(cfg.proxyFile)
+    end
 
     local metrics, structure = nil, nil
     local pageResults = {} -- [index] = StatusPage
@@ -189,17 +246,17 @@ local function refresh()
     end
 
     -- /metrics
-    if blocked.metrics then
+    if key == nil then
+        errors.metrics = keyErr == "empty" and tr("error.no_key") or tr(keyErr)
+    elseif blocked.metrics == key then
         errors.metrics = reasons.metrics
-    elseif cfg.key == "" then
-        errors.metrics = tr("error.no_key")
     else
-        request({ url = cfg.base .. "/metrics", basic_username = "kuma", basic_password = cfg.key }, function(r)
+        request({ url = cfg.base .. "/metrics", basic_username = "kuma", basic_password = key }, function(r)
             local body, msg, hard = classify(r)
             if body == nil then
                 errors.metrics = msg
                 if hard then
-                    blocked.metrics = true
+                    blocked.metrics = key
                     reasons.metrics = msg
                 end
             elseif body:find("monitor_status", 1, true) == nil then
@@ -216,10 +273,10 @@ local function refresh()
     if cfg.v3 then
         if v3Off then
             errors.monitors = reasons.monitors
-        elseif blocked.monitors then
+        elseif key ~= nil and blocked.monitors == key then
             errors.monitors = reasons.monitors
-        elseif cfg.key ~= "" then
-            request({ url = cfg.base .. "/api/monitors", headers = { "Authorization: Bearer " .. cfg.key } }, function(r)
+        elseif key ~= nil then
+            request({ url = cfg.base .. "/api/monitors", headers = { "Authorization: Bearer " .. key } }, function(r)
                 if r.ok and r.status == 404 then
                     v3Off = true
                     reasons.monitors = tr("error.v3_api_off")
@@ -230,7 +287,7 @@ local function refresh()
                 if body == nil then
                     errors.monitors = msg
                     if hard then
-                        blocked.monitors = true
+                        blocked.monitors = key
                         reasons.monitors = msg
                     end
                     return
@@ -251,7 +308,9 @@ local function refresh()
         local origin, slug = K.statusPageUrl(url)
         if origin == nil then
             errors.pages[url] = tr("error.bad_url")
-        elseif blocked.pages[url] then
+        elseif proxyErr ~= nil then
+            errors.pages[url] = tr(proxyErr)
+        elseif blocked.pages[url] ~= nil and blocked.pages[url] == proxyPw then
             errors.pages[url] = reasons.pages[url]
         else
             local got = { left = 2 }
@@ -261,7 +320,7 @@ local function refresh()
                 if got.err ~= nil then
                     errors.pages[url] = got.err
                     if got.hard then
-                        blocked.pages[url] = true
+                        blocked.pages[url] = proxyPw
                         reasons.pages[url] = got.err
                     end
                     return
@@ -280,7 +339,7 @@ local function refresh()
                 local req = { url = origin .. path .. slug }
                 if cfg.proxyUser ~= "" then
                     req.basic_username = cfg.proxyUser
-                    req.basic_password = cfg.proxyPassword
+                    req.basic_password = proxyPw
                 end
                 request(req, function(r)
                     local body, msg, hard = classify(r)
@@ -326,6 +385,7 @@ function onConfigChanged()
     blocked = { metrics = false, monitors = false, pages = {} }
     reasons = { pages = {} }
     v3Off = false
+    checkPermissions(readConfig())
     refresh()
 end
 
@@ -334,4 +394,5 @@ function onExit()
 end
 
 noctalia.setUpdateInterval(1000)
+checkPermissions(readConfig())
 refresh()
