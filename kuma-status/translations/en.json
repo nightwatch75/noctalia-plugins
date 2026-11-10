@@ -54,7 +54,17 @@
     "bad_url": "Not a valid status page URL."
   },
   "panel": {
-    "placeholder": "Dashboard and status pages: work in progress."
+    "tab_dashboard": "Dashboard",
+    "tab_pages": "Status pages",
+    "tip_refresh": "Refresh now",
+    "updated": "Updated {time}",
+    "empty": "No data yet.",
+    "mode_tags": "Grouped by tag (Kuma 3 shows the real groups)",
+    "mode_hierarchy": "Groups as in Kuma",
+    "group_none": "No group",
+    "warn_http": "This server is reached over plain http: the API key and passwords travel in clear text.",
+    "tip_bar": "{up} of {total} checks up",
+    "no_xdg_open": "xdg-open is not installed."
   },
   "tooltip_down": "DOWN",
   "tooltip_more": "+{count} more"
