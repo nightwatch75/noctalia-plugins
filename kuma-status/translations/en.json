@@ -7,19 +7,19 @@
     },
     "kuma_url": {
       "label": "Kuma URL",
-      "description": "Base URL of your Uptime Kuma server, http:// or https://. With http:// the key and password travel in clear text."
+      "description": "Base URL of Uptime Kuma. With http:// the key travels in clear text."
     },
     "proxy_user": {
       "label": "Status page user",
-      "description": "Basic auth user in front of your status pages (for example a reverse proxy). Leave empty if they are public."
+      "description": "Basic auth user in front of the status pages. Empty if they are public."
     },
     "status_pages": {
       "label": "Status pages",
-      "description": "One URL per page, like https://host/status/<slug>."
+      "description": "One URL per line, like https://host/status/<slug>."
     },
     "kuma3_support": {
       "label": "Kuma 3 support",
-      "description": "Use /api/monitors (Kuma 3, API enabled) to show the real groups. Leave off on Kuma 2: the plugin then groups by tag."
+      "description": "Show the real groups from /api/monitors. Leave off on Kuma 2."
     },
     "bar_display": {
       "label": "Bar display",
@@ -58,23 +58,23 @@
     },
     "api_key_file": {
       "label": "API key file",
-      "description": "Path of a file that holds the Kuma API key (one line, readable only by you: chmod 600). The key itself is never stored in the settings."
+      "description": "Path of a file holding the Kuma API key (chmod 600)."
     },
     "proxy_password_file": {
       "label": "Status page password file",
-      "description": "Path of a file that holds the password for the status page user. Sent only to the host of the Kuma URL and to the hosts in the list below."
+      "description": "Path of a file holding the status page password."
     },
     "proxy_hosts": {
       "label": "Hosts that get the status page password",
-      "description": "Hosts (host or host:port, one per line) of status pages that sit behind the same proxy login, for example status.example.com. The Kuma URL host is always included. A status page on any other host gets no password."
+      "description": "Extra hosts that get the password, one per line. The Kuma host is included."
     },
     "insecure_tls": {
       "label": "Accept untrusted HTTPS certificates",
-      "description": "Skips certificate checks for every request (self-signed or expired certificates). The API key and passwords can then be read by anyone who can intercept the connection. Leave off unless you trust the network."
+      "description": "Skips certificate checks on every request. Keys and passwords can be intercepted."
     },
     "group_tags": {
       "label": "Group by these tags",
-      "description": "Kuma 2 only. Tag names that make the Dashboard groups, in priority order, one per line (for example Production, Staging, DEV). A monitor goes to the first one it has. Empty: every tag is a group."
+      "description": "Kuma 2 only. Tags that make the groups, in priority order, one per line."
     }
   },
   "error": {
