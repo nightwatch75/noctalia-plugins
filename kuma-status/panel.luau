@@ -19,6 +19,7 @@ local REQUEST_KEY = "kuma_status_request"
 
 local data = nil
 local tab = "dashboard"
+local statusFilter = "all" -- "all" | "notok" | "down", dashboard rows only
 local collapsed = {}      -- group key -> bool; nil means "the groups_on_open default"
 local defaultCollapsed = false -- groups_on_open = "collapsed"
 local rememberGroups = false   -- groups_on_open = "last"
@@ -157,6 +158,32 @@ local function setAllCollapsed(which, value)
     render()
 end
 
+local FILTERS = {
+    { id = "all", glyph = "list", color = "primary", tip = "panel.tip_filter_all", match = function() return true end },
+    { id = "notok", glyph = "alert-triangle", color = R.COLORS[2], tip = "panel.tip_filter_notok", match = function(s) return s == 0 or s == 2 end },
+    { id = "down", glyph = "circle-x", color = R.COLORS[0], tip = "panel.tip_filter_down", match = function(s) return s == 0 end },
+}
+
+local function filterMatch()
+    for _, f in ipairs(FILTERS) do
+        if f.id == statusFilter then return f.match end
+    end
+    return FILTERS[1].match
+end
+
+local function filterChips()
+    local chips = {}
+    for i, f in ipairs(FILTERS) do
+        local on = statusFilter == f.id
+        chips[i] = ui.row({
+            key = "flt-" .. f.id, align = "center", paddingH = 8, paddingV = 4, radius = 6, tooltip = tr(f.tip),
+            fill = on and "surface_variant" or "surface",
+            onClick = function() statusFilter = f.id; render() end,
+        }, { ui.glyph({ name = f.glyph, size = 16, color = on and f.color or "on_surface_variant" }) })
+    end
+    return chips
+end
+
 local function dashboardView()
     local children = {}
     local dash = data and data.dashboard
@@ -165,12 +192,19 @@ local function dashboardView()
     elseif #dash.groups == 0 then
         children[1] = ui.label({ key = "dash-empty", text = tr("panel.empty_groups"), color = "on_surface_variant" })
     else
+        local match = filterMatch()
         for _, g in ipairs(dash.groups) do
             local key = R.groupKey(g)
-            children[#children + 1] = R.groupHeader(g, isCollapsed(key), toggleGroup)
-            if not isCollapsed(key) then
-                for _, row in ipairs(g.rows) do
-                    children[#children + 1] = R.monitorRow(row, openMonitor, openRowMenu)
+            local rows = {}
+            for _, row in ipairs(g.rows) do
+                if match(row.status) then rows[#rows + 1] = row end
+            end
+            if #rows > 0 then
+                children[#children + 1] = R.groupHeader(g, isCollapsed(key), toggleGroup)
+                if not isCollapsed(key) then
+                    for _, row in ipairs(rows) do
+                        children[#children + 1] = R.monitorRow(row, openMonitor, openRowMenu)
+                    end
                 end
             end
         end
@@ -366,21 +400,22 @@ function render()
     local stamp = data and data.ts and tr("panel.updated", { time = noctalia.formatTime("%H:%M", data.ts) }) or nil
     local dashChildren = {}
     if mode then
-        local left
+        local lead
         if mode == "hierarchy" then
-            left = ui.label({ key = "mode-line", text = tr("panel.mode_hierarchy"), flexGrow = 1, color = "on_surface_variant" })
+            lead = ui.label({ key = "mode-line", text = tr("panel.mode_hierarchy"), color = "on_surface_variant" })
         else
             -- the button shows the current view
             local all = data and data.tagMode == "all"
-            left = ui.row({ gap = 0, flexGrow = 1 }, {
-                ui.button({
-                    key = "btn-tag-mode", glyph = all and "tags" or "tag", variant = "ghost",
-                    text = all and tr("panel.tag_all") or tr("panel.tag_first"),
-                    tooltip = all and tr("panel.tip_tag_all") or tr("panel.tip_tag_first"),
-                    onClick = function() sendRequest("tag_mode", all and "first" or "all") end,
-                }),
+            lead = ui.button({
+                key = "btn-tag-mode", glyph = all and "tags" or "tag", variant = "ghost",
+                text = all and tr("panel.tag_all") or tr("panel.tag_first"),
+                tooltip = all and tr("panel.tip_tag_all") or tr("panel.tip_tag_first"),
+                onClick = function() sendRequest("tag_mode", all and "first" or "all") end,
             })
         end
+        local leftChildren = { lead }
+        for _, chip in ipairs(filterChips()) do leftChildren[#leftChildren + 1] = chip end
+        local left = ui.row({ gap = 4, align = "center", flexGrow = 1 }, leftChildren)
         dashChildren[1] = ui.row({ key = "view-row", gap = 4, align = "center" }, {
             left,
             ui.button({ key = "btn-expand-all", glyph = "chevrons-down", variant = "ghost", tooltip = tr("panel.tip_expand_all"), onClick = function() setAllCollapsed("dashboard", false) end }),

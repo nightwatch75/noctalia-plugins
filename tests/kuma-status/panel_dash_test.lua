@@ -94,6 +94,23 @@ P.publish({ baseUrl = "https://kuma.example.test", dashboard = dash("tags", { g1
 eq(find(P.tree, "gh-alert-x"), nil, "no flag on a healthy group")
 eq(find(P.tree, "gh-alert-y") ~= nil, true, "flag on a group with a down monitor")
 
+-- test: status_filter_buttons_are_exclusive_and_filter_rows
+P = boot()
+local gf1 = group("x", { row(1, "ok", 1), row(2, "slow", 2), row(3, "dead", 0) })
+local gf2 = group("y", { row(4, "fine", 1) })
+P.publish({ baseUrl = "https://kuma.example.test", dashboard = dash("tags", { gf1, gf2 }) })
+eq(find(P.tree, "row-1") ~= nil and find(P.tree, "gh-y") ~= nil, true, "all shown by default")
+find(P.tree, "flt-notok").props.onClick()
+eq(find(P.tree, "row-1"), nil, "ok row hidden")
+eq(find(P.tree, "row-2") ~= nil and find(P.tree, "row-3") ~= nil, true, "pending and down rows shown")
+eq(find(P.tree, "gh-y"), nil, "group without matches hidden")
+find(P.tree, "flt-down").props.onClick()
+eq(find(P.tree, "row-2"), nil, "pending hidden when only down")
+eq(find(P.tree, "row-3") ~= nil, true, "down row shown")
+eq(find(P.tree, "flt-down").props.fill ~= find(P.tree, "flt-notok").props.fill, true, "only the active chip is filled")
+find(P.tree, "flt-all").props.onClick()
+eq(find(P.tree, "row-1") ~= nil and find(P.tree, "gh-y") ~= nil, true, "all restored")
+
 -- test: group_row_collapse_toggles
 P = boot()
 P.publish({ baseUrl = "https://kuma.example.test", dashboard = dash("tags", { group("x", { row(1, "a", 1) }) }) })

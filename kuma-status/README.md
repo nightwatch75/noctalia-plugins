@@ -55,7 +55,7 @@ noctalia msg panel-toggle nightwatch75/kuma-status:panel
   Kuma. Right click a monitor for **Open monitor in Kuma**,
   **Open monitored URL** and **Copy monitored URL** (the URL the monitor
   tests); hovering a row shows that URL. A line of buttons above the list
-  has the view choice (see below) and **expand all** / **collapse all**.
+  has the view choice (see below), three exclusive filter buttons (**all**, **not OK** = down or pending, **down**) and **expand all** / **collapse all**.
 - **Status pages tab:** type a status page URL in the field and press `+` to
   add it; the trash button removes it. The open button next to a title opens
   the page; the URL under the title copies it on click; the page description
