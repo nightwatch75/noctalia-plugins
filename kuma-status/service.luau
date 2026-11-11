@@ -37,7 +37,7 @@ local STATE_KEY = "kuma_status_data"
 local REQUEST_KEY = "kuma_status_request"
 local BUFFER_CAP = 40
 local RETRY_SECONDS = 10
-local PARSE_LINES = 40     -- /metrics lines parsed per tick,
+local PARSE_LINES = 80     -- /metrics lines parsed per tick,
 local PARSE_SECONDS = 0.005 -- or until this much time is used
 
 local gen = 0        -- bumps per cycle and on config change; stale callbacks drop themselves
