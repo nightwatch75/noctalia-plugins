@@ -244,7 +244,7 @@ function K.parseStatusPage(page: any, heartbeats: any, origin: string, slug: str
     local sp = {
         slug = slug,
         title = K.safeText(cfg.title or slug, MAX_NAME),
-        description = K.safeText(cfg.description or "", 160),
+        description = K.safeText(cfg.description or "", 160):match("^%s*(.-)%s*$"),
         url = origin .. "/status/" .. slug,
         groups = {},
     }

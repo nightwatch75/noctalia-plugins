@@ -106,6 +106,7 @@ end
 local sp0 = K.parseStatusPage({ config = { title = "T", description = "a\nb" }, publicGroupList = {} }, { heartbeatList = {} }, "https://h.example.test", "dev")
 eq(sp0.description, "a b", "description cleaned")
 eq(K.parseStatusPage({ config = {}, publicGroupList = {} }, {}, "https://h.example.test", "dev").description, "", "missing description")
+eq(K.parseStatusPage({ config = { description = " \n " }, publicGroupList = {} }, {}, "https://h.example.test", "dev").description, "", "blank description")
 
 -- test: statuspage_keeps_last_40_beats
 local beats = {}
