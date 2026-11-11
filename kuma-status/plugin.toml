@@ -1,6 +1,6 @@
 id = "nightwatch75/kuma-status"
 name = "Kuma Status"
-version = "0.11.0"
+version = "0.12.0"
 plugin_api = 32
 author = "nightwatch75"
 license = "MIT"
@@ -103,6 +103,13 @@ options = [
   { value = "toast", label_key = "settings.notify_changes.options.toast" },
   { value = "toast_blink", label_key = "settings.notify_changes.options.toast_blink" },
 ]
+
+[[setting]]
+key = "notify_certs"
+type = "bool"
+label_key = "settings.notify_certs.label"
+description_key = "settings.notify_certs.description"
+default = false
 
 [[setting]]
 key = "refresh_seconds"

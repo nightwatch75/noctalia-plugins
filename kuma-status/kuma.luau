@@ -271,6 +271,19 @@ function K.certLevel(days, limits)
     return "green"
 end
 
+-- Expired and red certificates ({ name, days, level }, shortest first) when the
+-- last alert (`last`, seconds, nil = never) is at least a day old, else {}.
+function K.dueCerts(metrics, limits, last, now)
+    local out = {}
+    if last ~= nil and now - last < 86400 then return out end
+    for _, g in ipairs(K.buildCertificates(metrics, limits).groups) do
+        if g.level == "expired" or g.level == "red" then
+            for _, r in ipairs(g.rows) do out[#out + 1] = { name = r.name, days = r.certDays, level = r.level } end
+        end
+    end
+    return out
+end
+
 -- Certificates tab: monitors with a certificate expiry, shortest first, grouped
 -- by level (empty levels omitted).
 function K.buildCertificates(metrics, limits)

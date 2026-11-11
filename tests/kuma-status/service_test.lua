@@ -430,6 +430,24 @@ eq(h.data().certs.groups[2].level, "green", "60 days is green with yellow 59")
 eq(h.data().certLimits.yellow, 59, "custom limits published")
 eq(h.data().dashboard.groups[1].rows[1].certLevel ~= nil, true, "dashboard rows have a level")
 
+-- test: cert_toast_is_off_by_default_and_daily_when_on
+local realTime = os.time
+local NOW = 1000000
+os.time = function() return NOW end
+h = boot({}, certMetrics)
+eq(#h.toasts, 0, "no certificate toast by default")
+h = boot({ notify_certs = true }, certMetrics)
+eq(#h.toasts, 1, "one toast at the first cycle"); eq(h.toasts[1][1], "notify.certs", "title")
+eq(h.toasts[1][2], "svc-a (panel.cert_days_short)", "body names the certificate")
+h.refresh(1)
+eq(#h.toasts, 1, "not again within a day")
+NOW += 86400
+h.refresh(2)
+eq(#h.toasts, 2, "again after a day")
+h = boot({ notify_certs = true }, certMetrics, { ["/data/cert_alert.txt"] = tostring(NOW - 100) })
+eq(#h.toasts, 0, "a restart does not repeat a toast sent today")
+os.time = realTime
+
 -- test: group_tags_setting_drives_the_tag_groups
 h = boot({ group_tags = { "x" } }, multiTag)
 eq(h.data().dashboard.groups[1].name, "x", "listed tag first"); eq(#h.data().dashboard.groups[1].rows, 1, "svc-a only")

@@ -34,6 +34,10 @@
         "toast_blink": "Toast and blinking bar"
       }
     },
+    "notify_certs": {
+      "label": "Certificate expiry toast",
+      "description": "Daily toast for red and expired certificates, whatever Kuma sends."
+    },
     "bar_display": {
       "label": "Bar display",
       "description": "What the bar widget shows next to the icon.",
@@ -158,7 +162,8 @@
   "tooltip_down": "DOWN",
   "notify": {
     "down": "{count} monitor(s) down",
-    "restored": "{count} monitor(s) back up"
+    "restored": "{count} monitor(s) back up",
+    "certs": "{count} certificate(s) expiring"
   },
   "tooltip_more": "+{count} more",
   "tooltip_warn_http": "Plain http: credentials in clear text",

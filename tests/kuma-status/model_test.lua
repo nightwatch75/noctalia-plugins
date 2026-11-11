@@ -168,6 +168,14 @@ c = K.buildCertificates(cm, { red = 3, yellow = 10 })
 eq(c.groups[2].level, "yellow", "5 days is yellow with red 3"); eq(c.groups[2].rows[1].name, "near", "near moved to yellow")
 eq(c.groups[3].level, "green", "20 days is green with yellow 10")
 
+-- test: due_certs_once_a_day
+local lim0 = { red = 7, yellow = 30 }
+local due = K.dueCerts(cm, lim0, nil, 1000)
+eq(#due, 2, "expired and red only"); eq(due[1].name, "gone", "shortest first"); eq(due[1].level, "expired", "level kept"); eq(due[2].name, "near", "red one")
+eq(#K.dueCerts(cm, lim0, 1000, 1000 + 86399), 0, "not due before 24 h")
+eq(#K.dueCerts(cm, lim0, 1000, 1000 + 86400), 2, "due after 24 h")
+eq(#K.dueCerts(set(metric(1, "ok", 1, { certDays = 99 })), lim0, nil, 1000), 0, "nothing red, nothing due")
+
 -- test: certificates_empty_groups_are_omitted
 c = K.buildCertificates(set(metric(1, "a", 1, { certDays = 99 })))
 eq(#c.groups, 1, "only the green group"); eq(c.groups[1].level, "green", "green")

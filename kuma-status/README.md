@@ -98,6 +98,7 @@ refresh, in memory only), so right after a start their bar is mostly empty.
 | `cert_yellow_days` | `int` | `30` | Yellow up to this many days, green beyond (2 to 730). Always kept above the red limit |
 | `group_tags` | `string_list` | empty | Kuma 2 only. Tags that make the Dashboard groups, in priority order and spelling (matched ignoring case). A monitor goes to the first listed tag it has, or under every one it has in the **All tags** view. Other tags are ignored; a monitor with none is listed last without a group name. Empty: every tag is a group |
 | `notify_changes` | `select` | `toast_blink` | Toast when a monitor has been down for 2 cycles in a row and when it recovers; `toast_blink` also blinks the bar for 10 s or until you open the panel. No alert on the first cycle after start; the same monitor alerts at most every 10 minutes |
+| `notify_certs` | `bool` | `false` | One toast a day listing the certificates that are red or expired (see the limits below), independent of the alerts Kuma sends. Off by default |
 | `bar_display` | `select` | `counts` | `counts`: glyph, up and down numbers. `color`: glyph color only |
 | `refresh_seconds` | `int` | `60` | Seconds between updates, 20 to 3600. Kuma caches status pages for a minute |
 | `glyph` | `glyph` | `heartbeat` | Bar icon (per widget) |

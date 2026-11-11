@@ -20,6 +20,7 @@
 -- The API key goes to kuma_url only. The proxy user/password pair (Basic on
 -- status pages) goes to the kuma_url host and proxy_hosts only.
 -- Toasts: a monitor down for 2 cycles, then its recovery (see K.trackChanges).
+-- notify_certs (off by default): one toast a day listing expired and red certificates.
 -- Bodies over 1 MiB (4 MiB for status pages) are refused. insecure_tls skips
 -- certificate checks on every request.
 -- A 401/403 blocks a source until the secret or the settings change; a 404 on
@@ -105,6 +106,7 @@ local function readConfig()
         insecure = noctalia.getConfig("insecure_tls") == true,
         v3 = noctalia.getConfig("kuma3_support") == true,
         certLimits = K.certLimits(noctalia.getConfig("cert_red_days"), noctalia.getConfig("cert_yellow_days")),
+        notifyCerts = noctalia.getConfig("notify_certs") == true,
         notify = noctalia.getConfig("notify_changes") or "toast_blink",
         interval = math.min(3600, math.max(20, interval))
     }
@@ -162,13 +164,42 @@ end
 
 local MAX_NAMES = 5
 
+-- cert_alert.txt in the plugin data folder: when the last certificate toast went out.
+local function certAlertFile()
+    local dir = noctalia.pluginDataDir()
+    return dir and (dir .. "/cert_alert.txt") or nil
+end
+local lastCertAlert = (function()
+    local f = certAlertFile()
+    return tonumber(f and noctalia.readFile(f) or nil)
+end)()
+
 local function toast(titleKey, list)
     local shown = table.concat(list, ", ", 1, math.min(#list, MAX_NAMES))
     if #list > MAX_NAMES then shown = shown .. " " .. tr("tooltip_more", { count = #list - MAX_NAMES }) end
     noctalia.notify(tr(titleKey, { count = #list }), shown)
 end
 
+local function announceCerts(cfg, metrics)
+    local now = os.time()
+    local due = K.dueCerts(metrics, cfg.certLimits, lastCertAlert, now)
+    if #due == 0 then return end
+    local items = {}
+    for i = 1, math.min(#due, MAX_NAMES) do
+        local c = due[i]
+        local when = c.level == "expired" and tr("panel.cert_expired_short") or tr("panel.cert_days_short", { days = c.days })
+        items[i] = c.name .. " (" .. when .. ")"
+    end
+    local body = table.concat(items, ", ")
+    if #due > MAX_NAMES then body = body .. " " .. tr("tooltip_more", { count = #due - MAX_NAMES }) end
+    noctalia.notify(tr("notify.certs", { count = #due }), body)
+    lastCertAlert = now
+    local f = certAlertFile()
+    if f then noctalia.writeFile(f, tostring(now)) end
+end
+
 local function announce(cfg, metrics)
+    if cfg.notifyCerts then announceCerts(cfg, metrics) end
     local ev = K.trackChanges(track, metrics, os.time())
     if cfg.notify == "off" then return end
     if #ev.down > 0 then
