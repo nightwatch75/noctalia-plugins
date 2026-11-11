@@ -79,6 +79,13 @@ find(P.tree, "btn-tab-pages").props.onClick()
 eq(find(P.tree, "tab-dashboard").props.visible, false, "dashboard hidden, still mounted")
 eq(find(P.tree, "tab-pages").props.visible, true, "pages visible")
 
+-- test: stale_marker_shows_only_for_stale_data
+P = boot()
+P.publish({ baseUrl = "https://kuma.example.test", stale = false, dashboard = dash("tags", { group("x", { row(1, "a", 1) }) }) })
+eq(find(P.tree, "btn-stale").props.visible, false, "no marker on fresh data")
+P.publish({ baseUrl = "https://kuma.example.test", stale = true, errors = { metrics = "boom", pages = {} }, dashboard = dash("tags", { group("x", { row(1, "a", 1) }) }) })
+eq(find(P.tree, "btn-stale").props.visible, true, "marker on stale data")
+
 -- test: group_row_collapse_toggles
 P = boot()
 P.publish({ baseUrl = "https://kuma.example.test", dashboard = dash("tags", { group("x", { row(1, "a", 1) }) }) })

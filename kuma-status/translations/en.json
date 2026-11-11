@@ -115,6 +115,7 @@
     "tab_dashboard": "Dashboard",
     "tab_pages": "Status pages",
     "tip_refresh": "Refresh now",
+    "tip_stale": "Outdated values: {reason}. Click to refresh.",
     "updated": "Updated {time}",
     "empty": "No data yet.",
     "mode_hierarchy": "Groups as in Kuma",

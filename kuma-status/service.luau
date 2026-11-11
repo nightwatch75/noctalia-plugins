@@ -43,6 +43,7 @@ local nonce = 0
 local seenRequest = nil
 local elapsed = 0
 local inFlight = false -- a cycle is waiting for answers; the timer must not restart it
+local lastGood = nil    -- { metrics, structure } of the last answered cycle, shown (stale) while Kuma is silent
 local completion = nil  -- final merge + publish of a finished cycle, run by the next tick
 local v3Off = false  -- /api/monitors answered 404: stop asking this session
 local blocked = { metrics = false, monitors = false, pages = {} }
@@ -239,6 +240,7 @@ function publish(cfg, metrics, structure, beatsById, pages, errors)
         alertTs = alertTs,
         certs = metrics ~= nil and K.buildCertificates(metrics, cfg.certLimits) or nil,
         certLimits = cfg.certLimits,
+        stale = metrics ~= nil and errors.metrics ~= nil,
         baseUrl = cfg.base or "",
         plainHttp = plain,
         insecureTls = cfg.insecure,
@@ -290,7 +292,13 @@ local function refresh()
                 end
             end
         end
-        if metrics ~= nil then
+        local failed = metrics == nil
+        if failed and lastGood ~= nil then
+            metrics, structure = lastGood.metrics, lastGood.structure
+        elseif not failed then
+            lastGood = { metrics = metrics, structure = structure }
+        end
+        if not failed then
             announce(cfg, metrics)
             for id, m in pairs(metrics) do
                 if m.type ~= "group" and beatsById[id] == nil then
@@ -299,7 +307,7 @@ local function refresh()
             end
         end
         publish(cfg, metrics, structure, beatsById, pages, errors)
-        if metrics == nil and errors.metrics == tr("error.offline") then
+        if failed and errors.metrics == tr("error.offline") then
             elapsed = math.max(0, cfg.interval - RETRY_SECONDS) -- no answer: ask again soon
         end
     end
@@ -472,6 +480,7 @@ function onConfigChanged()
     blocked = { metrics = false, monitors = false, pages = {} }
     reasons = { pages = {} }
     v3Off = false
+    lastGood = nil
     checkPermissions(readConfig())
     refresh()
 end

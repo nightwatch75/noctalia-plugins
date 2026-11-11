@@ -38,7 +38,7 @@ local function tooltip(summary, errors)
     local stamp = data and data.ts and noctalia.formatTime("%H:%M", data.ts) or ""
     local reason = errors and errors.metrics
     rows[1] = { key = noctalia.tr("tooltip"), value = reason or stamp }
-    if reason == nil and summary then
+    if summary and summary.color ~= "offline" then
         for i = 1, math.min(MAX_DOWN_NAMES, #summary.downNames) do
             rows[#rows + 1] = { key = summary.downNames[i], value = noctalia.tr("tooltip_down") }
         end

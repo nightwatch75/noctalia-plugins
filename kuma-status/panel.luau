@@ -400,6 +400,7 @@ function render()
             ui.button({ key = "btn-tab-dashboard", glyph = "layout-dashboard", text = tr("panel.tab_dashboard"), variant = tab == "dashboard" and "primary" or "ghost", onClick = function() setTab("dashboard"); render() end }),
             ui.button({ key = "btn-tab-pages", glyph = "world-www", text = tr("panel.tab_pages"), variant = tab == "pages" and "primary" or "ghost", onClick = function() setTab("pages"); render() end }),
             ui.button({ key = "btn-tab-certs", glyph = "certificate", text = tr("panel.tab_certs"), variant = tab == "certs" and "primary" or "ghost", onClick = function() setTab("certs"); render() end }),
+            ui.button({ key = "btn-stale", visible = data ~= nil and data.stale == true, glyph = "alert-triangle", variant = "ghost", tooltip = tr("panel.tip_stale", { reason = data and data.errors and data.errors.metrics or "" }), onClick = requestRefresh }),
             ui.label({ key = "kuma-url", text = data and data.baseUrl or "", flexGrow = 1, textAlign = "end", maxLines = 1, fontSize = 12, color = "on_surface_variant" }),
             ui.button({ key = "btn-refresh", glyph = "refresh", variant = "ghost", tooltip = tr("panel.tip_refresh") .. (stamp and (" · " .. stamp) or ""), onClick = requestRefresh }),
         }),

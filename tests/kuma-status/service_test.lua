@@ -274,7 +274,7 @@ h = boot({}, standard)
 h.kuma.parseMetrics = function() error("boom") end
 h.refresh(50)
 eq(h.data().errors.metrics, "error.bad_metrics", "a throwing parser shows an error")
-eq(h.data().summary.color, "offline", "offline")
+eq(h.data().stale, true, "old values kept")
 
 -- test: no_answer_is_retried_after_10_seconds
 local down = true
@@ -286,6 +286,23 @@ eq(h.data().summary.color, "offline", "offline while the server is silent")
 down = false
 for _ = 1, 11 do update() end
 eq(h.data().summary.color ~= "offline", true, "recovered without waiting a full interval")
+
+-- test: silent_server_keeps_old_values_marked_stale
+local silent = false
+h = boot({ refresh_seconds = 60 }, function(req)
+    if silent then return nil end
+    return standard(req)
+end)
+eq(h.data().stale, false, "fresh data is not stale")
+local upBefore = h.data().summary.up
+silent = true
+h.refresh(60)
+eq(h.data().stale, true, "stale after a failed cycle")
+eq(h.data().summary.up, upBefore, "old counts kept")
+eq(h.data().errors.metrics, "error.offline", "reason kept for the tooltip")
+silent = false
+h.refresh(61)
+eq(h.data().stale, false, "fresh again after an answer")
 
 -- test: wrong_shape_json_is_reported_and_cycle_still_publishes
 h = boot({ kuma3_support = true, status_pages = { "https://status.example.test/status/dev" } }, function(req)
