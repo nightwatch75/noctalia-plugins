@@ -264,8 +264,8 @@ tags = ["bar", "panel", "utility"]
 [[plugin]]
 id = "nightwatch75/kuma-status"
 name = "Kuma Status"
-version = "0.15.2"
-updated_at = 1794405477
+version = "0.15.6"
+updated_at = 1794406888
 added_at = 1794330197
 author = "nightwatch75"
 license = "MIT"
