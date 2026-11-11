@@ -9,7 +9,7 @@ R.CELLS = 40
 R.COLORS = { [0] = "#e06c75", [1] = "#98c379", [2] = "#e5c07b", [3] = "#61afef" }
 R.EMPTY = "#4b5263"
 -- Panel width minus padding, scrollbar, dot, ping, bar and gaps (see plugin.toml).
-local NAME_W = 264
+local NAME_W = 256
 
 -- Always CELLS boxes, oldest left; missing history is padded with neutral cells.
 function R.beatBar(beats, key)
@@ -64,7 +64,7 @@ function R.monitorRow(row, onOpen, onMenu, onMute)
             onClick = function() onOpen(id) end,
             onRightClick = onMenu and function() onMenu(row) end or nil,
         }),
-        ui.label({ key = "ping-" .. id, text = pingText(row), width = 64, textAlign = "end", color = "on_surface_variant" }),
+        ui.column({ width = 64, align = "end" }, { ui.label({ key = "ping-" .. id, text = pingText(row), color = "on_surface_variant" }) }),
         R.beatBar(row.beats, "bar-" .. id),
         onMute and ui.button({
             key = "mute-" .. id, glyph = row.muted and "eye-off" or "eye", variant = "ghost",
