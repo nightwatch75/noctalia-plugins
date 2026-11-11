@@ -179,7 +179,7 @@ local MAX_PAGE_BODY = 4194304
 
 -- (body) or (nil, message, hard); hard marks a 401/403 that blocks the source.
 local function classify(r, max)
-    if not r.ok then return nil, tr("error.offline"), false end
+    if not r.ok then return nil, tr(r.status == -1 and "error.busy" or "error.offline"), false end
     if #(r.body or "") > (max or MAX_BODY) then return nil, tr("error.too_large"), false end
     if r.status == 401 or r.status == 403 then return nil, tr("error.unauthorized"), true end
     if r.status == 404 then return nil, tr("error.not_found"), false end
@@ -332,7 +332,7 @@ local function refresh()
             end
         end
         publish(cfg, metrics, structure, beatsById, pages, errors)
-        if failed and errors.metrics == tr("error.offline") then
+        if failed and (errors.metrics == tr("error.offline") or errors.metrics == tr("error.busy")) then
             elapsed = math.max(0, cfg.interval - RETRY_SECONDS) -- no answer: ask again soon
         end
     end
@@ -353,7 +353,7 @@ local function refresh()
         end)
         if not sent then
             pending -= 1
-            cb({ ok = false, status = 0, body = "" })
+            cb({ ok = false, status = -1, body = "" })
         end
     end
 
@@ -373,10 +373,14 @@ local function refresh()
                 end
             elseif body:find("monitor_status", 1, true) == nil then
                 -- a login page or wrong path also answers 200
-                errors.metrics = tr("error.bad_metrics")
+                errors.metrics = tr("error.bad_metrics") .. " [HTTP " .. r.status .. ", " .. #body .. " B]"
             else
                 local parsed, result = pcall(K.parseMetrics, body)
-                if parsed then metrics = result else errors.metrics = tr("error.bad_metrics") end
+                if parsed then
+                    metrics = result
+                else
+                    errors.metrics = tr("error.bad_metrics") .. " [" .. tostring(result):sub(1, 100) .. "]"
+                end
             end
         end)
     end

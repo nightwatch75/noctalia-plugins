@@ -27,9 +27,9 @@ local seen = noctalia.state.get(SEEN_KEY)
 -- After a "down" toast, until the panel is opened or BLINK_SECONDS pass.
 local function blinkOpacity()
     local at = data and data.alertTs
-    if at == nil or (seen or 0) >= at then return nil end
+    if at == nil or (seen or 0) >= at then return 1 end
     local age = os.time() - at
-    if age < 0 or age >= BLINK_SECONDS then return nil end
+    if age < 0 or age >= BLINK_SECONDS then return 1 end
     return os.time() % 2 == 0 and 1 or 0.25
 end
 

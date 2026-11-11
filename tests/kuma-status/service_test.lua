@@ -65,6 +65,7 @@ local function boot(cfg, respond, files)
         http = function(req, cb)
             H.calls[#H.calls + 1] = req
             local r = respond(req)
+            if r == "REFUSE" then return false end -- the host refused to start the request
             if r == "HOLD" then return true end -- never answers: a stalled server
             if r == nil then r = { ok = false, status = 0, body = "" } end
             cb(r)
@@ -242,7 +243,7 @@ h = boot({}, function(req)
     if req.url:sub(-8) == "/metrics" then return ok("<html>login</html>") end
     return standard(req)
 end)
-eq(h.data().errors.metrics, "error.bad_metrics", "html answer is reported")
+eq(h.data().errors.metrics, "error.bad_metrics [HTTP 200, 18 B]", "html answer is reported with its status and size")
 eq(h.data().summary.color, "offline", "offline, not idle")
 
 -- test: metrics_help_lines_only_is_idle_not_an_error
@@ -273,7 +274,7 @@ eq(h.count("/metrics"), 2, "a cycle stuck for 3 intervals + 30 s is restarted")
 h = boot({}, standard)
 h.kuma.parseMetrics = function() error("boom") end
 h.refresh(50)
-eq(h.data().errors.metrics, "error.bad_metrics", "a throwing parser shows an error")
+eq(h.data().errors.metrics:find("boom", 1, true) ~= nil, true, "a throwing parser shows its error")
 eq(h.data().stale, true, "old values kept")
 
 -- test: no_answer_is_retried_after_10_seconds
@@ -325,6 +326,13 @@ noctalia.state.set("kuma_status_request", { nonce = 82, action = "prune_muted" }
 eq(h.files["/data/muted.txt"], "2\n", "only the id Kuma still reports is kept")
 eq(h.data().mutedCount, 1, "count updated")
 eq(#h.toasts, 1, "one toast says how many were removed")
+
+-- test: refused_request_is_told_apart_from_no_answer
+h = boot({}, function(req)
+    if req.url:sub(-8) == "/metrics" then return "REFUSE" end
+    return standard(req)
+end)
+eq(h.data().errors.metrics, "error.busy", "refusal has its own message")
 
 -- test: wrong_shape_json_is_reported_and_cycle_still_publishes
 h = boot({ kuma3_support = true, status_pages = { "https://status.example.test/status/dev" } }, function(req)

@@ -115,11 +115,11 @@ T = 1001; update()
 local o2 = find(w.tree, "bar-down-arrow").props.opacity
 eq(o1 ~= o2, true, "opacity alternates each second")
 T = 1011; update()
-eq(find(w.tree, "bar-down-arrow").props.opacity, nil, "blink stops after 10 s")
+eq(find(w.tree, "bar-down-arrow").props.opacity, 1, "blink stops after 10 s with an explicit full opacity")
 T = 1001; update()
 noctalia.state.set("kuma_status_seen", 1001)
 update()
-eq(find(w.tree, "bar-down-arrow").props.opacity, nil, "blink stops once the panel is opened")
+eq(find(w.tree, "bar-down-arrow").props.opacity, 1, "blink stops once the panel is opened")
 os.time = realTime
 
 print("widget_test OK")

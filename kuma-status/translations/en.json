@@ -102,6 +102,7 @@
     "too_large": "The answer is too large to read.",
     "not_found": "Not found (404).",
     "offline": "Server not reachable.",
+    "busy": "The host refused the request (too many pending requests).",
     "http": "Unexpected answer: HTTP {status}.",
     "v3_api_off": "The Kuma 3 API is not enabled on this server.",
     "bad_json": "Unreadable answer.",
