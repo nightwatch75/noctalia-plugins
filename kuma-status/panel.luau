@@ -422,6 +422,7 @@ function render()
         local left = ui.row({ gap = 4, align = "center", flexGrow = 1 }, leftChildren)
         dashChildren[1] = ui.row({ key = "view-row", gap = 4, align = "center" }, {
             left,
+            ui.button({ key = "btn-prune-muted", visible = data ~= nil and (data.mutedCount or 0) > 0, glyph = "eraser", variant = "ghost", tooltip = tr("panel.tip_prune_muted"), onClick = function() sendRequest("prune_muted") end }),
             ui.button({ key = "btn-expand-all", glyph = "chevrons-down", variant = "ghost", tooltip = tr("panel.tip_expand_all"), onClick = function() setAllCollapsed("dashboard", false) end }),
             ui.button({ key = "btn-collapse-all", glyph = "chevrons-up", variant = "ghost", tooltip = tr("panel.tip_collapse_all"), onClick = function() setAllCollapsed("dashboard", true) end }),
         })

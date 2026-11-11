@@ -148,6 +148,7 @@
     "tip_filter_notok": "Show only monitors that are down or pending",
     "tip_filter_down": "Show only monitors that are down",
     "tip_mute": "Mute this monitor on the widget (counts, toasts and alerts ignore it)",
+    "tip_prune_muted": "Forget muted monitors that Kuma no longer reports (a paused monitor may be missing too)",
     "tip_unmute": "Unmute this monitor",
     "tip_expand_all": "Expand all groups",
     "tip_collapse_all": "Collapse all groups",
@@ -169,7 +170,8 @@
   "notify": {
     "down": "{count} monitor(s) down",
     "restored": "{count} monitor(s) back up",
-    "certs": "{count} certificate(s) expiring"
+    "certs": "{count} certificate(s) expiring",
+    "pruned": "{count} muted entr(ies) removed"
   },
   "tooltip_more": "+{count} more",
   "tooltip_warn_http": "Plain http: credentials in clear text",

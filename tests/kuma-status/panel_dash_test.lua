@@ -121,6 +121,15 @@ eq(find(P.tree, "row-1").props.opacity, 1, "live row not greyed")
 eq(find(P.tree, "row-2").props.opacity < 1, true, "muted row greyed")
 eq(find(P.tree, "mute-1").props.glyph ~= find(P.tree, "mute-2").props.glyph, true, "different glyph when muted")
 
+-- test: prune_button_shows_only_with_muted_monitors
+P = boot()
+P.publish({ baseUrl = "https://kuma.example.test", mutedCount = 0, dashboard = dash("tags", { group("x", { row(1, "a", 1) }) }) })
+eq(find(P.tree, "btn-prune-muted").props.visible, false, "hidden without muted monitors")
+P.publish({ baseUrl = "https://kuma.example.test", mutedCount = 2, dashboard = dash("tags", { group("x", { row(1, "a", 1) }) }) })
+eq(find(P.tree, "btn-prune-muted").props.visible, true, "shown with muted monitors")
+find(P.tree, "btn-prune-muted").props.onClick()
+eq(noctalia.state.get("kuma_status_request").action, "prune_muted", "prune request")
+
 -- test: group_row_collapse_toggles
 P = boot()
 P.publish({ baseUrl = "https://kuma.example.test", dashboard = dash("tags", { group("x", { row(1, "a", 1) }) }) })

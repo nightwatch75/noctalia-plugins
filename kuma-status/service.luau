@@ -264,6 +264,7 @@ function publish(cfg, metrics, structure, beatsById, pages, errors)
         certs = metrics ~= nil and K.buildCertificates(metrics, cfg.certLimits) or nil,
         certLimits = cfg.certLimits,
         stale = metrics ~= nil and errors.metrics ~= nil,
+        mutedCount = (function() local n = 0 for _ in pairs(muted) do n += 1 end return n end)(),
         baseUrl = cfg.base or "",
         plainHttp = plain,
         insecureTls = cfg.insecure,
@@ -483,6 +484,18 @@ noctalia.state.watch(REQUEST_KEY, function(req)
         muted[req.value] = not muted[req.value] or nil
         saveMuted()
         if last ~= nil then publish(table.unpack(last)) end
+    elseif req.action == "prune_muted" and last ~= nil then
+        local metrics, structure = last[2], last[3]
+        local removed = 0
+        for id in pairs(muted) do
+            if (metrics == nil or metrics[id] == nil) and (structure == nil or structure[id] == nil) then
+                muted[id] = nil
+                removed += 1
+            end
+        end
+        saveMuted()
+        noctalia.notify(tr("notify.pruned", { count = removed }), "")
+        publish(table.unpack(last))
     elseif req.action == "tag_mode" and (req.value == "first" or req.value == "all") then
         tagMode = req.value
         local f = modeFile()

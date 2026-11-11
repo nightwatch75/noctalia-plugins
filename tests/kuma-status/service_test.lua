@@ -316,6 +316,16 @@ noctalia.state.set("kuma_status_request", { nonce = 71, action = "mute", value =
 eq(h.data().summary.down, 1, "unmuted again")
 eq(h.files["/data/muted.txt"], "", "file emptied")
 
+-- test: prune_drops_muted_ids_unknown_to_kuma
+h = boot({}, standard)
+noctalia.state.set("kuma_status_request", { nonce = 80, action = "mute", value = 2 })
+noctalia.state.set("kuma_status_request", { nonce = 81, action = "mute", value = 99 })
+eq(h.data().mutedCount, 2, "two muted ids")
+noctalia.state.set("kuma_status_request", { nonce = 82, action = "prune_muted" })
+eq(h.files["/data/muted.txt"], "2\n", "only the id Kuma still reports is kept")
+eq(h.data().mutedCount, 1, "count updated")
+eq(#h.toasts, 1, "one toast says how many were removed")
+
 -- test: wrong_shape_json_is_reported_and_cycle_still_publishes
 h = boot({ kuma3_support = true, status_pages = { "https://status.example.test/status/dev" } }, function(req)
     if req.url:sub(-13) == "/api/monitors" then return ok("badmonitors") end
