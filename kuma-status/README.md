@@ -5,6 +5,14 @@ monitors up and down. A panel lists every monitor with its last 40 heartbeats,
 your status pages and certificate expiry. Read-only: it never pauses, edits or
 restarts a monitor.
 
+![Kuma Status bar widget](screenshots/bar.webp)
+
+![Dashboard tab: groups, monitors and heartbeat bars](screenshots/dashboard.webp)
+
+![Status pages tab](screenshots/status-pages.webp)
+
+![Certificates tab](screenshots/certificates.webp)
+
 ## Plugin
 
 | Field | Value |
