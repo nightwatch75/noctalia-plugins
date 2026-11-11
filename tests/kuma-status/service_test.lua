@@ -85,7 +85,11 @@ local function boot(cfg, respond, files)
     onConfigChanged = nil
     update = nil
     loadstring(MODULE_SRC)()
-    function H.refresh(n) noctalia.state.set("kuma_status_request", { nonce = n, action = "refresh" }) end
+    update() -- the finished cycle is published by the next tick
+    function H.refresh(n)
+        noctalia.state.set("kuma_status_request", { nonce = n, action = "refresh" })
+        update()
+    end
     function H.data() return H.state["kuma_status_data"] end
     function H.count(suffix)
         local n = 0
@@ -255,6 +259,14 @@ h = boot({ refresh_seconds = 20 }, function(req)
 end)
 for _ = 1, 45 do update() end
 eq(h.count("/metrics"), 1, "stalled cycle is not restarted by the timer")
+
+-- test: stalled_cycle_is_restarted_by_the_watchdog
+h = boot({ refresh_seconds = 20 }, function(req)
+    if req.url:sub(-8) == "/metrics" then return "HOLD" end
+    return standard(req)
+end)
+for _ = 1, 100 do update() end
+eq(h.count("/metrics"), 2, "a cycle stuck for 3 intervals + 30 s is restarted")
 
 -- test: wrong_shape_json_is_reported_and_cycle_still_publishes
 h = boot({ kuma3_support = true, status_pages = { "https://status.example.test/status/dev" } }, function(req)

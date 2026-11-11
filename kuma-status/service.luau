@@ -42,6 +42,7 @@ local nonce = 0
 local seenRequest = nil
 local elapsed = 0
 local inFlight = false -- a cycle is waiting for answers; the timer must not restart it
+local completion = nil  -- final merge + publish of a finished cycle, run by the next tick
 local v3Off = false  -- /api/monitors answered 404: stop asking this session
 local blocked = { metrics = false, monitors = false, pages = {} }
 local reasons = { pages = {} } -- text shown for blocked sources
@@ -273,9 +274,8 @@ local function refresh()
     local pageResults = {} -- [index] = StatusPage
     local pending = 1      -- guard: held until every request is issued
 
-    local function finish()
-        pending -= 1
-        if pending > 0 or mine ~= gen then return end
+    local function complete()
+        if mine ~= gen then return end
         inFlight = false
         local pages, beatsById = {}, {}
         for i = 1, #cfg.pages do
@@ -298,6 +298,12 @@ local function refresh()
             end
         end
         publish(cfg, metrics, structure, beatsById, pages, errors)
+    end
+
+    local function finish()
+        pending -= 1
+        if pending > 0 or mine ~= gen then return end
+        completion = complete
     end
 
     local function request(req, cb)
@@ -446,7 +452,14 @@ end)
 
 function update()
     elapsed += 1
-    if not inFlight and elapsed >= readConfig().interval then refresh() end
+    if completion ~= nil then
+        local run = completion
+        completion = nil
+        run()
+        return
+    end
+    local interval = readConfig().interval
+    if not inFlight and elapsed >= interval or inFlight and elapsed >= interval * 3 + 30 then refresh() end
 end
 
 -- Settings changed: drop every block and ask again.
