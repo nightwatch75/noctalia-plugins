@@ -189,4 +189,24 @@ do
     eq(n, 30, "all monitors")
 end
 
+-- test: metrics_parser_stops_a_step_when_the_time_slice_is_used
+do
+    local rows = {}
+    for id = 1, 30 do rows[#rows + 1] = line("monitor_status", "", id, "svc-" .. id, "http", 1) end
+    local text = table.concat(rows, "\n")
+    local realClock, now = os.clock, 0
+    os.clock = function() now += 1; return now end
+    local p = K.metricsParser(text)
+    local steps, result = 0, nil
+    repeat
+        result = p.step(100, 5)
+        steps += 1
+    until result ~= nil or steps > 50
+    os.clock = realClock
+    eq(steps > 1, true, "the clock cut the 30-line step short")
+    local n = 0
+    for _ in pairs(result) do n += 1 end
+    eq(n, 30, "nothing lost between steps")
+end
+
 print("parse_test OK")

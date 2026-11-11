@@ -103,7 +103,7 @@ local function labelsOf(l)
 end
 
 local function parseLine(byId, l)
-    if l:sub(1, 8) ~= "monitor_" then return end
+    if l:sub(1, 8) ~= "monitor_" then return false end
     local metric = l:match("^([%w_]+){")
     if metric ~= nil and USED[metric] and (metric ~= "monitor_uptime_ratio" or l:find('window="1d"', 1, true)) then
         local id = tonumber(l:match('monitor_id="(%d+)"'))
@@ -152,16 +152,21 @@ local function parseLine(byId, l)
             end
         end
     end
+    return true
 end
 
--- Parses /metrics `lines` at a time: step(n) returns nil until the text is
--- done, then the monitors by id. Keeps each call far under the host's 25 ms.
+-- Parses /metrics in slices: step(n, seconds) parses at most n monitor_ lines, and stops
+-- early after `seconds` of os.clock when the sandbox has it. Returns nil until
+-- the text is done, then the monitors by id.
 function K.metricsParser(text: string)
     local byId = {}
     local nextLine = (text or ""):gmatch("[^\n]+")
     local P = {}
-    function P.step(n: number)
-        for _ = 1, n do
+    function P.step(n: number, seconds: number?)
+        local clock = seconds ~= nil and type(os) == "table" and os.clock or nil
+        local started = clock and clock()
+        local used = 0
+        while used < n do
             local l = nextLine()
             if l == nil then
                 -- a monitor without a status series is noise
@@ -170,7 +175,8 @@ function K.metricsParser(text: string)
                 end
                 return byId
             end
-            parseLine(byId, l)
+            if parseLine(byId, l) then used += 1 end
+            if clock and clock() - started >= seconds then break end
         end
         return nil
     end

@@ -37,7 +37,8 @@ local STATE_KEY = "kuma_status_data"
 local REQUEST_KEY = "kuma_status_request"
 local BUFFER_CAP = 40
 local RETRY_SECONDS = 10
-local PARSE_LINES = 150 -- /metrics lines parsed per tick
+local PARSE_LINES = 40     -- /metrics lines parsed per tick,
+local PARSE_SECONDS = 0.005 -- or until this much time is used
 
 local gen = 0        -- bumps per cycle and on config change; stale callbacks drop themselves
 local nonce = 0
@@ -345,7 +346,7 @@ local function refresh()
         completion = function()
             if mine ~= gen then return true end
             if parser ~= nil then
-                local ok, result = pcall(parser.step, PARSE_LINES)
+                local ok, result = pcall(parser.step, PARSE_LINES, PARSE_SECONDS)
                 if not ok then
                     parser = nil
                     errors.metrics = tr("error.bad_metrics") .. " [" .. tostring(result):sub(1, 100) .. "]"
