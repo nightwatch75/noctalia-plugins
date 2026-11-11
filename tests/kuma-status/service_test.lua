@@ -420,9 +420,14 @@ local function certMetrics(req)
     end
     return standard(req)
 end
-h = boot({ cert_red_days = 99 }, certMetrics) -- an old setting must change nothing
+h = boot({}, certMetrics)
 eq(h.data().certs.groups[1].level, "red", "7 days is red"); eq(h.data().certs.groups[2].level, "yellow", "8 days is yellow")
 eq(h.data().certs.groups[3].level, "green", "60 days is green")
+eq(h.data().certLimits.red, 7, "default limits published"); eq(h.data().certLimits.yellow, 30, "default yellow")
+h = boot({ cert_red_days = 8, cert_yellow_days = 59 }, certMetrics)
+eq(h.data().certs.groups[1].level, "red", "8 days is red with red 8"); eq(#h.data().certs.groups[1].rows, 2, "7 and 8 days")
+eq(h.data().certs.groups[2].level, "green", "60 days is green with yellow 59")
+eq(h.data().certLimits.yellow, 59, "custom limits published")
 eq(h.data().dashboard.groups[1].rows[1].certLevel ~= nil, true, "dashboard rows have a level")
 
 -- test: group_tags_setting_drives_the_tag_groups

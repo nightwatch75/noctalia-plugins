@@ -129,7 +129,20 @@ eq(#d.groups[2].rows, 2, "default keeps duplicates: y holds a and b")
 eq(K.certLevel(-1), "expired", "negative"); eq(K.certLevel(0), "red", "today is red, not expired")
 eq(K.certLevel(7), "red", "7 days is still red"); eq(K.certLevel(8), "yellow", "8 days")
 eq(K.certLevel(30), "yellow", "30 days is still yellow"); eq(K.certLevel(31), "green", "31 days")
-eq(K.CERT_RED_DAYS, 7, "fixed red limit"); eq(K.CERT_YELLOW_DAYS, 30, "fixed yellow limit")
+
+-- test: cert_limits_are_configurable_and_normalized
+local lim = K.certLimits()
+eq(lim.red, 7, "default red"); eq(lim.yellow, 30, "default yellow")
+eq(K.certLevel(10, { red = 14, yellow = 60 }), "red", "custom red limit"); eq(K.certLevel(61, { red = 14, yellow = 60 }), "green", "custom yellow limit")
+lim = K.certLimits(10, 5)
+eq(lim.red, 10, "red kept"); eq(lim.yellow, 11, "yellow is always above red")
+lim = K.certLimits("x", nil)
+eq(lim.red, 7, "bad red falls back"); eq(lim.yellow, 30, "bad yellow falls back")
+lim = K.certLimits(0, 0)
+eq(lim.red, 1, "red at least 1"); eq(lim.yellow, 2, "yellow above it")
+lim = K.certLimits(9999, 9999)
+eq(lim.red, 365, "red capped"); eq(lim.yellow, 730, "yellow capped")
+eq(K.certLimits(7.9, 30.2).red, 7, "whole days")
 
 -- test: certificates_sorted_by_expiry_and_grouped
 local cm = set(
@@ -150,6 +163,11 @@ local flat = {}
 for _, g in ipairs(c.groups) do for _, r in ipairs(g.rows) do flat[#flat + 1] = r.name end end
 eq(list(flat), "gone,near,mid,far", "shortest first overall")
 
+-- test: certificates_use_the_given_limits
+c = K.buildCertificates(cm, { red = 3, yellow = 10 })
+eq(c.groups[2].level, "yellow", "5 days is yellow with red 3"); eq(c.groups[2].rows[1].name, "near", "near moved to yellow")
+eq(c.groups[3].level, "green", "20 days is green with yellow 10")
+
 -- test: certificates_empty_groups_are_omitted
 c = K.buildCertificates(set(metric(1, "a", 1, { certDays = 99 })))
 eq(#c.groups, 1, "only the green group"); eq(c.groups[1].level, "green", "green")
@@ -158,6 +176,10 @@ eq(K.buildCertificates({}).total, 0, "nothing")
 -- test: dashboard_rows_carry_cert_level
 d = K.buildDashboard(set(metric(1, "a", 1, { certDays = 12, tags = { "t" } }), metric(2, "b", 1, { certDays = 7, tags = { "t" } })), nil, {}, {})
 eq(d.groups[1].rows[1].certLevel, "yellow", "12 days is yellow"); eq(d.groups[1].rows[2].certLevel, "red", "7 days is red")
+
+-- test: dashboard_rows_use_the_given_limits
+d = K.buildDashboard(set(metric(1, "a", 1, { certDays = 12, tags = { "t" } })), nil, {}, {}, { certLimits = { red = 14, yellow = 60 } })
+eq(d.groups[1].rows[1].certLevel, "red", "12 days is red with red 14")
 
 -- test: group_tags_group_by_listed_tags_in_priority_order
 local gt = set(

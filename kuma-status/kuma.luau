@@ -249,25 +249,36 @@ function K.parseStatusPage(page: any, heartbeats: any, origin: string, slug: str
     return sp
 end
 
--- Expiry level for the days left: expired (<0), red (<=7), yellow (<=30), green.
-K.CERT_RED_DAYS = 7
-K.CERT_YELLOW_DAYS = 30
+-- Certificate limits from the settings, whole days: red up to `red`, yellow up
+-- to `yellow` (always above red).
+local function whole(v, default, lo, hi)
+    v = tonumber(v)
+    if v == nil then return default end
+    return math.min(hi, math.max(lo, math.floor(v)))
+end
 
-function K.certLevel(days)
+function K.certLimits(red, yellow)
+    red = whole(red, 7, 1, 365)
+    return { red = red, yellow = math.max(red + 1, whole(yellow, 30, 2, 730)) }
+end
+
+-- Expiry level for the days left: expired (<0), red, yellow, green.
+function K.certLevel(days, limits)
+    limits = limits or K.certLimits()
     if days < 0 then return "expired" end
-    if days <= K.CERT_RED_DAYS then return "red" end
-    if days <= K.CERT_YELLOW_DAYS then return "yellow" end
+    if days <= limits.red then return "red" end
+    if days <= limits.yellow then return "yellow" end
     return "green"
 end
 
 -- Certificates tab: monitors with a certificate expiry, shortest first, grouped
 -- by level (empty levels omitted).
-function K.buildCertificates(metrics)
+function K.buildCertificates(metrics, limits)
     local all = {}
     for id, m in pairs(metrics) do
         if m.type ~= "group" and m.certDays ~= nil then
             local days = math.floor(m.certDays)
-            all[#all + 1] = { id = id, name = m.name, url = m.url, link = m.link, certDays = days, level = K.certLevel(days) }
+            all[#all + 1] = { id = id, name = m.name, url = m.url, link = m.link, certDays = days, level = K.certLevel(days, limits) }
         end
     end
     table.sort(all, function(a, b)
@@ -383,13 +394,13 @@ local function byName(a, b)
 end
 
 -- A monitor known only from the structure (Kuma 3) is paused: no series.
-local function makeRow(id, m, struct, beats, buffer)
+local function makeRow(id, m, struct, beats, buffer, limits)
     local b = beats[id]
     if b == nil or #b == 0 then b = buffer[id] or {} end
     if m ~= nil then
         return {
             id = id, name = m.name, status = m.status, ping = m.ping, beats = b, paused = false, url = m.url, link = m.link,
-            certDays = m.certDays, certLevel = m.certDays ~= nil and K.certLevel(math.floor(m.certDays)) or nil,
+            certDays = m.certDays, certLevel = m.certDays ~= nil and K.certLevel(math.floor(m.certDays), limits) or nil,
         }
     end
     return { id = id, name = struct.name, status = -1, beats = b, paused = true }
@@ -418,8 +429,10 @@ end
 -- ones named "Parent / Child"). Without: one group per tag, an unnamed one last.
 -- opts.firstTagOnly: a monitor only in its first tag. opts.groupTags: only these
 -- tags make groups, in this order; a monitor goes to the first one it has.
+-- opts.certLimits: see K.certLimits.
 function K.buildDashboard(metrics, structure, beats, buffer, opts)
     local groups = {}
+    local limits = opts and opts.certLimits or nil
     if structure ~= nil then
         local function fullName(id)
             local st, parts, guard = structure[id], {}, 0
@@ -437,7 +450,7 @@ function K.buildDashboard(metrics, structure, beats, buffer, opts)
                 for _, c in ipairs(st.children) do
                     local cs = structure[c]
                     if cs ~= nil and cs.type ~= "group" then
-                        rows[#rows + 1] = makeRow(c, metrics[c], cs, beats, buffer)
+                        rows[#rows + 1] = makeRow(c, metrics[c], cs, beats, buffer, limits)
                         placed[c] = true
                     end
                 end
@@ -448,12 +461,12 @@ function K.buildDashboard(metrics, structure, beats, buffer, opts)
         for _, g in ipairs(named) do groups[#groups + 1] = makeGroup(g.id, g.name, g.rows, metrics) end
         for id, st in pairs(structure) do
             if st.type ~= "group" and not placed[id] then
-                loose[#loose + 1] = makeRow(id, metrics[id], st, beats, buffer)
+                loose[#loose + 1] = makeRow(id, metrics[id], st, beats, buffer, limits)
             end
         end
         for id, m in pairs(metrics) do
             if m.type ~= "group" and structure[id] == nil then
-                loose[#loose + 1] = makeRow(id, m, nil, beats, buffer)
+                loose[#loose + 1] = makeRow(id, m, nil, beats, buffer, limits)
             end
         end
         if #loose > 0 then groups[#groups + 1] = makeGroup(nil, "", loose, metrics) end
@@ -478,7 +491,7 @@ function K.buildDashboard(metrics, structure, beats, buffer, opts)
     end
     for id, m in pairs(metrics) do
         if m.type ~= "group" then
-            local r = makeRow(id, m, nil, beats, buffer)
+            local r = makeRow(id, m, nil, beats, buffer, limits)
             if listed then
                 local picked = {}
                 for _, t in ipairs(m.tags) do

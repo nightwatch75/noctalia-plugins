@@ -1,6 +1,6 @@
 id = "nightwatch75/kuma-status"
 name = "Kuma Status"
-version = "0.10.0"
+version = "0.11.0"
 plugin_api = 32
 author = "nightwatch75"
 license = "MIT"
@@ -56,6 +56,24 @@ type = "bool"
 label_key = "settings.kuma3_support.label"
 description_key = "settings.kuma3_support.description"
 default = false
+
+[[setting]]
+key = "cert_red_days"
+type = "int"
+label_key = "settings.cert_red_days.label"
+description_key = "settings.cert_red_days.description"
+default = 7
+min = 1
+max = 365
+
+[[setting]]
+key = "cert_yellow_days"
+type = "int"
+label_key = "settings.cert_yellow_days.label"
+description_key = "settings.cert_yellow_days.description"
+default = 30
+min = 2
+max = 730
 
 [[setting]]
 key = "group_tags"

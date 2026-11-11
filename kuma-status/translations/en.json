@@ -14,8 +14,16 @@
       "description": "Basic auth user in front of the status pages. Empty if they are public."
     },
     "kuma3_support": {
-      "label": "Kuma 3 support",
+      "label": "Kuma 3 support (beta)",
       "description": "Show the real groups from /api/monitors. Leave off on Kuma 2."
+    },
+    "cert_red_days": {
+      "label": "Certificate red limit (days)",
+      "description": "Red up to this many days left. Expired is always red."
+    },
+    "cert_yellow_days": {
+      "label": "Certificate yellow limit (days)",
+      "description": "Yellow up to this many days left, green beyond. Kept above the red limit."
     },
     "notify_changes": {
       "label": "State change alerts",

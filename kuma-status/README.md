@@ -51,7 +51,7 @@ noctalia msg panel-toggle nightwatch75/kuma-status:panel
   Kuma URL and the refresh button.
 - **Dashboard tab:** groups and monitors with the newest state, ping and a bar
   of the last 40 heartbeats. Under a check, in small, the certificate expiry
-  when Kuma reports it (colored glyph, same fixed limits as the Certificates tab: red up to 7 days, yellow up to 30, green beyond; Kuma does not expose its own notification days). Click a group to collapse it, a monitor name to open its page in
+  when Kuma reports it (colored glyph, same limits as the Certificates tab: `cert_red_days`, `cert_yellow_days`). Click a group to collapse it, a monitor name to open its page in
   Kuma. Right click a monitor for **Open monitor in Kuma**,
   **Open monitored URL** and **Copy monitored URL** (the URL the monitor
   tests); hovering a row shows that URL. A line of buttons above the list
@@ -62,8 +62,8 @@ noctalia msg panel-toggle nightwatch75/kuma-status:panel
   shows at the right of the title.
 - **Certificates tab:** every monitor for which Kuma reports a certificate
   expiry, shortest first, grouped by how close the expiry is: **Expired**,
-  **Expiring now** (up to 7 days), **Expiring soon** (8 to 30 days) and
-  **Healthy** (over 30 days). Each row has a certificate glyph in red, yellow
+  **Expiring now** (up to `cert_red_days`, default 7), **Expiring soon** (up to
+  `cert_yellow_days`, default 30) and **Healthy** (beyond). Each row has a certificate glyph in red, yellow
   or green, the monitored URL (the monitor name when it has none) and the days
   left. The sort button reverses the order and the line next to it says which way. Group titles are large and colored; click one to collapse it, or use expand all / collapse all. The choice follows `groups_on_open` and is remembered the same way as on the Dashboard. Click a row to open the monitor in
   Kuma, right click for the same menu as the Dashboard. The data is the one
@@ -91,9 +91,11 @@ refresh, in memory only), so right after a start their bar is mostly empty.
 | `proxy_password_file` | `file` | empty | Path of a file holding that user's password. Sent, with the user, only to the Kuma URL host and to `proxy_hosts` |
 | `proxy_hosts` | `string_list` | empty | Hosts (`host` or `host:port`) of status pages behind the same proxy login, e.g. `status.example.com`. A status page on any other host gets no password and shows a 401 hint |
 | `insecure_tls` | `bool` | `false` | Accept untrusted HTTPS certificates (self-signed, expired) on every request. The panel shows a warning while it is on |
-| `kuma3_support` | `bool` | `false` | Call `/api/monitors` (Kuma 3). Off means no call at all. A 404 turns it off until the settings change |
+| `kuma3_support` | `bool` | `false` | Beta. Call `/api/monitors` (Kuma 3). Off means no call at all. A 404 turns it off until the settings change |
 | `groups_on_open` | `select` | `expanded` | Dashboard groups when the panel opens: `expanded`, `collapsed` or `last` (the groups you closed stay closed; a new group starts open) |
 | `start_tab` | `select` | `dashboard` | Tab the panel opens on: `dashboard`, `pages`, `certs` or `last` (the one you used last) |
+| `cert_red_days` | `int` | `7` | Certificates are red up to this many days left (1 to 365). Expired is always red |
+| `cert_yellow_days` | `int` | `30` | Yellow up to this many days, green beyond (2 to 730). Always kept above the red limit |
 | `group_tags` | `string_list` | empty | Kuma 2 only. Tags that make the Dashboard groups, in priority order and spelling (matched ignoring case). A monitor goes to the first listed tag it has, or under every one it has in the **All tags** view. Other tags are ignored; a monitor with none is listed last without a group name. Empty: every tag is a group |
 | `notify_changes` | `select` | `toast_blink` | Toast when a monitor has been down for 2 cycles in a row and when it recovers; `toast_blink` also blinks the bar for 10 s or until you open the panel. No alert on the first cycle after start; the same monitor alerts at most every 10 minutes |
 | `bar_display` | `select` | `counts` | `counts`: glyph, up and down numbers. `color`: glyph color only |

@@ -5,7 +5,7 @@
 --   publishes "kuma_status_data" = { nonce, ts, summary, dashboard?, certs?,
 --       pages (each with .source), pageUrls, errors = { metrics?,
 --       monitors?, pages = {[url]=msg} }, mode, tagMode, credWarn, baseUrl,
---       plainHttp, insecureTls, alertTs }; summary.color is "offline" without /metrics.
+--       plainHttp, insecureTls, alertTs, certLimits }; summary.color is "offline" without /metrics.
 --   reads "kuma_status_request" = { nonce, action = "refresh" }
 --       or { nonce, action = "tag_mode", value = "first"|"all" }; a nonce
 --       already seen is ignored.
@@ -104,6 +104,7 @@ local function readConfig()
         proxyHosts = proxyHostSet(),
         insecure = noctalia.getConfig("insecure_tls") == true,
         v3 = noctalia.getConfig("kuma3_support") == true,
+        certLimits = K.certLimits(noctalia.getConfig("cert_red_days"), noctalia.getConfig("cert_yellow_days")),
         notify = noctalia.getConfig("notify_changes") or "toast_blink",
         interval = math.min(3600, math.max(20, interval))
     }
@@ -184,7 +185,7 @@ function publish(cfg, metrics, structure, beatsById, pages, errors)
     last = { cfg, metrics, structure, beatsById, pages, errors }
     local dashboard = nil
     if metrics ~= nil then
-        dashboard = K.buildDashboard(metrics, structure, beatsById, buffer, { firstTagOnly = tagMode == "first", groupTags = cfg.groupTags })
+        dashboard = K.buildDashboard(metrics, structure, beatsById, buffer, { firstTagOnly = tagMode == "first", groupTags = cfg.groupTags, certLimits = cfg.certLimits })
     end
     -- from the configured URLs, so a page that failed still flags clear text
     local plain = cfg.base ~= nil and cfg.base:sub(1, 7) == "http://"
@@ -203,7 +204,8 @@ function publish(cfg, metrics, structure, beatsById, pages, errors)
         tagMode = tagMode,
         credWarn = credWarn,
         alertTs = alertTs,
-        certs = metrics ~= nil and K.buildCertificates(metrics) or nil,
+        certs = metrics ~= nil and K.buildCertificates(metrics, cfg.certLimits) or nil,
+        certLimits = cfg.certLimits,
         baseUrl = cfg.base or "",
         plainHttp = plain,
         insecureTls = cfg.insecure,

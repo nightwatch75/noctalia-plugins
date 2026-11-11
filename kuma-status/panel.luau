@@ -293,10 +293,11 @@ end
 local CERT_W = 440
 
 local function certGroupName(level)
+    local lim = data and data.certLimits or K.certLimits()
     if level == "expired" then return tr("panel.certs_expired") end
-    if level == "red" then return tr("panel.certs_red", { days = K.CERT_RED_DAYS }) end
-    if level == "yellow" then return tr("panel.certs_yellow", { from = K.CERT_RED_DAYS + 1, to = K.CERT_YELLOW_DAYS }) end
-    return tr("panel.certs_green", { days = K.CERT_YELLOW_DAYS })
+    if level == "red" then return tr("panel.certs_red", { days = lim.red }) end
+    if level == "yellow" then return tr("panel.certs_yellow", { from = lim.red + 1, to = lim.yellow }) end
+    return tr("panel.certs_green", { days = lim.yellow })
 end
 
 local function certRow(c)
