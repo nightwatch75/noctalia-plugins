@@ -20,6 +20,7 @@ local REQUEST_KEY = "kuma_status_request"
 local data = nil
 local tab = "dashboard"
 local statusFilter = "all" -- "all" | "notok" | "down", dashboard rows only
+local removedPages = {}   -- url -> true: hidden until the service republishes the list
 local collapsed = {}      -- group key -> bool; nil means "the groups_on_open default"
 local defaultCollapsed = false -- groups_on_open = "collapsed"
 local rememberGroups = false   -- groups_on_open = "last"
@@ -139,12 +140,14 @@ local function toggleGroup(key)
     render()
 end
 
--- which = "certs" or "dashboard"; certificate groups use a "certs:" key prefix.
+-- which = "certs", "pages" or "dashboard"; keys are prefixed "certs:" and "page:".
 local function setAllCollapsed(which, value)
     if which == "certs" then
         for _, g in ipairs(data and data.certs and data.certs.groups or {}) do
             collapsed["certs:" .. g.key] = value
         end
+    elseif which == "pages" then
+        for _, url in ipairs(store.load()) do collapsed["page:" .. url] = value end
     else
         for _, g in ipairs(data and data.dashboard and data.dashboard.groups or {}) do
             collapsed[R.groupKey(g)] = value
@@ -232,6 +235,7 @@ local function addPage()
     for _, u in ipairs(list) do
         if u == url then present = true end
     end
+    removedPages[url] = nil
     if not present then
         list[#list + 1] = url
         store.save(list)
@@ -243,6 +247,7 @@ local function addPage()
 end
 
 local function removePage(url)
+    removedPages[url] = true
     local kept = {}
     for _, u in ipairs(store.load()) do
         if u ~= url then kept[#kept + 1] = u end
@@ -263,6 +268,8 @@ local function addView()
                 }),
             }),
             ui.button({ key = "btn-add-page", glyph = "plus", variant = "ghost", tooltip = tr("panel.tip_add"), onClick = addPage }),
+            ui.button({ key = "btn-pages-expand-all", glyph = "chevrons-down", variant = "ghost", tooltip = tr("panel.tip_expand_all"), onClick = function() setAllCollapsed("pages", false) end }),
+            ui.button({ key = "btn-pages-collapse-all", glyph = "chevrons-up", variant = "ghost", tooltip = tr("panel.tip_collapse_all"), onClick = function() setAllCollapsed("pages", true) end }),
         }),
     }
     if addError then
@@ -273,7 +280,10 @@ end
 
 local function pagesView()
     local out = {}
-    local urls = data and data.pageUrls or {}
+    local urls = {}
+    for _, u in ipairs(data and data.pageUrls or {}) do
+        if not removedPages[u] then urls[#urls + 1] = u end
+    end
     if #urls == 0 then
         out[1] = ui.label({ key = "pages-empty", text = tr("panel.pages_empty"), color = "on_surface_variant" })
         return out
@@ -283,11 +293,17 @@ local function pagesView()
     local pageErrors = data.errors and data.errors.pages or {}
     for i, url in ipairs(urls) do
         local sp = bySource[url]
+        local key = "page:" .. url
+        local closed = isCollapsed(key)
+        local arrow = ui.label({ key = "page-arrow-" .. i, text = closed and "▶" or "▼", width = 14, color = "on_surface_variant" })
         local removeBtn = ui.button({ key = "btn-del-page-" .. i, glyph = "trash", variant = "ghost", tooltip = tr("panel.tip_remove_page"), onClick = function() removePage(url) end })
         if sp == nil then
             out[#out + 1] = ui.column({ key = "page-" .. i, gap = 2 }, {
                 ui.row({ key = "page-head-" .. i, gap = 6, align = "center" }, {
-                    ui.label({ key = "page-url-" .. i, text = url, flexGrow = 1, fontWeight = "semibold", maxLines = 1 }),
+                    ui.row({ key = "page-toggle-" .. i, gap = 6, align = "center", flexGrow = 1, onClick = function() toggleGroup(key) end }, {
+                        arrow,
+                        ui.label({ key = "page-url-" .. i, text = url, flexGrow = 1, fontWeight = "semibold", maxLines = 1 }),
+                    }),
                     removeBtn,
                 }),
                 ui.label({ key = "page-err-" .. i, text = pageErrors[url] or tr("panel.page_no_data"), color = "error" }),
@@ -296,7 +312,10 @@ local function pagesView()
             local function open() openUrl(sp.url) end
             local children = {
                 ui.row({ key = "page-head-" .. i, gap = 6, align = "center" }, {
-                    ui.label({ key = "page-title-" .. i, text = sp.title, maxLines = 1, fontWeight = "bold" }),
+                    ui.row({ key = "page-toggle-" .. i, gap = 6, align = "center", onClick = function() toggleGroup(key) end }, {
+                        arrow,
+                        ui.label({ key = "page-title-" .. i, text = sp.title, maxLines = 1, fontWeight = "bold" }),
+                    }),
                     ui.row({
                         key = "page-link-" .. i, flexGrow = 1, justify = "end", tooltip = tr("panel.tip_copy_url"),
                         onClick = function() noctalia.copyToClipboard(sp.url, "text/plain") end,
@@ -310,7 +329,7 @@ local function pagesView()
             if sp.description ~= "" then
                 children[2] = ui.label({ key = "page-desc-" .. i, text = sp.description, fontSize = 11, maxLines = 1, color = "on_surface_variant" })
             end
-            for j, g in ipairs(sp.groups) do
+            for j, g in ipairs(closed and {} or sp.groups) do
                 if #sp.groups > 1 then
                     children[#children + 1] = ui.label({ key = "page-group-" .. i .. "-" .. j, text = g.name, fontWeight = "semibold", color = "on_surface_variant" })
                 end

@@ -114,12 +114,27 @@ eq(P.writes, nil, "nothing written")
 
 -- test: every_page_can_be_removed
 P = boot()
-P.files["/data/status_pages.txt"] = URL .. "\n"
+P.files["/data/status_pages.txt"] = URL .. "\nhttps://other.example.test/status/x\n"
 P.publish({ pageUrls = { URL, "https://other.example.test/status/x" }, pages = { PAGE } })
 eq(find(P.tree, "btn-del-page-1") ~= nil, true, "remove button on a loaded page")
 eq(find(P.tree, "btn-del-page-2") ~= nil, true, "remove button on a failed page")
 find(P.tree, "btn-del-page-1").props.onClick()
-eq(P.files["/data/status_pages.txt"], "", "removed from the store")
+eq(P.files["/data/status_pages.txt"], "https://other.example.test/status/x\n", "removed from the store")
+eq(find(P.tree, "page-url-1") ~= nil and find(P.tree, "page-title-1") == nil, true, "gone from the list before the service republishes")
+
+-- test: page_collapses_and_expands
+P = boot()
+PAGE.description = ""
+P.files["/data/status_pages.txt"] = URL .. "\n"
+P.publish({ pageUrls = { URL }, pages = { PAGE } })
+eq(find(P.tree, "page-arrow-1").props.text, "▼", "open by default")
+find(P.tree, "page-toggle-1").props.onClick()
+eq(find(P.tree, "page-arrow-1").props.text, "▶", "arrow closed")
+eq(#find(P.tree, "page-1").children, 1, "only the head stays")
+find(P.tree, "btn-pages-expand-all").props.onClick()
+eq(find(P.tree, "page-arrow-1").props.text, "▼", "expand all")
+find(P.tree, "btn-pages-collapse-all").props.onClick()
+eq(find(P.tree, "page-arrow-1").props.text, "▶", "collapse all")
 
 -- test: page_url_beside_title_copies_and_description_under_it
 P = boot()

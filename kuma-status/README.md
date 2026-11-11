@@ -69,7 +69,8 @@ it.
 
 **Status pages tab.** Type a status page URL and press `+` to add it; the trash
 button removes it. Each page shows its title, description and URL (click to
-copy), with a button to open it.
+copy), with a button to open it. Click the title to collapse a page; the arrows
+next to `+` collapse or expand all.
 
 **Certificates tab.** Monitors with a certificate expiry, shortest first, in
 four groups: **Expired**, **Expiring now** (up to `cert_red_days`), **Expiring
