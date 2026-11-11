@@ -81,6 +81,7 @@ local function boot(cfg, respond, files)
     }
     local kuma = loadstring(MODULES["kuma.luau"])()
     local store = loadstring(MODULES["pages_store.luau"])()
+    H.kuma = kuma
     require = function(p) if p:find("pages_store") then return store end return kuma end
     onConfigChanged = nil
     update = nil
@@ -267,6 +268,13 @@ h = boot({ refresh_seconds = 20 }, function(req)
 end)
 for _ = 1, 100 do update() end
 eq(h.count("/metrics"), 2, "a cycle stuck for 3 intervals + 30 s is restarted")
+
+-- test: parser_failure_is_reported_not_blank
+h = boot({}, standard)
+h.kuma.parseMetrics = function() error("boom") end
+h.refresh(50)
+eq(h.data().errors.metrics, "error.bad_metrics", "a throwing parser shows an error")
+eq(h.data().summary.color, "offline", "offline")
 
 -- test: wrong_shape_json_is_reported_and_cycle_still_publishes
 h = boot({ kuma3_support = true, status_pages = { "https://status.example.test/status/dev" } }, function(req)

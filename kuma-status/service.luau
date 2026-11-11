@@ -338,7 +338,8 @@ local function refresh()
                 -- a login page or wrong path also answers 200
                 errors.metrics = tr("error.bad_metrics")
             else
-                metrics = K.parseMetrics(body)
+                local parsed, result = pcall(K.parseMetrics, body)
+                if parsed then metrics = result else errors.metrics = tr("error.bad_metrics") end
             end
         end)
     end
