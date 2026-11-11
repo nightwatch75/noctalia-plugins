@@ -34,6 +34,7 @@ local text = table.concat(lines, "\n")
 print(string.format("metrics text: %d KB, %d lines", #text // 1024, #lines))
 
 local metrics = timed("parseMetrics", function() return K.parseMetrics(text) end)
+timed("parse step (150)", function() return K.metricsParser(text).step(150) end)
 
 local monitors, beats = {}, {}
 for id = 1, 52 do

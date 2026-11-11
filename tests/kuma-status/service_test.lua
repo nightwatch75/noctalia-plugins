@@ -272,7 +272,7 @@ eq(h.count("/metrics"), 2, "a cycle stuck for 3 intervals + 30 s is restarted")
 
 -- test: parser_failure_is_reported_not_blank
 h = boot({}, standard)
-h.kuma.parseMetrics = function() error("boom") end
+h.kuma.metricsParser = function() return { step = function() error("boom") end } end
 h.refresh(50)
 eq(h.data().errors.metrics:find("boom", 1, true) ~= nil, true, "a throwing parser shows its error")
 eq(h.data().stale, true, "old values kept")
@@ -333,6 +333,20 @@ h = boot({}, function(req)
     return standard(req)
 end)
 eq(h.data().errors.metrics, "error.busy", "refusal has its own message")
+
+-- test: big_metrics_are_parsed_over_several_ticks
+do
+    local rows = {}
+    for id = 1, 200 do rows[#rows + 1] = series("monitor_status", id, "m" .. id, 1) end
+    local BIG = table.concat(rows, "\n")
+    h = boot({}, function(req)
+        if req.url:sub(-8) == "/metrics" then return ok(BIG) end
+        return standard(req)
+    end)
+    eq(h.data(), nil, "nothing published until the whole body is parsed")
+    for _ = 1, 5 do update() end
+    eq(h.data().summary.up, 200, "all parsed after a few ticks")
+end
 
 -- test: wrong_shape_json_is_reported_and_cycle_still_publishes
 h = boot({ kuma3_support = true, status_pages = { "https://status.example.test/status/dev" } }, function(req)

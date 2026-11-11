@@ -102,63 +102,85 @@ local function labelsOf(l)
     return labels
 end
 
-function K.parseMetrics(text: string)
-    local byId = {}
-    for l in (text or ""):gmatch("[^\n]+") do
-        local metric = l:match("^([%w_]+){")
-        if metric ~= nil and USED[metric] and (metric ~= "monitor_uptime_ratio" or l:find('window="1d"', 1, true)) then
-            local id = tonumber(l:match('monitor_id="(%d+)"'))
-            local value = tonumber(l:match("}%s+(%S+)%s*$"))
-            if id ~= nil and value ~= nil and value == value then
-                local m = byId[id]
-                if m == nil then
-                    local labels = labelsOf(l)
-                    if labels ~= nil then
-                        local tags = {}
-                        for key in pairs(labels) do
-                            if not RESERVED[key] then tags[#tags + 1] = K.safeText(key, MAX_NAME) end
-                        end
-                        table.sort(tags)
-                        local url = labels.monitor_url
-                        if url == nil or url == "" or url == "null" then
-                            url = nil
-                            local host = labels.monitor_hostname
-                            if host ~= nil and host ~= "" and host ~= "null" then
-                                url = host
-                                local port = labels.monitor_port
-                                if port ~= nil and port ~= "" and port ~= "null" then url = host .. ":" .. port end
-                            end
-                        end
-                        m = {
-                            id = id,
-                            name = K.safeText(labels.monitor_name or "", MAX_NAME),
-                            type = K.safeText(labels.monitor_type or "", 40),
-                            url = url and displayUrl(url) or nil,
-                            link = url and utf8.len(url) ~= nil and #url <= MAX_LINK and K.safeText(url, MAX_LINK) or nil,
-                            tags = tags,
-                        }
-                        byId[id] = m
+local function parseLine(byId, l)
+    if l:sub(1, 8) ~= "monitor_" then return end
+    local metric = l:match("^([%w_]+){")
+    if metric ~= nil and USED[metric] and (metric ~= "monitor_uptime_ratio" or l:find('window="1d"', 1, true)) then
+        local id = tonumber(l:match('monitor_id="(%d+)"'))
+        local value = tonumber(l:match("}%s+(%S+)%s*$"))
+        if id ~= nil and value ~= nil and value == value then
+            local m = byId[id]
+            if m == nil then
+                local labels = labelsOf(l)
+                if labels ~= nil then
+                    local tags = {}
+                    for key in pairs(labels) do
+                        if not RESERVED[key] then tags[#tags + 1] = K.safeText(key, MAX_NAME) end
                     end
+                    table.sort(tags)
+                    local url = labels.monitor_url
+                    if url == nil or url == "" or url == "null" then
+                        url = nil
+                        local host = labels.monitor_hostname
+                        if host ~= nil and host ~= "" and host ~= "null" then
+                            url = host
+                            local port = labels.monitor_port
+                            if port ~= nil and port ~= "" and port ~= "null" then url = host .. ":" .. port end
+                        end
+                    end
+                    m = {
+                        id = id,
+                        name = K.safeText(labels.monitor_name or "", MAX_NAME),
+                        type = K.safeText(labels.monitor_type or "", 40),
+                        url = url and displayUrl(url) or nil,
+                        link = url and utf8.len(url) ~= nil and #url <= MAX_LINK and K.safeText(url, MAX_LINK) or nil,
+                        tags = tags,
+                    }
+                    byId[id] = m
                 end
-                if m ~= nil then
-                    if metric == "monitor_status" then
-                        m.status = value
-                    elseif metric == "monitor_response_time" then
-                        if value >= 0 then m.ping = value end
-                    elseif metric == "monitor_uptime_ratio" then
-                        m.uptime1d = value
-                    else
-                        m.certDays = value
-                    end
+            end
+            if m ~= nil then
+                if metric == "monitor_status" then
+                    m.status = value
+                elseif metric == "monitor_response_time" then
+                    if value >= 0 then m.ping = value end
+                elseif metric == "monitor_uptime_ratio" then
+                    m.uptime1d = value
+                else
+                    m.certDays = value
                 end
             end
         end
     end
-    -- a monitor without a status series is noise
-    for id, m in pairs(byId) do
-        if m.status == nil then byId[id] = nil end
+end
+
+-- Parses /metrics `lines` at a time: step(n) returns nil until the text is
+-- done, then the monitors by id. Keeps each call far under the host's 25 ms.
+function K.metricsParser(text: string)
+    local byId = {}
+    local nextLine = (text or ""):gmatch("[^\n]+")
+    local P = {}
+    function P.step(n: number)
+        for _ = 1, n do
+            local l = nextLine()
+            if l == nil then
+                -- a monitor without a status series is noise
+                for id, m in pairs(byId) do
+                    if m.status == nil then byId[id] = nil end
+                end
+                return byId
+            end
+            parseLine(byId, l)
+        end
+        return nil
     end
-    return byId
+    return P
+end
+
+function K.parseMetrics(text: string)
+    local p = K.metricsParser(text)
+    local result = p.step(math.huge)
+    return result
 end
 
 -- Input is the decoded body of GET /api/monitors: { monitors = { ... } }.

@@ -37,6 +37,7 @@ local STATE_KEY = "kuma_status_data"
 local REQUEST_KEY = "kuma_status_request"
 local BUFFER_CAP = 40
 local RETRY_SECONDS = 10
+local PARSE_LINES = 150 -- /metrics lines parsed per tick
 
 local gen = 0        -- bumps per cycle and on config change; stale callbacks drop themselves
 local nonce = 0
@@ -298,6 +299,7 @@ local function refresh()
     end
 
     local metrics, structure = nil, nil
+    local parser = nil     -- /metrics text still to parse, a few lines per tick
     local pageResults = {} -- [index] = StatusPage
     local pending = 1      -- guard: held until every request is issued
 
@@ -340,7 +342,23 @@ local function refresh()
     local function finish()
         pending -= 1
         if pending > 0 or mine ~= gen then return end
-        completion = complete
+        completion = function()
+            if mine ~= gen then return true end
+            if parser ~= nil then
+                local ok, result = pcall(parser.step, PARSE_LINES)
+                if not ok then
+                    parser = nil
+                    errors.metrics = tr("error.bad_metrics") .. " [" .. tostring(result):sub(1, 100) .. "]"
+                elseif result == nil then
+                    return false
+                else
+                    parser = nil
+                    metrics = result
+                end
+            end
+            complete()
+            return true
+        end
     end
 
     local function request(req, cb)
@@ -375,12 +393,7 @@ local function refresh()
                 -- a login page or wrong path also answers 200
                 errors.metrics = tr("error.bad_metrics") .. " [HTTP " .. r.status .. ", " .. #body .. " B]"
             else
-                local parsed, result = pcall(K.parseMetrics, body)
-                if parsed then
-                    metrics = result
-                else
-                    errors.metrics = tr("error.bad_metrics") .. " [" .. tostring(result):sub(1, 100) .. "]"
-                end
+                parser = K.metricsParser(body)
             end
         end)
     end
@@ -511,9 +524,7 @@ end)
 function update()
     elapsed += 1
     if completion ~= nil then
-        local run = completion
-        completion = nil
-        run()
+        if completion() then completion = nil end
         return
     end
     local interval = readConfig().interval

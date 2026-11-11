@@ -166,4 +166,27 @@ for i = 1, 700 do many[i] = { id = i, name = "m" .. i } end
 local capped = K.parseStatusPage({ config = {}, publicGroupList = { { name = "G", monitorList = many } } }, { heartbeatList = {} }, "https://h.example.test", "s")
 eq(#capped.groups[1].monitors, 500, "monitors per page capped")
 
+-- test: metrics_parser_works_in_steps_and_matches_the_whole_parse
+do
+    local rows = {}
+    for id = 1, 30 do
+        rows[#rows + 1] = line("monitor_status", "", id, "svc-" .. id, "http", id % 2)
+        rows[#rows + 1] = line("monitor_response_time", "", id, "svc-" .. id, "http", 10 + id)
+        rows[#rows + 1] = "# HELP noise unrelated line"
+    end
+    local text = table.concat(rows, "\n")
+    local whole = K.parseMetrics(text)
+    local p = K.metricsParser(text)
+    local steps, result = 0, nil
+    repeat
+        result = p.step(10)
+        steps += 1
+    until result ~= nil or steps > 100
+    eq(steps > 1, true, "needs several steps for 90 lines at 10 per step")
+    eq(result[7].status, whole[7].status, "same status"); eq(result[7].ping, whole[7].ping, "same ping")
+    local n = 0
+    for _ in pairs(result) do n += 1 end
+    eq(n, 30, "all monitors")
+end
+
 print("parse_test OK")
