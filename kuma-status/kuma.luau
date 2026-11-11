@@ -3,7 +3,7 @@
 -- /api/monitors (Kuma 3) and status-page JSON, URL validation, grouping.
 -- Monitor names and URLs are untrusted: all UI text passes through safeText.
 --
---   Metric     = { id, name, type, url?, link?, status, ping?, uptime1d?, certDays?, tags }
+--   Metric     = { id, name, type, url?, link?, status, ping?, uptime1d?, certDays?, tags, muted? }
 --   Structure  = { id, name, type, parent?, children, tags, active }
 --   StatusPage = { slug, title, url, groups = { { name, monitors = { { id, name, beats } } } } }
 -- Status codes: 0 down, 1 up, 2 pending, 3 maintenance.
@@ -85,8 +85,8 @@ local function parseSeries(l: string)
     return metric, labels, value
 end
 
--- Hot path (callbacks get ~25 ms): unused series are skipped by prefix and
--- labels are parsed once per monitor. Lines with a backslash use parseSeries.
+-- Unused series are skipped by prefix and labels are parsed once per monitor.
+-- Lines with a backslash use parseSeries.
 local USED = {
     monitor_status = true, monitor_response_time = true,
     monitor_uptime_ratio = true, monitor_cert_days_remaining = true,
@@ -181,12 +181,6 @@ function K.metricsParser(text: string)
         return nil
     end
     return P
-end
-
-function K.parseMetrics(text: string)
-    local p = K.metricsParser(text)
-    local result = p.step(math.huge)
-    return result
 end
 
 -- Input is the decoded body of GET /api/monitors: { monitors = { ... } }.

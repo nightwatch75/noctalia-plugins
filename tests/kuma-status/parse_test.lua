@@ -4,6 +4,7 @@
 -- Run through tests/kuma-status/run.sh.
 
 local K = loadstring(MODULE_SRC)()
+local function parseAll(text) return K.metricsParser(text).step(math.huge) end
 
 local function eq(a, b, m) if a ~= b then error(m .. ": got " .. tostring(a) .. " want " .. tostring(b), 2) end end
 local function list(t) return table.concat(t, ",") end
@@ -33,7 +34,7 @@ local METRICS = table.concat({
     line("monitor_cert_days_remaining", 'alpha="",', 1, "svc-a", "http", 60),
 }, "\n")
 
-local m = K.parseMetrics(METRICS)
+local m = parseAll(METRICS)
 
 -- test: metrics_tags_not_reserved
 eq(list(m[1].tags), "alpha", "tags of 1")
@@ -128,7 +129,7 @@ local custom = table.concat({
     'monitor_status{monitor_id="22",monitor_name="host-only",monitor_type="port",monitor_url="null",monitor_hostname="h.example.test",monitor_port="8883"} 1',
     'monitor_status{monitor_id="23",monitor_name="none",monitor_type="group",monitor_url="null",monitor_hostname="null",monitor_port="null"} 1',
 }, "\n")
-local cm = K.parseMetrics(custom)
+local cm = parseAll(custom)
 eq(cm[21].url, "https://svc.example.test/health", "url label")
 eq(cm[22].url, "h.example.test:8883", "hostname:port fallback")
 eq(cm[23].url, nil, "nothing to show")
@@ -141,7 +142,7 @@ local function urlMetric(id, url)
     return 'monitor_status{monitor_id="' .. id .. '",monitor_name="n",monitor_type="http",monitor_url="' .. url
         .. '",monitor_hostname="null",monitor_port="null"} 1'
 end
-local um = K.parseMetrics(table.concat({
+local um = parseAll(table.concat({
     urlMetric(1, "https://user:pw@h.example.test/p?token=abc#f"),
     urlMetric(2, "http://x.example.test\\n--flag=1"),
     urlMetric(3, "https://l.example.test/" .. string.rep("a", 300)),
@@ -175,7 +176,7 @@ do
         rows[#rows + 1] = "# HELP noise unrelated line"
     end
     local text = table.concat(rows, "\n")
-    local whole = K.parseMetrics(text)
+    local whole = parseAll(text)
     local p = K.metricsParser(text)
     local steps, result = 0, nil
     repeat

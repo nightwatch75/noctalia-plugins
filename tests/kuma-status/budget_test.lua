@@ -6,6 +6,7 @@
 -- tests/kuma-status/run.sh.
 
 local K = loadstring(MODULE_SRC)()
+local function parseAll(text) return K.metricsParser(text).step(math.huge) end
 local LIMIT_MS = 15
 
 local function timed(name, fn)
@@ -33,7 +34,7 @@ end
 local text = table.concat(lines, "\n")
 print(string.format("metrics text: %d KB, %d lines", #text // 1024, #lines))
 
-local metrics = timed("parseMetrics", function() return K.parseMetrics(text) end)
+local metrics = timed("parseMetrics", function() return parseAll(text) end)
 timed("parse step (80)", function() return K.metricsParser(text).step(80) end)
 
 local monitors, beats = {}, {}

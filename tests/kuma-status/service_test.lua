@@ -348,6 +348,40 @@ do
     eq(h.data().summary.up, 200, "all parsed after a few ticks")
 end
 
+-- test: requests_in_flight_stay_under_the_host_limit
+do
+    local urls = {}
+    for i = 1, 6 do urls[i] = "https://status.example.test/status/p" .. i end
+    h = boot({ status_pages = urls }, function() return "HOLD" end)
+    eq(#h.calls, 6, "13 requests wanted, only 6 in flight while none has answered")
+end
+
+-- test: all_queued_requests_complete_when_answers_arrive
+do
+    local urls = {}
+    for i = 1, 6 do urls[i] = "https://status.example.test/status/p" .. i end
+    h = boot({ status_pages = urls }, standard)
+    eq(#h.calls, 13, "metrics + 2 requests per page")
+    eq(#h.data().pages, 6, "every page published")
+end
+
+-- test: toast_text_has_no_markup_characters
+local flaky = false
+h = boot({}, function(req)
+    if req.url:sub(-8) == "/metrics" then return ok(series("monitor_status", 1, "a<b>&c", flaky and 0 or 1)) end
+    return standard(req)
+end)
+flaky = true
+h.refresh(90); h.refresh(91)
+eq(h.toasts[1] and h.toasts[1][2], "a b  c", "markup characters replaced in the toast body")
+
+-- test: parser_error_text_has_no_script_path
+h = boot({}, standard)
+h.kuma.metricsParser = function() return { step = function() error('[string "/home/someone/x.luau"]:110: boom', 0) end } end
+h.refresh(95)
+eq(h.data().errors.metrics:find("/home/", 1, true), nil, "no path in the message")
+eq(h.data().errors.metrics:find("boom", 1, true) ~= nil, true, "the reason stays")
+
 -- test: wrong_shape_json_is_reported_and_cycle_still_publishes
 h = boot({ kuma3_support = true, status_pages = { "https://status.example.test/status/dev" } }, function(req)
     if req.url:sub(-13) == "/api/monitors" then return ok("badmonitors") end

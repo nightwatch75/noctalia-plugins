@@ -1,6 +1,6 @@
 --!nonstrict
 -- kuma-status — UI builders for the panel: a monitor row (40-cell heartbeat bar,
--- optional certificate line) and a collapsible group header. The name is a ghost
+-- mute button, optional certificate line) and a collapsible group header. The name is a ghost
 -- button because only a button has onRightClick. "row-<id>" carries the URL tooltip.
 
 local R = {}

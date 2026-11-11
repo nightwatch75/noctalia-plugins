@@ -5,10 +5,12 @@
 --   publishes "kuma_status_data" = { nonce, ts, summary, dashboard?, certs?,
 --       pages (each with .source), pageUrls, errors = { metrics?,
 --       monitors?, pages = {[url]=msg} }, mode, tagMode, credWarn, baseUrl,
---       plainHttp, insecureTls, alertTs, certLimits }; summary.color is "offline" without /metrics.
---   reads "kuma_status_request" = { nonce, action = "refresh" }
---       or { nonce, action = "tag_mode", value = "first"|"all" }; a nonce
---       already seen is ignored.
+--       plainHttp, insecureTls, alertTs, certLimits, stale, mutedCount };
+--       summary.color is "offline" without /metrics. stale: Kuma did not answer
+--       and the values are those of the last answered cycle.
+--   reads "kuma_status_request" = { nonce, action, value? } with action
+--       "refresh", "tag_mode" ("first"|"all"), "mute" (monitor id, toggles) or
+--       "prune_muted"; a nonce already seen is ignored.
 --
 -- Sources per cycle (refresh_seconds):
 --   /metrics        Basic, user "kuma", password = API key
@@ -25,9 +27,11 @@
 -- certificate checks on every request.
 -- A 401/403 blocks a source until the secret or the settings change; a 404 on
 -- /api/monitors turns Kuma 3 support off for the session; other failures retry
--- next cycle. A failing source never clears the others.
--- Callbacks parse inline (host budget ~25 ms). Monitors no status page covers
--- get a 40-sample history buffer in memory.
+-- next cycle (after 10 s when Kuma did not answer). A failing source never
+-- clears the others.
+-- Host limits: a callback gets ~25 ms of CPU, so /metrics is parsed a slice per
+-- tick; at most 8 http requests per plugin, so at most MAX_PARALLEL are in flight.
+-- Monitors no status page covers get a 40-sample history buffer in memory.
 
 local K = require("./kuma.luau")
 local store = require("./pages_store.luau")
@@ -37,8 +41,9 @@ local STATE_KEY = "kuma_status_data"
 local REQUEST_KEY = "kuma_status_request"
 local BUFFER_CAP = 40
 local RETRY_SECONDS = 10
-local PARSE_LINES = 80     -- /metrics lines parsed per tick,
+local PARSE_LINES = 80      -- /metrics lines parsed per tick,
 local PARSE_SECONDS = 0.005 -- or until this much time is used
+local MAX_PARALLEL = 6      -- http requests in flight (the host refuses more than 8)
 
 local gen = 0        -- bumps per cycle and on config change; stale callbacks drop themselves
 local nonce = 0
@@ -55,30 +60,27 @@ local track = K.newTrack()
 local alertTs = nil -- when the last "down" toast went out, for the bar blink
 local credWarn = false -- a credentials file is readable by group/other
 local publish -- defined below; checkPermissions republishes through it
--- tag_mode.txt in the plugin data folder: "first" (monitor in its first tag) or "all"
-local function modeFile()
+local function dataFile(name)
     local dir = noctalia.pluginDataDir()
-    return dir and (dir .. "/tag_mode.txt") or nil
+    return dir and (dir .. "/" .. name) or nil
 end
-local function loadTagMode()
-    local f = modeFile()
+
+-- tag_mode.txt: "first" (monitor in its first tag) or "all"
+local tagMode = "first"
+do
+    local f = dataFile("tag_mode.txt")
     local saved = f and noctalia.readFile(f) or nil
-    return (saved ~= nil and saved:match("^%s*all")) and "all" or "first"
+    if saved ~= nil and saved:match("^%s*all") then tagMode = "all" end
 end
-local tagMode = loadTagMode()
 
 -- muted.txt: ids of monitors the user silenced on this widget, one per line.
-local function mutedFile()
-    local dir = noctalia.pluginDataDir()
-    return dir and (dir .. "/muted.txt") or nil
-end
 local muted = {}
 do
-    local f = mutedFile()
+    local f = dataFile("muted.txt")
     for id in (f and noctalia.readFile(f) or ""):gmatch("%d+") do muted[tonumber(id)] = true end
 end
 local function saveMuted()
-    local f = mutedFile()
+    local f = dataFile("muted.txt")
     if f == nil then return end
     local ids = {}
     for id in pairs(muted) do ids[#ids + 1] = id end
@@ -87,6 +89,11 @@ local function saveMuted()
 end
 local function applyMuted(metrics)
     for id, m in pairs(metrics or {}) do m.muted = muted[id] or nil end
+end
+local function mutedTotal()
+    local n = 0
+    for _ in pairs(muted) do n += 1 end
+    return n
 end
 local last = nil -- inputs of the last publish, to rebuild the view without network
 
@@ -120,8 +127,11 @@ local function proxyHostSet()
     return out
 end
 
+local function interval()
+    return math.min(3600, math.max(20, tonumber(noctalia.getConfig("refresh_seconds")) or 60))
+end
+
 local function readConfig()
-    local interval = tonumber(noctalia.getConfig("refresh_seconds")) or 60
     return {
         base = K.baseUrl(noctalia.getConfig("kuma_url") or ""),
         keyFile = noctalia.getConfig("api_key_file") or "",
@@ -135,7 +145,7 @@ local function readConfig()
         certLimits = K.certLimits(noctalia.getConfig("cert_red_days"), noctalia.getConfig("cert_yellow_days")),
         notifyCerts = noctalia.getConfig("notify_certs") == true,
         notify = noctalia.getConfig("notify_changes") or "toast_blink",
-        interval = math.min(3600, math.max(20, interval))
+        interval = interval(),
     }
 end
 
@@ -191,18 +201,19 @@ end
 
 local MAX_NAMES = 5
 
--- cert_alert.txt in the plugin data folder: when the last certificate toast went out.
-local function certAlertFile()
-    local dir = noctalia.pluginDataDir()
-    return dir and (dir .. "/cert_alert.txt") or nil
+-- cert_alert.txt: when the last certificate toast went out.
+local lastCertAlert = tonumber((function()
+    local f = dataFile("cert_alert.txt")
+    return f and noctalia.readFile(f) or nil
+end)())
+
+-- Monitor names are server text: no markup characters in a notification.
+local function plain(s)
+    return (s:gsub("[<>&]", " "))
 end
-local lastCertAlert = (function()
-    local f = certAlertFile()
-    return tonumber(f and noctalia.readFile(f) or nil)
-end)()
 
 local function toast(titleKey, list)
-    local shown = table.concat(list, ", ", 1, math.min(#list, MAX_NAMES))
+    local shown = plain(table.concat(list, ", ", 1, math.min(#list, MAX_NAMES)))
     if #list > MAX_NAMES then shown = shown .. " " .. tr("tooltip_more", { count = #list - MAX_NAMES }) end
     noctalia.notify(tr(titleKey, { count = #list }), shown)
 end
@@ -215,13 +226,13 @@ local function announceCerts(cfg, metrics)
     for i = 1, math.min(#due, MAX_NAMES) do
         local c = due[i]
         local when = c.level == "expired" and tr("panel.cert_expired_short") or tr("panel.cert_days_short", { days = c.days })
-        items[i] = c.name .. " (" .. when .. ")"
+        items[i] = plain(c.name) .. " (" .. when .. ")"
     end
     local body = table.concat(items, ", ")
     if #due > MAX_NAMES then body = body .. " " .. tr("tooltip_more", { count = #due - MAX_NAMES }) end
     noctalia.notify(tr("notify.certs", { count = #due }), body)
     lastCertAlert = now
-    local f = certAlertFile()
+    local f = dataFile("cert_alert.txt")
     if f then noctalia.writeFile(f, tostring(now)) end
 end
 
@@ -266,7 +277,7 @@ function publish(cfg, metrics, structure, beatsById, pages, errors)
         certs = metrics ~= nil and K.buildCertificates(metrics, cfg.certLimits) or nil,
         certLimits = cfg.certLimits,
         stale = metrics ~= nil and errors.metrics ~= nil,
-        mutedCount = (function() local n = 0 for _ in pairs(muted) do n += 1 end return n end)(),
+        mutedCount = mutedTotal(),
         baseUrl = cfg.base or "",
         plainHttp = plain,
         insecureTls = cfg.insecure,
@@ -349,7 +360,7 @@ local function refresh()
                 local ok, result = pcall(parser.step, PARSE_LINES, PARSE_SECONDS)
                 if not ok then
                     parser = nil
-                    errors.metrics = tr("error.bad_metrics") .. " [" .. tostring(result):sub(1, 100) .. "]"
+                    errors.metrics = tr("error.bad_metrics") .. " [" .. tostring(result):gsub("^%[string \"[^\"]*\"%]:%d+: ", ""):sub(1, 100) .. "]"
                 elseif result == nil then
                     return false
                 else
@@ -362,18 +373,31 @@ local function refresh()
         end
     end
 
+    local queue, active = {}, 0
+    local pump
+    pump = function()
+        while active < MAX_PARALLEL and #queue > 0 and mine == gen do
+            local job = table.remove(queue, 1)
+            active += 1
+            local sent = noctalia.http(job.req, function(r)
+                active -= 1
+                -- a throwing handler must not leave the cycle without its finish()
+                if mine == gen then pcall(job.cb, r) end
+                finish()
+                pump()
+            end)
+            if not sent then
+                active -= 1
+                pcall(job.cb, { ok = false, status = -1, body = "" })
+                finish()
+            end
+        end
+    end
+
     local function request(req, cb)
         pending += 1
         if cfg.insecure then req.allow_insecure_tls = true end
-        local sent = noctalia.http(req, function(r)
-            -- a throwing handler must not leave the cycle without its finish()
-            if mine == gen then pcall(cb, r) end
-            finish()
-        end)
-        if not sent then
-            pending -= 1
-            cb({ ok = false, status = -1, body = "" })
-        end
+        queue[#queue + 1] = { req = req, cb = cb }
     end
 
     -- /metrics
@@ -488,6 +512,7 @@ local function refresh()
         end
     end
 
+    pump()
     finish()
 end
 
@@ -516,7 +541,7 @@ noctalia.state.watch(REQUEST_KEY, function(req)
         publish(table.unpack(last))
     elseif req.action == "tag_mode" and (req.value == "first" or req.value == "all") then
         tagMode = req.value
-        local f = modeFile()
+        local f = dataFile("tag_mode.txt")
         if f then noctalia.writeFile(f, tagMode) end
         if last ~= nil then publish(table.unpack(last)) end
     end
@@ -528,8 +553,8 @@ function update()
         if completion() then completion = nil end
         return
     end
-    local interval = readConfig().interval
-    if not inFlight and elapsed >= interval or inFlight and elapsed >= interval * 3 + 30 then refresh() end
+    local every = interval()
+    if not inFlight and elapsed >= every or inFlight and elapsed >= every * 3 + 30 then refresh() end
 end
 
 -- Settings changed: drop every block and ask again.

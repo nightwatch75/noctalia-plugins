@@ -1,9 +1,9 @@
 --!nonstrict
 -- kuma-status — panel with three tabs: Dashboard, Status pages and Certificates.
 --
--- Renders "kuma_status_data" (from service.luau). Writes only the refresh and
--- tag_mode requests ("kuma_status_request", nonce seeded from the clock) and the
--- pages added here (pages_store.luau).
+-- Renders "kuma_status_data" (from service.luau). Writes only requests to the
+-- service ("kuma_status_request": refresh, tag_mode, mute, prune_muted; nonce
+-- seeded from the clock) and the pages added here (pages_store.luau).
 -- All tabs stay mounted; the inactive ones are hidden with `visible = false`.
 -- Collapsed groups drop their rows.
 -- A monitor name opens its Kuma page; right click opens a menu for the checked
@@ -42,17 +42,18 @@ local function requestRefresh()
     sendRequest("refresh")
 end
 
--- last_tab.txt in the plugin data folder (start_tab = "last").
-local function tabFile()
+local function dataFile(name)
     local dir = noctalia.pluginDataDir()
-    return dir and (dir .. "/last_tab.txt") or nil
+    return dir and (dir .. "/" .. name) or nil
 end
+
+-- last_tab.txt: the tab to reopen with start_tab = "last".
 
 local function startTab()
     local setting = noctalia.getConfig("start_tab")
     if setting == "pages" or setting == "certs" then return setting end
     if setting == "last" then
-        local f = tabFile()
+        local f = dataFile("last_tab.txt")
         local saved = f and noctalia.readFile(f) or nil
         if saved ~= nil and saved:match("^%s*pages") then return "pages" end
         if saved ~= nil and saved:match("^%s*certs") then return "certs" end
@@ -62,7 +63,7 @@ end
 
 local function setTab(name)
     tab = name
-    local f = tabFile()
+    local f = dataFile("last_tab.txt")
     if f then noctalia.writeFile(f, name) end
 end
 
@@ -114,20 +115,15 @@ local function isCollapsed(key)
     return v
 end
 
--- collapsed_groups.txt in the plugin data folder: collapsed group keys, one per line.
-local function groupsFile()
-    local dir = noctalia.pluginDataDir()
-    return dir and (dir .. "/collapsed_groups.txt") or nil
-end
-
+-- collapsed_groups.txt: collapsed group keys, one per line.
 local function loadCollapsed()
-    local f = groupsFile()
+    local f = dataFile("collapsed_groups.txt")
     local text = f and noctalia.readFile(f) or nil
     for line in (text or ""):gmatch("[^\n]+") do collapsed[line] = true end
 end
 
 local function saveCollapsed()
-    local f = groupsFile()
+    local f = dataFile("collapsed_groups.txt")
     if not rememberGroups or f == nil then return end
     local keys = {}
     for key, v in pairs(collapsed) do
