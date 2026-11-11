@@ -36,6 +36,7 @@ local MAX_CRED = 65536 -- noctalia rejects larger credential files
 local STATE_KEY = "kuma_status_data"
 local REQUEST_KEY = "kuma_status_request"
 local BUFFER_CAP = 40
+local RETRY_SECONDS = 10
 
 local gen = 0        -- bumps per cycle and on config change; stale callbacks drop themselves
 local nonce = 0
@@ -298,6 +299,9 @@ local function refresh()
             end
         end
         publish(cfg, metrics, structure, beatsById, pages, errors)
+        if metrics == nil and errors.metrics == tr("error.offline") then
+            elapsed = math.max(0, cfg.interval - RETRY_SECONDS) -- no answer: ask again soon
+        end
     end
 
     local function finish()

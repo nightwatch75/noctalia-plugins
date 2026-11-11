@@ -276,6 +276,17 @@ h.refresh(50)
 eq(h.data().errors.metrics, "error.bad_metrics", "a throwing parser shows an error")
 eq(h.data().summary.color, "offline", "offline")
 
+-- test: no_answer_is_retried_after_10_seconds
+local down = true
+h = boot({ refresh_seconds = 60 }, function(req)
+    if down then return nil end
+    return standard(req)
+end)
+eq(h.data().summary.color, "offline", "offline while the server is silent")
+down = false
+for _ = 1, 11 do update() end
+eq(h.data().summary.color ~= "offline", true, "recovered without waiting a full interval")
+
 -- test: wrong_shape_json_is_reported_and_cycle_still_publishes
 h = boot({ kuma3_support = true, status_pages = { "https://status.example.test/status/dev" } }, function(req)
     if req.url:sub(-13) == "/api/monitors" then return ok("badmonitors") end
