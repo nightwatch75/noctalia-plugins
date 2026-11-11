@@ -260,3 +260,16 @@ icon = "key"
 description = "Password, key, htpasswd and JWT tools: a bar glyph opens a tabbed generator and decoder panel."
 plugin_api = 24
 tags = ["bar", "panel", "utility"]
+
+[[plugin]]
+id = "nightwatch75/kuma-status"
+name = "Kuma Status"
+version = "0.12.0"
+updated_at = 1794379456
+added_at = 1794330197
+author = "nightwatch75"
+license = "MIT"
+icon = "heartbeat"
+description = "Uptime Kuma monitors on the bar: a glyph shows the overall state, a panel lists monitors and status pages."
+plugin_api = 32
+tags = ["bar", "panel", "monitoring"]
