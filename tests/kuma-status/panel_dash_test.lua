@@ -86,6 +86,14 @@ eq(find(P.tree, "btn-stale").props.visible, false, "no marker on fresh data")
 P.publish({ baseUrl = "https://kuma.example.test", stale = true, errors = { metrics = "boom", pages = {} }, dashboard = dash("tags", { group("x", { row(1, "a", 1) }) }) })
 eq(find(P.tree, "btn-stale").props.visible, true, "marker on stale data")
 
+-- test: group_header_flags_down_monitors
+P = boot()
+local g1, g2 = group("x", { row(1, "a", 1) }), group("y", { row(2, "b", 0) })
+g1.down, g2.down = 0, 1
+P.publish({ baseUrl = "https://kuma.example.test", dashboard = dash("tags", { g1, g2 }) })
+eq(find(P.tree, "gh-alert-x"), nil, "no flag on a healthy group")
+eq(find(P.tree, "gh-alert-y") ~= nil, true, "flag on a group with a down monitor")
+
 -- test: group_row_collapse_toggles
 P = boot()
 P.publish({ baseUrl = "https://kuma.example.test", dashboard = dash("tags", { group("x", { row(1, "a", 1) }) }) })

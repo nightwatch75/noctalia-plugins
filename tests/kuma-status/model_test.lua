@@ -249,4 +249,14 @@ eq(#ev.restored, 0, "and its recovery is not announced either")
 K.trackChanges(tr0, ms(0, 1), 900); ev = K.trackChanges(tr0, ms(0, 1), 960)
 eq(#ev.down, 1, "after the cooldown it notifies again")
 
+-- test: group_counts_down_monitors
+do
+    local m = {
+        [1] = { id = 1, name = "a", type = "http", status = 0, tags = { "g" } },
+        [2] = { id = 2, name = "b", type = "http", status = 1, tags = { "g" } },
+    }
+    local d = K.buildDashboard(m, nil, {}, {})
+    eq(d.groups[1].down, 1, "one down monitor in the group")
+end
+
 print("model_test OK")

@@ -80,12 +80,16 @@ function R.groupHeader(group, collapsed, onToggle)
     local key = R.groupKey(group)
     local label = group.name ~= "" and group.name or noctalia.tr("panel.group_none")
     local uptime = group.uptime1d and string.format("%.1f%%", group.uptime1d * 100) or ""
-    return ui.row({ key = "gh-" .. key, gap = 8, align = "center", paddingV = 4, fill = "surface_variant", radius = 6, paddingH = 8, onClick = function() onToggle(key) end }, {
+    local children = {
         ui.label({ text = collapsed and "▶" or "▼", width = 14 }),
         ui.label({ text = label, flexGrow = 1, maxLines = 1, fontWeight = "semibold" }),
-        ui.label({ text = group.up .. "/" .. group.total, color = "on_surface_variant" }),
-        ui.label({ text = uptime, width = 56, textAlign = "end", color = "on_surface_variant" }),
-    })
+    }
+    if (group.down or 0) > 0 then
+        children[3] = ui.glyph({ key = "gh-alert-" .. key, name = "alert-triangle", size = 14, color = R.COLORS[0] })
+    end
+    children[#children + 1] = ui.label({ text = group.up .. "/" .. group.total, color = "on_surface_variant" })
+    children[#children + 1] = ui.label({ text = uptime, width = 56, textAlign = "end", color = "on_surface_variant" })
+    return ui.row({ key = "gh-" .. key, gap = 8, align = "center", paddingV = 4, fill = "surface_variant", radius = 6, paddingH = 8, onClick = function() onToggle(key) end }, children)
 end
 
 return R

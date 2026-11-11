@@ -421,12 +421,13 @@ end
 
 local function makeGroup(id, name, rows, metrics)
     table.sort(rows, byName)
-    local g = { id = id, name = name, up = 0, total = 0, rows = rows }
+    local g = { id = id, name = name, up = 0, down = 0, total = 0, rows = rows }
     local sum, n = 0, 0
     for _, r in ipairs(rows) do
         if not r.paused then
             g.total += 1
             if r.status == 1 or r.status == 3 then g.up += 1 end
+            if r.status == 0 then g.down += 1 end
             local u = metrics[r.id] and metrics[r.id].uptime1d
             if u ~= nil then
                 sum += u
