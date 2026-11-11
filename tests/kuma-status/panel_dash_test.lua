@@ -111,6 +111,16 @@ eq(find(P.tree, "flt-down").props.fill ~= find(P.tree, "flt-notok").props.fill, 
 find(P.tree, "flt-all").props.onClick()
 eq(find(P.tree, "row-1") ~= nil and find(P.tree, "gh-y") ~= nil, true, "all restored")
 
+-- test: mute_button_requests_toggle_and_muted_row_is_greyed
+P = boot()
+P.publish({ baseUrl = "https://kuma.example.test", dashboard = dash("tags", { group("x", { row(1, "a", 0), row(2, "b", 0, { muted = true }) }) }) })
+find(P.tree, "mute-1").props.onClick()
+local req = noctalia.state.get("kuma_status_request")
+eq(req.action, "mute", "mute request"); eq(req.value, 1, "for monitor 1")
+eq(find(P.tree, "row-1").props.opacity, 1, "live row not greyed")
+eq(find(P.tree, "row-2").props.opacity < 1, true, "muted row greyed")
+eq(find(P.tree, "mute-1").props.glyph ~= find(P.tree, "mute-2").props.glyph, true, "different glyph when muted")
+
 -- test: group_row_collapse_toggles
 P = boot()
 P.publish({ baseUrl = "https://kuma.example.test", dashboard = dash("tags", { group("x", { row(1, "a", 1) }) }) })

@@ -289,7 +289,7 @@ end
 function K.buildCertificates(metrics, limits)
     local all = {}
     for id, m in pairs(metrics) do
-        if m.type ~= "group" and m.certDays ~= nil then
+        if m.type ~= "group" and not m.muted and m.certDays ~= nil then
             local days = math.floor(m.certDays)
             all[#all + 1] = { id = id, name = m.name, url = m.url, link = m.link, certDays = days, level = K.certLevel(days, limits) }
         end
@@ -328,7 +328,7 @@ function K.trackChanges(track, metrics, now)
     local ev = { down = {}, restored = {} }
     local seen = {}
     for id, m in pairs(metrics) do
-        if m.type ~= "group" then
+        if m.type ~= "group" and not m.muted then
             seen[id] = true
             local t = track.mon[id]
             if t == nil then
@@ -377,7 +377,7 @@ function K.summarize(metrics)
     local s = { up = 0, down = 0, pending = 0, color = "idle", downNames = {} }
     local seen = 0
     for _, m in pairs(metrics) do
-        if m.type ~= "group" then
+        if m.type ~= "group" and not m.muted then
             seen += 1
             if m.status == 1 then
                 s.up += 1
@@ -412,7 +412,7 @@ local function makeRow(id, m, struct, beats, buffer, limits)
     if b == nil or #b == 0 then b = buffer[id] or {} end
     if m ~= nil then
         return {
-            id = id, name = m.name, status = m.status, ping = m.ping, beats = b, paused = false, url = m.url, link = m.link,
+            id = id, name = m.name, status = m.status, ping = m.ping, beats = b, paused = false, muted = m.muted, url = m.url, link = m.link,
             certDays = m.certDays, certLevel = m.certDays ~= nil and K.certLevel(math.floor(m.certDays), limits) or nil,
         }
     end
@@ -424,7 +424,7 @@ local function makeGroup(id, name, rows, metrics)
     local g = { id = id, name = name, up = 0, down = 0, total = 0, rows = rows }
     local sum, n = 0, 0
     for _, r in ipairs(rows) do
-        if not r.paused then
+        if not r.paused and not r.muted then
             g.total += 1
             if r.status == 1 or r.status == 3 then g.up += 1 end
             if r.status == 0 then g.down += 1 end

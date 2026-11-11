@@ -147,6 +147,8 @@
     "tip_filter_all": "Show all monitors",
     "tip_filter_notok": "Show only monitors that are down or pending",
     "tip_filter_down": "Show only monitors that are down",
+    "tip_mute": "Mute this monitor on the widget (counts, toasts and alerts ignore it)",
+    "tip_unmute": "Unmute this monitor",
     "tip_expand_all": "Expand all groups",
     "tip_collapse_all": "Collapse all groups",
     "warn_cred_perms": "A credentials file can be read by other users. Run chmod 600 on it.",

@@ -184,6 +184,10 @@ local function filterChips()
     return chips
 end
 
+local function muteMonitor(id)
+    sendRequest("mute", id)
+end
+
 local function dashboardView()
     local children = {}
     local dash = data and data.dashboard
@@ -197,13 +201,13 @@ local function dashboardView()
             local key = R.groupKey(g)
             local rows = {}
             for _, row in ipairs(g.rows) do
-                if match(row.status) then rows[#rows + 1] = row end
+                if match(row.muted and -1 or row.status) then rows[#rows + 1] = row end
             end
             if #rows > 0 then
                 children[#children + 1] = R.groupHeader(g, isCollapsed(key), toggleGroup)
                 if not isCollapsed(key) then
                     for _, row in ipairs(rows) do
-                        children[#children + 1] = R.monitorRow(row, openMonitor, openRowMenu)
+                        children[#children + 1] = R.monitorRow(row, openMonitor, openRowMenu, muteMonitor)
                     end
                 end
             end

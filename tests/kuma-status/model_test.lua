@@ -259,4 +259,19 @@ do
     eq(d.groups[1].down, 1, "one down monitor in the group")
 end
 
+-- test: muted_monitors_leave_summary_groups_and_alerts
+do
+    local m = set(metric(1, "a", 1), metric(2, "b", 0, { muted = true }), metric(3, "c", 0, { tags = { "g" } }))
+    local sm = K.summarize(m)
+    eq(sm.down, 1, "muted down not counted"); eq(#sm.downNames, 1, "muted name not listed")
+    local d = K.buildDashboard(set(metric(1, "a", 1, { tags = { "g" } }), metric(2, "b", 0, { muted = true, tags = { "g" } })), nil, {}, {})
+    eq(d.groups[1].down, 0, "no group alert from a muted monitor"); eq(d.groups[1].total, 1, "muted not in the group total")
+    eq(d.groups[1].rows[2].muted, true, "row keeps the flag so the panel can grey it")
+    local tr = K.newTrack()
+    K.trackChanges(tr, set(metric(2, "b", 1, { muted = true })), 1)
+    local ev = K.trackChanges(tr, set(metric(2, "b", 0, { muted = true })), 2)
+    ev = K.trackChanges(tr, set(metric(2, "b", 0, { muted = true })), 3)
+    eq(#ev.down, 0, "muted monitor never toasts")
+end
+
 print("model_test OK")

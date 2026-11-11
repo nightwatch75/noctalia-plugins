@@ -9,7 +9,7 @@ R.CELLS = 40
 R.COLORS = { [0] = "#e06c75", [1] = "#98c379", [2] = "#e5c07b", [3] = "#61afef" }
 R.EMPTY = "#4b5263"
 -- Panel width minus padding, scrollbar, dot, ping, bar and gaps (see plugin.toml).
-local NAME_W = 300
+local NAME_W = 264
 
 -- Always CELLS boxes, oldest left; missing history is padded with neutral cells.
 function R.beatBar(beats, key)
@@ -55,10 +55,10 @@ local function certLine(row)
 end
 
 -- onOpen(id): left click on the name. onMenu(row): right click, nil to disable.
-function R.monitorRow(row, onOpen, onMenu)
+function R.monitorRow(row, onOpen, onMenu, onMute)
     local id = row.id
     local main = ui.row({ gap = 8, align = "center", paddingV = 2 }, {
-        ui.box({ key = "dot-" .. id, width = 10, height = 10, radius = 5, fill = row.paused and R.EMPTY or (R.COLORS[row.status] or R.EMPTY) }),
+        ui.box({ key = "dot-" .. id, width = 10, height = 10, radius = 5, fill = (row.paused or row.muted) and R.EMPTY or (R.COLORS[row.status] or R.EMPTY) }),
         ui.button({
             key = "name-" .. id, text = row.name, variant = "ghost", contentAlign = "start", width = NAME_W,
             onClick = function() onOpen(id) end,
@@ -66,10 +66,14 @@ function R.monitorRow(row, onOpen, onMenu)
         }),
         ui.label({ key = "ping-" .. id, text = pingText(row), width = 64, textAlign = "end", color = "on_surface_variant" }),
         R.beatBar(row.beats, "bar-" .. id),
+        onMute and ui.button({
+            key = "mute-" .. id, glyph = row.muted and "eye-off" or "eye", variant = "ghost",
+            tooltip = noctalia.tr(row.muted and "panel.tip_unmute" or "panel.tip_mute"), onClick = function() onMute(id) end,
+        }) or ui.box({ width = 0 }),
     })
     local children = { main }
     if row.certDays ~= nil and not row.paused then children[2] = certLine(row) end
-    return ui.column({ key = "row-" .. id, gap = 0, opacity = row.paused and 0.55 or 1, tooltip = row.url }, children)
+    return ui.column({ key = "row-" .. id, gap = 0, opacity = (row.paused or row.muted) and 0.55 or 1, tooltip = row.url }, children)
 end
 
 function R.groupKey(group)

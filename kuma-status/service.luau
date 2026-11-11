@@ -64,6 +64,28 @@ local function loadTagMode()
     return (saved ~= nil and saved:match("^%s*all")) and "all" or "first"
 end
 local tagMode = loadTagMode()
+
+-- muted.txt: ids of monitors the user silenced on this widget, one per line.
+local function mutedFile()
+    local dir = noctalia.pluginDataDir()
+    return dir and (dir .. "/muted.txt") or nil
+end
+local muted = {}
+do
+    local f = mutedFile()
+    for id in (f and noctalia.readFile(f) or ""):gmatch("%d+") do muted[tonumber(id)] = true end
+end
+local function saveMuted()
+    local f = mutedFile()
+    if f == nil then return end
+    local ids = {}
+    for id in pairs(muted) do ids[#ids + 1] = id end
+    table.sort(ids)
+    noctalia.writeFile(f, #ids > 0 and (table.concat(ids, "\n") .. "\n") or "")
+end
+local function applyMuted(metrics)
+    for id, m in pairs(metrics or {}) do m.muted = muted[id] or nil end
+end
 local last = nil -- inputs of the last publish, to rebuild the view without network
 
 local function tr(key, args)
@@ -214,6 +236,7 @@ end
 
 function publish(cfg, metrics, structure, beatsById, pages, errors)
     nonce += 1
+    applyMuted(metrics)
     local summary = K.summarize(metrics or {})
     if metrics == nil then summary.color = "offline" end
     last = { cfg, metrics, structure, beatsById, pages, errors }
@@ -298,6 +321,7 @@ local function refresh()
         elseif not failed then
             lastGood = { metrics = metrics, structure = structure }
         end
+        applyMuted(metrics)
         if not failed then
             announce(cfg, metrics)
             for id, m in pairs(metrics) do
@@ -455,6 +479,10 @@ noctalia.state.watch(REQUEST_KEY, function(req)
     seenRequest = req.nonce
     if req.action == "refresh" then
         refresh()
+    elseif req.action == "mute" and type(req.value) == "number" and req.value % 1 == 0 then
+        muted[req.value] = not muted[req.value] or nil
+        saveMuted()
+        if last ~= nil then publish(table.unpack(last)) end
     elseif req.action == "tag_mode" and (req.value == "first" or req.value == "all") then
         tagMode = req.value
         local f = modeFile()

@@ -304,6 +304,18 @@ silent = false
 h.refresh(61)
 eq(h.data().stale, false, "fresh again after an answer")
 
+-- test: muting_a_monitor_removes_it_from_the_summary_and_is_remembered
+h = boot({}, standard)
+eq(h.data().summary.down, 1, "svc-b is down")
+noctalia.state.set("kuma_status_request", { nonce = 70, action = "mute", value = 2 })
+eq(h.data().summary.down, 0, "muted down monitor not counted")
+eq(h.files["/data/muted.txt"], "2\n", "choice saved")
+h = boot({}, standard, { ["/data/muted.txt"] = "2\n" })
+eq(h.data().summary.down, 0, "restored at start")
+noctalia.state.set("kuma_status_request", { nonce = 71, action = "mute", value = 2 })
+eq(h.data().summary.down, 1, "unmuted again")
+eq(h.files["/data/muted.txt"], "", "file emptied")
+
 -- test: wrong_shape_json_is_reported_and_cycle_still_publishes
 h = boot({ kuma3_support = true, status_pages = { "https://status.example.test/status/dev" } }, function(req)
     if req.url:sub(-13) == "/api/monitors" then return ok("badmonitors") end
