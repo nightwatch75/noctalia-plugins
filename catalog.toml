@@ -264,12 +264,18 @@ tags = ["bar", "panel", "utility"]
 [[plugin]]
 id = "nightwatch75/kuma-status"
 name = "Kuma Status"
-version = "0.18.1"
-updated_at = 1794477236
+version = "0.18.2"
+updated_at = 1794477537
 added_at = 1794330197
 author = "nightwatch75"
 license = "MIT"
 icon = "heartbeat"
 description = "Uptime Kuma monitors on the bar: a glyph shows the overall state, a panel lists monitors and status pages."
+plugin_api = 43
+tags = ["bar", "panel", "network"]
+
+[[plugin.release]]
 plugin_api = 32
-tags = ["bar", "panel", "monitoring"]
+version = "0.18.1"
+updated_at = 1794477236
+rev = "52b421a5d6951da3b5447a9dbe0e77e5530cb9fd"
