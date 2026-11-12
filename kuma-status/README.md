@@ -62,6 +62,8 @@ it.
 - The view button (left of the filters) cycles the grouping. Kuma 2: first tag,
   all tags, or **All monitors, no groups**. Kuma 3: groups as in Kuma, or no
   groups. The choice is remembered.
+- The certificate button (**Show/hide certs**) hides the expiry lines under the
+  monitors and makes the rows compact. The choice is remembered.
 - Filter buttons: **all**, **not OK** (down or pending), **down**.
 - The eye on a row mutes the monitor on the widget: it is greyed out and
   ignored by the bar counts, group totals, toasts and certificate alerts. Kuma

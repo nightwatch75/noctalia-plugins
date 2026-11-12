@@ -331,6 +331,21 @@ P.publish({ baseUrl = "https://k.example.test", tagMode = "flat", dashboard = fd
 eq(find(P.tree, "row-1") ~= nil and find(P.tree, "row-2") ~= nil, true, "rows listed")
 eq(find(P.tree, "gh-_none"), nil, "no header")
 
+-- test: certs_can_be_hidden_and_rows_become_compact
+P = boot()
+P.publish({ baseUrl = "https://k.example.test", dashboard = dash("tags", { group("x", { row(1, "a", 1, { certDays = 20, certLevel = "green" }) }) }) })
+eq(find(P.tree, "cert-1") ~= nil, true, "cert line shown by default")
+eq(find(P.tree, "scroll-dash").props.gap, 4, "normal spacing")
+find(P.tree, "btn-hide-certs").props.onClick()
+eq(find(P.tree, "cert-1"), nil, "cert line hidden")
+eq(find(P.tree, "scroll-dash").props.gap, 0, "compact: no gap between rows")
+eq(P.files["/data/hide_certs.txt"], "1", "choice saved")
+find(P.tree, "btn-hide-certs").props.onClick()
+eq(find(P.tree, "cert-1") ~= nil, true, "shown again")
+P = boot({}, { ["/data/hide_certs.txt"] = "1" })
+P.publish({ baseUrl = "https://k.example.test", dashboard = dash("tags", { group("x", { row(1, "a", 1, { certDays = 20, certLevel = "green" }) }) }) })
+eq(find(P.tree, "cert-1"), nil, "restored at start")
+
 -- test: groups_on_open_last_restores_collapsed_groups
 local FILE = "/data/collapsed_groups.txt"
 local function two() return { baseUrl = "https://k.example.test", dashboard = dash("tags", { group("x", { row(1, "a", 1) }), group("y", { row(2, "b", 1) }) }) } end

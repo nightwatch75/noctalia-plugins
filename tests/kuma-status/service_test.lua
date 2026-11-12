@@ -466,6 +466,9 @@ eq(h.data().tagMode, "flat", "switched")
 eq(h.data().dashboard.flat, true, "flat dashboard")
 eq(#h.data().dashboard.groups, 1, "one group")
 eq(#h.data().dashboard.groups[1].rows, 2, "both monitors, once")
+noctalia.state.set("kuma_status_request", { nonce = 12, action = "tag_mode", value = "first" })
+eq(h.data().tagMode, "first", "back from flat")
+eq(h.data().dashboard.flat, nil, "grouped again")
 
 -- test: tag_view_choice_is_remembered
 h = boot({}, multiTag)

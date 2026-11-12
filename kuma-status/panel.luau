@@ -28,6 +28,7 @@ local isOpen = false
 local requestNonce = math.floor(noctalia.nowMs())
 local addText, addRev, addError = "", 0, false
 local menuUrl = nil
+local hideCerts = false -- Dashboard: no certificate lines, compact rows
 local certAsc = true -- Certificates tab: shortest expiry first
 
 local function tr(key, args)
@@ -109,6 +110,13 @@ function onRowMenu(actionId, context)
 end
 
 local render
+
+local function setHideCerts(value)
+    hideCerts = value
+    local f = dataFile("hide_certs.txt")
+    if f then noctalia.writeFile(f, value and "1" or "0") end
+    render()
+end
 
 local function isCollapsed(key)
     local v = collapsed[key]
@@ -206,7 +214,7 @@ local function dashboardView()
                 if not dash.flat then children[#children + 1] = R.groupHeader(g, isCollapsed(key), toggleGroup) end
                 if dash.flat or not isCollapsed(key) then
                     for _, row in ipairs(rows) do
-                        children[#children + 1] = R.monitorRow(row, openMonitor, openRowMenu, muteMonitor)
+                        children[#children + 1] = R.monitorRow(row, openMonitor, openRowMenu, muteMonitor, hideCerts)
                     end
                 end
             end
@@ -441,12 +449,17 @@ function render()
         local left = ui.row({ gap = 4, align = "center", flexGrow = 1 }, leftChildren)
         dashChildren[1] = ui.row({ key = "view-row", gap = 4, align = "center" }, {
             left,
+            ui.button({
+                key = "btn-hide-certs", glyph = "certificate", variant = hideCerts and "primary" or "ghost",
+                tooltip = tr(hideCerts and "panel.tip_show_certs" or "panel.tip_hide_certs"),
+                onClick = function() setHideCerts(not hideCerts) end,
+            }),
             ui.button({ key = "btn-prune-muted", visible = data ~= nil and (data.mutedCount or 0) > 0, glyph = "eraser", variant = "ghost", tooltip = tr("panel.tip_prune_muted"), onClick = function() sendRequest("prune_muted") end }),
             ui.button({ key = "btn-expand-all", glyph = "chevrons-down", variant = "ghost", tooltip = tr("panel.tip_expand_all"), onClick = function() setAllCollapsed("dashboard", false) end }),
             ui.button({ key = "btn-collapse-all", glyph = "chevrons-up", variant = "ghost", tooltip = tr("panel.tip_collapse_all"), onClick = function() setAllCollapsed("dashboard", true) end }),
         })
     end
-    dashChildren[#dashChildren + 1] = ui.scroll({ key = "scroll-dash", flexGrow = 1, gap = 4 }, dashboardView())
+    dashChildren[#dashChildren + 1] = ui.scroll({ key = "scroll-dash", flexGrow = 1, gap = hideCerts and 0 or 4 }, dashboardView())
     local pagesChildren = addView()
     pagesChildren[#pagesChildren + 1] = ui.scroll({ key = "scroll-pages", flexGrow = 1, gap = 8 }, pagesView())
     panel.render(ui.column({ flexGrow = 1, gap = 8, align = "stretch" }, {
@@ -489,6 +502,8 @@ end)
 
 function onOpen(_context)
     isOpen = true
+    local hf = dataFile("hide_certs.txt")
+    hideCerts = hf ~= nil and (noctalia.readFile(hf) or ""):match("^%s*1") ~= nil
     noctalia.state.set("kuma_status_seen", os.time())
     data = noctalia.state.get(DATA_KEY)
     local mode = noctalia.getConfig("groups_on_open")

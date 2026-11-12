@@ -144,6 +144,8 @@
     "tag_first": "First tag only",
     "tag_all": "All tags (duplicates)",
     "tag_flat": "All monitors, no groups",
+    "tip_hide_certs": "Hide the certificate lines and make the rows compact",
+    "tip_show_certs": "Show the certificate lines",
     "tip_tag_flat": "One list with every monitor, without groups. Click to go back to the groups.",
     "tip_mode_hierarchy": "Groups as in Kuma. Click to show one list without groups.",
     "tip_tag_first": "Each monitor appears once, under its first tag. Click to show it under every tag.",

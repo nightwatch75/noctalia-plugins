@@ -55,9 +55,10 @@ local function certLine(row)
 end
 
 -- onOpen(id): left click on the name. onMenu(row): right click, nil to disable.
-function R.monitorRow(row, onOpen, onMenu, onMute)
+-- compact: no certificate line and no padding.
+function R.monitorRow(row, onOpen, onMenu, onMute, compact)
     local id = row.id
-    local main = ui.row({ gap = 8, align = "center", paddingV = 2 }, {
+    local main = ui.row({ gap = 8, align = "center", paddingV = compact and 0 or 2 }, {
         ui.box({ key = "dot-" .. id, width = 10, height = 10, radius = 5, fill = (row.paused or row.muted) and R.EMPTY or (R.COLORS[row.status] or R.EMPTY) }),
         ui.button({
             key = "name-" .. id, text = row.name, variant = "ghost", contentAlign = "start", width = NAME_W,
@@ -72,7 +73,7 @@ function R.monitorRow(row, onOpen, onMenu, onMute)
         }) or ui.box({ width = 0 }),
     })
     local children = { main }
-    if row.certDays ~= nil and not row.paused then children[2] = certLine(row) end
+    if row.certDays ~= nil and not row.paused and not compact then children[2] = certLine(row) end
     return ui.column({ key = "row-" .. id, gap = 0, opacity = (row.paused or row.muted) and 0.55 or 1, tooltip = row.url }, children)
 end
 
