@@ -59,6 +59,9 @@ it.
   is down.
 - Click a monitor name to open it in Kuma; right click for **Open monitor in
   Kuma**, **Open monitored URL** and **Copy monitored URL**.
+- The view button (left of the filters) cycles the grouping. Kuma 2: first tag,
+  all tags, or **All monitors, no groups**. Kuma 3: groups as in Kuma, or no
+  groups. The choice is remembered.
 - Filter buttons: **all**, **not OK** (down or pending), **down**.
 - The eye on a row mutes the monitor on the widget: it is greyed out and
   ignored by the bar counts, group totals, toasts and certificate alerts. Kuma
@@ -82,7 +85,7 @@ The refresh button in the header asks for new data now.
 | Server | Groups |
 | --- | --- |
 | Kuma 3 with **Kuma 3 support** on | The real groups, nested ones as `Parent / Child`; paused monitors are grey |
-| Kuma 2 | One group per tag. A monitor appears once, under its first tag; the view button switches to **All tags (duplicates)** |
+| Kuma 2 | One group per tag. A monitor appears once, under its first tag; the view button also offers **All tags (duplicates)** |
 
 The history bar uses status page data for monitors on one of your pages. The
 others fill from the plugin's own polls (one cell per refresh, in memory), so

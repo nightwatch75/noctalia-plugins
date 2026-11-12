@@ -39,6 +39,15 @@ eq(s.up + s.down + s.pending, 0, "no counts")
 s = K.summarize(set(metric(9, "grp", 1, { type = "group" })))
 eq(s.color, "idle", "groups alone are idle"); eq(s.up, 0, "groups are not counted")
 
+-- test: flat_list_has_every_monitor_once_without_groups
+local fm = set(metric(1, "b", 1, { tags = { "x", "y" } }), metric(2, "a", 0, { tags = { "x" } }), metric(3, "c", 1))
+local fd = K.buildDashboard(fm, nil, {}, {}, { firstTagOnly = false })
+fd = K.flattenDashboard(fd, fm)
+eq(fd.flat, true, "flag"); eq(#fd.groups, 1, "one group"); eq(fd.groups[1].name, "", "no name")
+eq(list({ fd.groups[1].rows[1].name, fd.groups[1].rows[2].name, fd.groups[1].rows[3].name }), "a,b,c", "each once, by name")
+eq(#fd.groups[1].rows, 3, "no duplicates from several tags")
+eq(fd.groups[1].down, 1, "down counted")
+
 -- test: summarize_down_names_listed
 s = K.summarize(set(metric(1, "zeta", 0), metric(2, "alpha", 0), metric(3, "ok", 1)))
 eq(list(s.downNames), "alpha,zeta", "down names sorted")

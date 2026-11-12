@@ -461,6 +461,20 @@ local function makeGroup(id, name, rows, metrics)
     return g
 end
 
+-- One unnamed group with every monitor of the dashboard, once, by name.
+function K.flattenDashboard(dash, metrics)
+    local rows, seen = {}, {}
+    for _, g in ipairs(dash.groups) do
+        for _, r in ipairs(g.rows) do
+            if not seen[r.id] then
+                seen[r.id] = true
+                rows[#rows + 1] = r
+            end
+        end
+    end
+    return { mode = dash.mode, flat = true, groups = { makeGroup(nil, "", rows, metrics) } }
+end
+
 -- Groups for the Dashboard. With a Kuma 3 structure: the group monitors (nested
 -- ones named "Parent / Child"). Without: one group per tag, an unnamed one last.
 -- opts.firstTagOnly: a monitor only in its first tag. opts.groupTags: only these

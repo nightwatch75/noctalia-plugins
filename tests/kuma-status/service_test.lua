@@ -459,12 +459,22 @@ eq(h.data().tagMode, "all", "switched")
 eq(#h.data().dashboard.groups[2].rows, 2, "duplicates back: y holds both")
 eq(#h.calls, calls, "no new network call")
 
+-- test: flat_view_lists_every_monitor_in_one_group
+h = boot({}, multiTag)
+noctalia.state.set("kuma_status_request", { nonce = 11, action = "tag_mode", value = "flat" })
+eq(h.data().tagMode, "flat", "switched")
+eq(h.data().dashboard.flat, true, "flat dashboard")
+eq(#h.data().dashboard.groups, 1, "one group")
+eq(#h.data().dashboard.groups[1].rows, 2, "both monitors, once")
+
 -- test: tag_view_choice_is_remembered
 h = boot({}, multiTag)
 noctalia.state.set("kuma_status_request", { nonce = 3, action = "tag_mode", value = "all" })
 eq(h.files["/data/tag_mode.txt"], "all", "choice saved")
 h = boot({}, multiTag, { ["/data/tag_mode.txt"] = "all" })
 eq(h.data().tagMode, "all", "restored at start")
+h = boot({}, multiTag, { ["/data/tag_mode.txt"] = "flat" })
+eq(h.data().tagMode, "flat", "flat restored at start")
 h = boot({}, multiTag, { ["/data/tag_mode.txt"] = "junk" })
 eq(h.data().tagMode, "first", "unknown content falls back to the default")
 

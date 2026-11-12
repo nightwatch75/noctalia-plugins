@@ -203,8 +203,8 @@ local function dashboardView()
                 if match(row.muted and -1 or row.status) then rows[#rows + 1] = row end
             end
             if #rows > 0 then
-                children[#children + 1] = R.groupHeader(g, isCollapsed(key), toggleGroup)
-                if not isCollapsed(key) then
+                if not dash.flat then children[#children + 1] = R.groupHeader(g, isCollapsed(key), toggleGroup) end
+                if dash.flat or not isCollapsed(key) then
                     for _, row in ipairs(rows) do
                         children[#children + 1] = R.monitorRow(row, openMonitor, openRowMenu, muteMonitor)
                     end
@@ -419,19 +419,23 @@ function render()
     local stamp = data and data.ts and tr("panel.updated", { time = noctalia.formatTime("%H:%M", data.ts) }) or nil
     local dashChildren = {}
     if mode then
-        local lead
-        if mode == "hierarchy" then
-            lead = ui.label({ key = "mode-line", text = tr("panel.mode_hierarchy"), color = "on_surface_variant" })
+        -- the button shows the current view; Kuma 2: first tag, all tags, flat. Kuma 3: groups, flat
+        local view = data and data.tagMode or "first"
+        local hier = mode == "hierarchy"
+        local text, glyph, tip, nextView
+        if view == "flat" then
+            text, glyph, tip, nextView = tr("panel.tag_flat"), "list", tr("panel.tip_tag_flat"), "first"
+        elseif hier then
+            text, glyph, tip, nextView = tr("panel.mode_hierarchy"), "folders", tr("panel.tip_mode_hierarchy"), "flat"
+        elseif view == "all" then
+            text, glyph, tip, nextView = tr("panel.tag_all"), "tags", tr("panel.tip_tag_all"), "flat"
         else
-            -- the button shows the current view
-            local all = data and data.tagMode == "all"
-            lead = ui.button({
-                key = "btn-tag-mode", glyph = all and "tags" or "tag", variant = "ghost",
-                text = all and tr("panel.tag_all") or tr("panel.tag_first"),
-                tooltip = all and tr("panel.tip_tag_all") or tr("panel.tip_tag_first"),
-                onClick = function() sendRequest("tag_mode", all and "first" or "all") end,
-            })
+            text, glyph, tip, nextView = tr("panel.tag_first"), "tag", tr("panel.tip_tag_first"), "all"
         end
+        local lead = ui.button({
+            key = "btn-tag-mode", glyph = glyph, variant = "ghost", text = text, tooltip = tip,
+            onClick = function() sendRequest("tag_mode", nextView) end,
+        })
         local leftChildren = { lead }
         for _, chip in ipairs(filterChips()) do leftChildren[#leftChildren + 1] = chip end
         local left = ui.row({ gap = 4, align = "center", flexGrow = 1 }, leftChildren)

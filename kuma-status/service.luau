@@ -65,12 +65,13 @@ local function dataFile(name)
     return dir and (dir .. "/" .. name) or nil
 end
 
--- tag_mode.txt: "first" (monitor in its first tag) or "all"
+-- tag_mode.txt: "first" (monitor in its first tag), "all" or "flat" (no groups)
 local tagMode = "first"
 do
     local f = dataFile("tag_mode.txt")
     local saved = f and noctalia.readFile(f) or nil
-    if saved ~= nil and saved:match("^%s*all") then tagMode = "all" end
+    local word = saved ~= nil and saved:match("^%s*(%a+)") or nil
+    if word == "all" or word == "flat" then tagMode = word end
 end
 
 -- muted.txt: ids of monitors the user silenced on this widget, one per line.
@@ -255,7 +256,8 @@ function publish(cfg, metrics, structure, beatsById, pages, errors)
     last = { cfg, metrics, structure, beatsById, pages, errors }
     local dashboard = nil
     if metrics ~= nil then
-        dashboard = K.buildDashboard(metrics, structure, beatsById, buffer, { firstTagOnly = tagMode == "first", groupTags = cfg.groupTags, certLimits = cfg.certLimits })
+        dashboard = K.buildDashboard(metrics, structure, beatsById, buffer, { firstTagOnly = tagMode ~= "all", groupTags = cfg.groupTags, certLimits = cfg.certLimits })
+        if tagMode == "flat" then dashboard = K.flattenDashboard(dashboard, metrics) end
     end
     -- from the configured URLs, so a page that failed still flags clear text
     local plain = cfg.base ~= nil and cfg.base:sub(1, 7) == "http://"
@@ -539,7 +541,7 @@ noctalia.state.watch(REQUEST_KEY, function(req)
         saveMuted()
         noctalia.notify(tr("notify.pruned", { count = removed }), "")
         publish(table.unpack(last))
-    elseif req.action == "tag_mode" and (req.value == "first" or req.value == "all") then
+    elseif req.action == "tag_mode" and (req.value == "first" or req.value == "all" or req.value == "flat") then
         tagMode = req.value
         local f = dataFile("tag_mode.txt")
         if f then noctalia.writeFile(f, tagMode) end

@@ -165,7 +165,7 @@ P = boot()
 P.publish({ baseUrl = "https://k.example.test", dashboard = dash("tags", {}), mode = "tags" })
 eq(find(P.tree, "btn-tag-mode").props.text, "panel.tag_first", "tags: the toggle shows the current view")
 P.publish({ baseUrl = "https://k.example.test", dashboard = dash("hierarchy", {}), mode = "hierarchy" })
-eq(find(P.tree, "mode-line").props.text, "panel.mode_hierarchy", "hierarchy")
+eq(find(P.tree, "btn-tag-mode").props.text, "panel.mode_hierarchy", "hierarchy")
 
 -- test: open_monitor_runs_xdg_open_with_https_url
 P = boot()
@@ -306,12 +306,30 @@ eq(P.state["kuma_status_request"].action, "tag_mode", "action"); eq(P.state["kum
 P.publish({ baseUrl = "https://k.example.test", tagMode = "all", dashboard = dash("tags", {}) })
 eq(find(P.tree, "btn-tag-mode").props.text, "panel.tag_all", "shows the current view")
 find(P.tree, "btn-tag-mode").props.onClick()
-eq(P.state["kuma_status_request"].value, "first", "and back")
+eq(P.state["kuma_status_request"].value, "flat", "then the flat list")
+P.publish({ baseUrl = "https://k.example.test", tagMode = "flat", dashboard = dash("tags", {}) })
+eq(find(P.tree, "btn-tag-mode").props.text, "panel.tag_flat", "shows the flat view")
+find(P.tree, "btn-tag-mode").props.onClick()
+eq(P.state["kuma_status_request"].value, "first", "and back to grouped")
 
--- test: hierarchy_mode_has_no_tag_toggle
+-- test: hierarchy_mode_toggles_between_groups_and_flat
 P = boot()
 P.publish({ baseUrl = "https://k.example.test", dashboard = dash("hierarchy", {}), mode = "hierarchy" })
-eq(find(P.tree, "btn-tag-mode"), nil, "no toggle"); eq(find(P.tree, "mode-line").props.text, "panel.mode_hierarchy", "plain label")
+eq(find(P.tree, "btn-tag-mode").props.text, "panel.mode_hierarchy", "groups as in Kuma")
+find(P.tree, "btn-tag-mode").props.onClick()
+eq(P.state["kuma_status_request"].value, "flat", "to flat")
+P.publish({ baseUrl = "https://k.example.test", tagMode = "flat", dashboard = dash("hierarchy", {}), mode = "hierarchy" })
+eq(find(P.tree, "btn-tag-mode").props.text, "panel.tag_flat", "flat view")
+find(P.tree, "btn-tag-mode").props.onClick()
+eq(P.state["kuma_status_request"].value, "first", "back to groups")
+
+-- test: flat_dashboard_has_no_group_header
+P = boot()
+local fd = dash("tags", { group("", { row(1, "a", 1), row(2, "b", 1) }) })
+fd.flat = true
+P.publish({ baseUrl = "https://k.example.test", tagMode = "flat", dashboard = fd })
+eq(find(P.tree, "row-1") ~= nil and find(P.tree, "row-2") ~= nil, true, "rows listed")
+eq(find(P.tree, "gh-_none"), nil, "no header")
 
 -- test: groups_on_open_last_restores_collapsed_groups
 local FILE = "/data/collapsed_groups.txt"
