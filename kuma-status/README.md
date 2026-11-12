@@ -22,7 +22,7 @@ restarts a monitor.
 
 ## Requirements
 
-- noctalia with `plugin_api = 32`.
+- noctalia 5.4.1 or newer (`plugin_api = 43`).
 - Uptime Kuma 2.5 or newer. Kuma 3 (beta) adds the real group hierarchy.
 - An API key, created in Kuma under **Settings → API Keys**. On Kuma 3 also
   enable the **Prometheus API** (`/metrics`) and the API section

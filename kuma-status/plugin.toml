@@ -1,11 +1,11 @@
 id = "nightwatch75/kuma-status"
 name = "Kuma Status"
-version = "0.18.1"
-plugin_api = 32
+version = "0.18.2"
+plugin_api = 43
 author = "nightwatch75"
 license = "MIT"
 dependencies = ["xdg-open", "stat"]
-tags = ["bar", "panel", "monitoring"]
+tags = ["bar", "panel", "network"]
 icon = "heartbeat"
 description = "Uptime Kuma monitors on the bar: a glyph shows the overall state, a panel lists monitors and status pages."
 
@@ -40,6 +40,7 @@ default = ""
 [[setting]]
 key = "proxy_hosts"
 type = "string_list"
+default = []
 label_key = "settings.proxy_hosts.label"
 description_key = "settings.proxy_hosts.description"
 
@@ -78,6 +79,7 @@ max = 730
 [[setting]]
 key = "group_tags"
 type = "string_list"
+default = []
 label_key = "settings.group_tags.label"
 description_key = "settings.group_tags.description"
 

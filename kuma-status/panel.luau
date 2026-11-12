@@ -186,7 +186,7 @@ local function filterChips()
         local on = statusFilter == f.id
         chips[i] = ui.row({
             key = "flt-" .. f.id, align = "center", paddingH = 8, paddingV = 4, radius = 6, tooltip = tr(f.tip),
-            fill = on and "surface_variant" or "surface",
+            fill = on and "surface_container" or "surface",
             onClick = function() statusFilter = f.id; render() end,
         }, { ui.glyph({ name = f.glyph, size = 16, color = on and f.color or "on_surface_variant" }) })
     end

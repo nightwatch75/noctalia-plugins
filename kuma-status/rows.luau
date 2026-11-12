@@ -94,7 +94,7 @@ function R.groupHeader(group, collapsed, onToggle)
     end
     children[#children + 1] = ui.label({ text = group.up .. "/" .. group.total, color = "on_surface_variant" })
     children[#children + 1] = ui.label({ text = uptime, width = 56, textAlign = "end", color = "on_surface_variant" })
-    return ui.row({ key = "gh-" .. key, gap = 8, align = "center", paddingV = 4, fill = "surface_variant", radius = 6, paddingH = 8, onClick = function() onToggle(key) end }, children)
+    return ui.row({ key = "gh-" .. key, gap = 8, align = "center", paddingV = 4, fill = "surface_container", radius = 6, paddingH = 8, onClick = function() onToggle(key) end }, children)
 end
 
 return R
