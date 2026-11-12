@@ -136,8 +136,10 @@ If the file is readable by group or other, the panel warns: run `chmod 600`.
   Mute it with the eye, or delete its heartbeats and events in Kuma: then it
   disappears from `/metrics`. A monitor paused before Kuma started has no
   series and is not listed.
-- The muted list is `muted.txt` in the plugin data folder, one monitor id per
-  line.
+- The plugin keeps small text files in its data folder: `status_pages.txt`
+  (your status pages), `muted.txt` (muted monitor ids), `tag_mode.txt` (the
+  grouping), `hide_certs.txt`, `collapsed_groups.txt` and `last_tab.txt`. Delete
+  one to reset that choice.
 - Names from the server are cleaned of control characters and cut to 80
   characters. Monitored URLs are shown without `user:password@`, query and
   fragment.

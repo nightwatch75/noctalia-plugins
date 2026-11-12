@@ -3,7 +3,9 @@
 --
 -- Renders "kuma_status_data" (from service.luau). Writes only requests to the
 -- service ("kuma_status_request": refresh, tag_mode, mute, prune_muted; nonce
--- seeded from the clock) and the pages added here (pages_store.luau).
+-- seeded from the clock) and the pages added here (pages_store.luau). Its own
+-- choices (tab, collapsed groups and pages, hidden certificate lines) are small
+-- files in the plugin data folder.
 -- All tabs stay mounted; the inactive ones are hidden with `visible = false`.
 -- Collapsed groups drop their rows.
 -- A monitor name opens its Kuma page; right click opens a menu for the checked

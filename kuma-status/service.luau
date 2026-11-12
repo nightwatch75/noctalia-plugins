@@ -9,7 +9,7 @@
 --       summary.color is "offline" without /metrics. stale: Kuma did not answer
 --       and the values are those of the last answered cycle.
 --   reads "kuma_status_request" = { nonce, action, value? } with action
---       "refresh", "tag_mode" ("first"|"all"), "mute" (monitor id, toggles) or
+--       "refresh", "tag_mode" ("first"|"all"|"flat"), "mute" (monitor id, toggles) or
 --       "prune_muted"; a nonce already seen is ignored.
 --
 -- Sources per cycle (refresh_seconds):
