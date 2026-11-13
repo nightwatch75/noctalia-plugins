@@ -65,11 +65,6 @@ local htp = newHtp()
 
 local render
 
--- api 43 retired `surface_variant` for `surface_container`; the host still maps
--- the old name until 5.5.0 (with a warning). getColor (api 31) returns nil for
--- an unknown role, so older hosts keep the old name.
-local SURFACE = (noctalia.getColor ~= nil and noctalia.getColor("surface_container") ~= nil) and "surface_container" or "surface_variant"
-
 local function tr(k, subst)
     return noctalia.tr(k, subst)
 end
@@ -78,8 +73,7 @@ local function fail(detail)
     noctalia.notifyError(tr("title"), detail or tr("err_generic"))
 end
 
--- Idle clipboard wipe (plugin_api 35, `noctalia.idle`; absent on older hosts, so
--- the guard keeps the manifest at api 24). After a copy we arm one watch: once
+-- Idle clipboard wipe (`noctalia.idle`, plugin_api 35). After a copy we arm one watch: once
 -- the user has been idle for `clear_after_idle` seconds, a clipboard that still
 -- holds our secret is overwritten with a space (the host refuses an empty copy).
 local copiedText, idleWatch = nil, nil
@@ -95,7 +89,7 @@ end
 local function armIdleClear(text)
     disarmIdleClear()
     local seconds = tonumber(noctalia.getConfig("clear_after_idle")) or 0
-    if noctalia.idle == nil or seconds <= 0 then
+    if seconds <= 0 then
         return
     end
     copiedText = text
@@ -563,7 +557,7 @@ local function section(title, glyph, children, titleSize)
     for _, child in ipairs(children) do
         rows[#rows + 1] = child
     end
-    return ui.column({ gap = 6, fill = SURFACE, radius = 10, padding = 10 }, rows)
+    return ui.column({ gap = 6, fill = "surface_container", radius = 10, padding = 10 }, rows)
 end
 
 -- ── Tabs ────────────────────────────────────────────────────────────────────
@@ -1061,7 +1055,7 @@ local function jwtStatusBox(view)
     if #cols > 0 then
         children[#children + 1] = ui.row({ gap = 8 }, cols)
     end
-    return ui.column({ gap = 4, fill = SURFACE, radius = 10, padding = 10, border = view.status.role, borderWidth = 1 }, children)
+    return ui.column({ gap = 4, fill = "surface_container", radius = 10, padding = 10, border = view.status.role, borderWidth = 1 }, children)
 end
 
 -- The decoded token as one JSON document: { "header": {...}, "payload": {...} }.
