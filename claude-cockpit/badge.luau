@@ -1,7 +1,7 @@
 --!nonstrict
 -- Claude Cockpit — "needs you" badge (a [[layer]] entry, plugin_api 36).
 --
--- A small overlay pill in the top-right corner of the focused output showing how
+-- a small overlay pill in the top-right corner of every output showing how
 -- many Claude Code sessions wait for input, so it stays visible above
 -- fullscreen windows where the bar is hidden. service.luau owns it: it calls
 -- noctalia.layer.show("badge") when the waiting count goes above 0 and hide()

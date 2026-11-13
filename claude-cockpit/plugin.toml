@@ -121,7 +121,7 @@ layer = "overlay"
 anchors = ["top", "right"]
 margins = { top = 12, right = 12 }
 click_through = true
-output = "focused"
+output = "all"
 
 [[panel]]
 id = "panel"

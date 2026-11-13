@@ -63,7 +63,7 @@ Set `display_mode` to `classic` for the glyph and percentages only.
 ### Needs-you badge
 
 Turn on `waiting_badge` to get a red overlay badge (bell and count) in the top-right
-corner of the focused output, also above fullscreen windows. It counts the sessions that
+corner of every output, also above fullscreen windows. It counts the sessions that
 wait for you (an open question or permission prompt, not a finished turn) and disappears
 when none does. It ignores the pointer.
 
@@ -203,7 +203,7 @@ bottom.*
 | `terminal` | `string` | `""` | Terminal to resume a session in. Empty uses `$TERMINAL`, then the usual emulators. |
 | `editor_command` | `string` | `""` | Command to open a CLAUDE.md. Empty tries `code`, then `zed`. |
 | `display_mode` | `select` | `activity` | Widget mode: `activity` (dots, rings, percentages) or `classic` (glyph and percentages). |
-| `waiting_badge` | `bool` | `false` | Show a click-through overlay badge (top-right, focused output) with the number of sessions waiting for you, visible above fullscreen windows. Keeps the service polling live sessions every 2 s. |
+| `waiting_badge` | `bool` | `false` | Show a click-through overlay badge (top-right, every output) with the number of sessions waiting for you, visible above fullscreen windows. Keeps the service polling live sessions every 2 s. |
 | `glyph` | `glyph` | `robot` | Widget glyph. |
 | `usage_percent_display` | `select` | `both` | Windows the widget shows, in both modes: `session` (`sNN%`), `weekly` (`wNN%`), `both`, or `none`. |
 
