@@ -131,6 +131,10 @@
       "description": "How often to fetch usage data (minutes).",
       "label": "Usage refresh interval"
     },
+    "waiting_badge": {
+      "label": "Needs-you badge",
+      "description": "Show a red overlay badge with the number of sessions waiting for you, above fullscreen windows. Keeps polling live sessions every 2 seconds while on."
+    },
     "display_mode": {
       "label": "Display mode",
       "description": "Classic shows usage percentages. Activity shows one dot per live session (red needs you, accent working, grey idle) and fill rings for the session and weekly limits.",
