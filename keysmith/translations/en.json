@@ -55,6 +55,10 @@
       "label": "Copy on generate",
       "description": "Copy each new secret to the clipboard when you press Generate."
     },
+    "clear_after_idle": {
+      "label": "Clear clipboard when idle",
+      "description": "Seconds of inactivity after which a copied secret is wiped from the clipboard. 0 turns it off. Needs a newer noctalia."
+    },
     "glyph": {
       "label": "Glyph",
       "description": "Icon shown on the bar."
