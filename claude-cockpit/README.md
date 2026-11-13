@@ -13,7 +13,7 @@ CLAUDE.md files, and the installed skills and mods.
 | Field | Value |
 | --- | --- |
 | ID | `nightwatch75/claude-cockpit` |
-| Entries | Bar widget: `widget`; panel: `panel`; service: `service` |
+| Entries | Bar widget: `widget`; panel: `panel`; service: `service`; layer: `badge` |
 
 The headless `service` fetches usage and polls the live sessions. The
 widget and the Live and Usage tabs only show what it publishes.
