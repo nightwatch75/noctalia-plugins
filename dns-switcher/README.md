@@ -24,6 +24,7 @@ the v5 Luau plugin API.
 - **DNS lookup tester** at the bottom of the panel — resolve a name with `dig`/`nslookup` through
   the active provider, or through any other provider via its row menu, without switching to it.
   Use it to confirm a switch, or to check whether a provider blocks a domain before switching.
+  A copy button next to the answer puts the resolved IP addresses (one per line) on the clipboard.
 - **Rebindable gestures** — left click, right click and scroll are declared in the manifest
   (`[widget.actions]`), so any of them can be remapped from the bar's own gesture settings.
 - **Singleton service** — one engine regardless of how many bars/monitors show the widget; the
@@ -130,6 +131,7 @@ shared machines.
 
 ## Notes
 
+- On noctalia with plugin API 39 the switch confirmation is an OSD instead of a notification; with API 48 the active DNS is re-detected right after the machine resumes from sleep. Older versions skip both.
 - IPv4 DNS only, like the v4 plugin.
 - Targets the first active wifi/ethernet connection, falling back to the first active
   non-loopback one; a VPN's own DNS is not touched.
