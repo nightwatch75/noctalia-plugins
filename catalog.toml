@@ -264,8 +264,14 @@ author = "nightwatch75"
 license = "MIT"
 icon = "key"
 description = "Password, key, htpasswd and JWT tools: a bar glyph opens a tabbed generator and decoder panel."
-plugin_api = 24
+plugin_api = 43
 tags = ["bar", "panel", "utility"]
+
+[[plugin.release]]
+plugin_api = 24
+version = "0.2.0"
+updated_at = 1794590419
+rev = "37a6248686d5cfbc4aad0e680ff2a9ca6f4ffeb2"
 
 [[plugin]]
 id = "nightwatch75/kuma-status"
