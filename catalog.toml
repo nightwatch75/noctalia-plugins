@@ -11,15 +11,21 @@
 [[plugin]]
 id = "nightwatch75/dns-switcher"
 name = "DNS Switcher"
-version = "0.5.0"
-updated_at = 1794590419
+version = "0.5.1"
+updated_at = 1795595902
 added_at = 1783852430
 author = "nightwatch75"
 license = "MIT"
 icon = "world"
 description = "Switch the system DNS between popular providers, custom servers, or the ISP default (NetworkManager)."
-plugin_api = 42
+plugin_api = 48
 tags = ["bar", "panel", "service", "network", "privacy"]
+
+[[plugin.release]]
+plugin_api = 42
+version = "0.5.0"
+updated_at = 1794590419
+rev = "beb670b473939ea37f7fa10d8444cfc14fe97137"
 
 [[plugin.release]]
 plugin_api = 28
@@ -66,15 +72,21 @@ rev = "34b05dfa074239f4a410de8303be81995bca0b78"
 [[plugin]]
 id = "nightwatch75/file-search"
 name = "File Search"
-version = "0.6.0"
-updated_at = 1794233315
+version = "0.6.1"
+updated_at = 1795595902
 added_at = 1783852430
 author = "nightwatch75"
 license = "MIT"
 icon = "search"
 description = "Search files and folders as you type, fuzzy-matched with fzf; open results with the system MIME association."
-plugin_api = 33
+plugin_api = 56
 tags = ["bar", "launcher", "panel", "utility", "productivity"]
+
+[[plugin.release]]
+plugin_api = 33
+version = "0.6.0"
+updated_at = 1794233315
+rev = "6e862d98a2bed7ac2e07b301f66f2d9b663dc5e3"
 
 [[plugin.release]]
 plugin_api = 28
