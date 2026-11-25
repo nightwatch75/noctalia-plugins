@@ -121,15 +121,21 @@ rev = "b6e1ff3dc39c38ac042fb76f94af2e29c5c457d5"
 [[plugin]]
 id = "nightwatch75/nnotes"
 name = "nnotes"
-version = "0.0.6"
-updated_at = 1785224009
+version = "1.0.0"
+updated_at = 1795594497
 added_at = 1783852430
 author = "nightwatch75"
 license = "MIT"
 icon = "notes"
-description = "One-click scratchpad: floating notes panel with autosave."
-plugin_api = 15
+description = "Quick notes on the bar: pin, sort, search and autosave a folder of notes."
+plugin_api = 24
 tags = ["bar", "panel", "productivity"]
+
+[[plugin.release]]
+plugin_api = 15
+version = "0.0.6"
+updated_at = 1785224009
+rev = "af6fdc0331061a854ddcbd5062101da30dbf796f"
 
 [[plugin.release]]
 plugin_api = 3
