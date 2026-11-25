@@ -5,7 +5,7 @@
 
 local function eq(a, b, m) if a ~= b then error(m .. ": got " .. tostring(a) .. " want " .. tostring(b), 2) end end
 
-local files, decoded, runs, tools, ms, redraws, notes
+local files, decoded, runs, tools, ms, redraws, notes, hostOps
 local DIR = "/data"
 local HOME = "/home/u"
 
@@ -15,6 +15,7 @@ end })
 
 local function boot(home)
     files, decoded, runs, tools, notes = {}, {}, {}, { lsblk = false }, {}
+    hostOps = {}
     ms, redraws = 1e9, 0
     noctalia = {
         readFile = function(p) local f = files[p]; return f and f.text end,
@@ -41,6 +42,8 @@ local function boot(home)
             if v == nil then return nil, "bad json" end
             return v
         end },
+        openPath = function(p) table.insert(hostOps, { "open", p }) end,
+        revealPath = function(p) table.insert(hostOps, { "reveal", p }) end,
         runAsync = function(argv, cb, timeout)
             table.insert(runs, { argv = argv, cb = cb, timeout = timeout })
             return true
@@ -545,21 +548,19 @@ do
     local tree = space.render()
     click(rowOf(tree, "space-row-", "big.mkv"), "big.mkv row")
     eq(#notes, 0, "existing file: no notice")
-    eq(runs[#runs].argv[1], "gdbus", "reveal through gdbus")
-    assert(runs[#runs].argv[10]:find("file:///big.mkv", 1, true), "uri of the file")
-    local before = #runs
+    eq(hostOps[#hostOps][1], "reveal", "reveal through the host")
+    eq(hostOps[#hostOps][2], "/big.mkv", "path of the file")
+    local before = #hostOps
     click(rowOf(tree, "space-row-", "gone.mkv"), "missing row")
-    eq(#runs, before, "missing file: no reveal")
+    eq(#hostOps, before, "missing file: no reveal")
     eq(#notes, 1, "missing file: one notice")
     -- hostile name: file exists, argv stays one element, no crash
     space.setTypeFilter(3)
     tree = space.render()
     files["/" .. WEIRD .. ".mp3"] = { text = "x", mtime = 1 }
     click(rowOf(tree, "space-row-", (WEIRD .. ".mp3"):gsub("%c", " ")), "hostile row")
-    eq(runs[#runs].argv[1], "gdbus", "hostile name revealed")
-    local lit = runs[#runs].argv[10]
-    assert(lit:find("%0A", 1, true), "newline percent-encoded")
-    assert(not lit:sub(3, -3):find('[\n"<&]'), "no raw newline, quote or markup in the literal")
+    eq(hostOps[#hostOps][1], "reveal", "hostile name revealed")
+    eq(hostOps[#hostOps][2], "/" .. WEIRD .. ".mp3", "hostile path verbatim")
 end
 
 -- ── slice colours: never shared, legend == svg == list ───────────────────────
@@ -717,7 +718,7 @@ do
     -- the reveal still uses the full path
     files["/home/u/Videos/Recordings/02-vantaggi.mp4"] = { text = "x", mtime = 1 }
     click(find(space.render(), "space-row-1"), "stripped row")
-    assert(runs[#runs].argv[10]:find("file:///home/u/Videos/Recordings/02-vantaggi.mp4", 1, true), "reveal full path")
+    eq(hostOps[#hostOps][2], "/home/u/Videos/Recordings/02-vantaggi.mp4", "reveal full path")
 
     -- mixed folders: no shared folder, nothing stripped, no label
     tree = load({ { n = "a/c.mkv", s = 10, k = 1 }, { n = "b/a.mkv", s = 20, k = 1 } }).render()
@@ -893,7 +894,7 @@ do
     expectItems(menus[1], "big.mkv")
     local before = #runs
     click(rowOf(tree, "space-row-", "big.mkv"), "left click reveals")
-    eq(runs[#runs].argv[1], "gdbus", "left click still reveals")
+    eq(hostOps[#hostOps][1], "reveal", "left click still reveals")
     eq(#menus, 1, "left click: no menu")
     -- hostile name: verbatim context, flat header
     space.setTypeFilter(3)
@@ -907,14 +908,14 @@ do
     wire()
     files["/x y/<a&\"b\nc>"] = { text = "x", mtime = 1 }
     local hp = "/x y/<a&\"b\nc>"
-    runs, notes = {}, {}
+    runs, notes, hostOps = {}, {}, {}
     space.menuAction("open", hp)
-    eq(runs[1].argv[1], "xdg-open", "open argv")
-    eq(runs[1].argv[2], hp, "open path verbatim")
+    eq(hostOps[1][1], "open", "open call")
+    eq(hostOps[1][2], hp, "open path verbatim")
     eq(closed, 1, "open closes the panel")
     space.menuAction("reveal", hp)
-    eq(runs[2].argv[1], "gdbus", "reveal argv")
-    eq(runs[2].argv[10], '["file:///x%20y/%3Ca%26%22b%0Ac%3E"]', "reveal uri encoded")
+    eq(hostOps[2][1], "reveal", "reveal call")
+    eq(hostOps[2][2], hp, "reveal path verbatim")
     space.menuAction("copy_path", hp)
     eq(copied[1][1], hp, "copy_path exact")
     eq(copied[1][2], "text/plain", "copy_path mime")

@@ -2,7 +2,7 @@
 # The bar glyph toggles a search panel: the search folder is indexed with
 # `find` (honoring the excluded directories), every keystroke is matched
 # through `fzf --filter`, and picking a result opens it with the system
-# MIME association (xdg-open). Right-click a result for a context menu with
+# MIME association (noctalia.openPath). Right-click a result for a context menu with
 # open, reveal in the file manager, copy path and copy name. The panel's disk
 # button widens the search to the mounted USB/removable volumes, detected
 # with `lsblk`. The globe button widens the search folder to the whole system
@@ -14,24 +14,24 @@
 
 id = "nightwatch75/file-search"
 name = "File Search"
-version = "0.6.0"
+version = "0.6.1"
+# 56 for noctalia.openPath / revealPath (open and reveal-in-file-manager are
+# host calls, no xdg-open/gdbus spawn). The rest of the floor, all below it:
 # 33 for `revealKey` on ui.scroll: the result list follows the keyboard
 # selection. Also 28 for panel.openContextMenu, a result row's right-click
 # menu; 22 for relative luau imports — the three entries share shared.luau,
 # which owns the index fingerprint they all have to agree on — and 24 for
 # argv process execution: the usage chart spawns `du` with the user's own
-# exclusion patterns as arguments, xdg-open takes a path straight from the
-# index and the reveal call carries a file name inside a GVariant literal,
-# and an argv is exec'd directly, so no shell ever parses any of them.
-plugin_api = 33
+# exclusion patterns as arguments; an argv is exec'd directly, so no shell
+# ever parses them.
+plugin_api = 56
 author = "nightwatch75"
 license = "MIT"
-# The exact commands the plugin spawns (fzf, lsblk, gdbus, ncdu and jq aside,
-# findutils + coreutils + xdg-utils on any Linux desktop). ncdu and jq only
+# The exact commands the plugin spawns (fzf, lsblk, ncdu and jq aside,
+# findutils + coreutils on any Linux desktop). ncdu and jq only
 # run for the Space tab. lsblk only runs while the search
-# scope includes the external disks, gdbus only on a reveal-in-file-manager
-# click, and that one falls back to xdg-open when it is missing.
-dependencies = ["fzf", "find", "lsblk", "gdbus", "mktemp", "mv", "wc", "head", "rm", "date", "xdg-open", "du", "ncdu", "jq", "nice"]
+# scope includes the external disks.
+dependencies = ["fzf", "find", "lsblk", "mktemp", "mv", "wc", "head", "rm", "date", "du", "ncdu", "jq", "nice"]
 tags = ["bar", "launcher", "panel", "utility", "productivity"]
 icon = "search"
 description = "Search files and folders as you type, fuzzy-matched with fzf; open results with the system MIME association."

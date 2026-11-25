@@ -127,44 +127,18 @@ function shared.formatBytes(n)
     return string.format("%.1f %s", value, units[index])
 end
 
--- Open a path with the system MIME association.
+-- Open a path with the system MIME association (host call, API 56). The host
+-- raises on an empty path, so refuse it here.
 function shared.openPath(path)
-    noctalia.runAsync({ "xdg-open", path })
-end
-
--- file:// URI for a local path; every byte outside the unreserved set is percent-encoded.
-local function fileUri(path)
-    return "file://" .. (path:gsub("[^%w%-%._~/]", function(byte)
-        return string.format("%%%02X", string.byte(byte))
-    end))
-end
-
--- Show the entry selected in its containing folder (FileManager1.ShowItems);
--- falls back to opening the containing folder.
-function shared.revealPath(path)
-    local parent = path:match("^(.*)/[^/]+$")
-    if parent == nil or parent == "" then
-        parent = "/"
+    if path ~= "" then
+        noctalia.openPath(path)
     end
-    local ok = noctalia.runAsync({
-        "gdbus",
-        "call",
-        "--session",
-        "--dest",
-        "org.freedesktop.FileManager1",
-        "--object-path",
-        "/org/freedesktop/FileManager1",
-        "--method",
-        "org.freedesktop.FileManager1.ShowItems",
-        '["' .. fileUri(path) .. '"]',
-        "",
-    }, function(result)
-        if result.exitCode ~= 0 or result.timedOut then
-            shared.openPath(parent)
-        end
-    end, 5000)
-    if not ok then
-        shared.openPath(parent)
+end
+
+-- Show the entry selected in its containing folder; the host falls back to opening it.
+function shared.revealPath(path)
+    if path ~= "" then
+        noctalia.revealPath(path)
     end
 end
 

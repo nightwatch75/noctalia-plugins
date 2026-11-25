@@ -3,7 +3,7 @@
 -- keyboard flow of the noctalia launcher (type, arrows, Enter).
 --
 -- `/fs <text>` fuzzy-matches over the index file the panel builds (built here
--- on demand when missing). Activating a result opens it with xdg-open.
+-- on demand when missing). Activating a result opens it with noctalia.openPath.
 -- An empty query offers rows that cycle the scope and rebuild the index.
 -- The index, its fingerprint and the helpers live in shared.luau.
 --

@@ -4,7 +4,7 @@ A [noctalia](https://github.com/noctalia-dev/noctalia) v5 bar plugin: fuzzy
 search files and folders as you type, matched with
 [fzf](https://github.com/junegunn/fzf). Click the bar glyph to open a search
 panel; picking a result opens it with the system MIME association
-(`xdg-open`) — directories open in the file manager. A `/fs` launcher entry
+(`noctalia.openPath`) — directories open in the file manager. A `/fs` launcher entry
 gives the same search with native keyboard navigation. The panel can widen
 the search to folders you add and to mounted USB/removable disks, and show a
 disk-usage donut for the search folder. A second panel tab, **Space**, browses disk usage with
@@ -200,7 +200,7 @@ open / show in file manager / copy path / copy name.
 | Key       | Action                                   |
 |-----------|--------------------------------------------|
 | ↑ / ↓     | Move through the results                  |
-| `Enter`   | Open the selected result (MIME/`xdg-open`) |
+| `Enter`   | Open the selected result (MIME association) |
 
 An empty `/fs` query also offers *Rebuild search index* and the USB disks
 toggle; the index is shared with the panel. *Rebuild search index* walks the
@@ -236,16 +236,15 @@ results whenever the index is out of date.
 
 ## Requirements
 
-- noctalia with `plugin_api = 33` (the release after v5.2.1 that adds
-  `revealKey` on `ui.scroll`, which keeps the keyboard selection in view; an
-  older shell keeps being served the last version it can load) — also for
-  the row context menu, relative Luau imports (the three entries share
-  `shared.luau`) and direct argv process execution, so `du`, `xdg-open` and
-  the reveal call take their arguments with no shell parsing them
+- noctalia providing `plugin_api = 56` (`noctalia.openPath` and
+  `noctalia.revealPath`, which open a result and show it in the file manager
+  with no helper command). An older shell keeps being served the last
+  version it can load. Earlier floors still apply: `revealKey` on
+  `ui.scroll` (33), the row context menu (28), relative Luau imports (22)
+  and direct argv process execution for `du` (24)
 - [`fzf`](https://github.com/junegunn/fzf) — the fuzzy matcher. 0.36 or newer
   for path-aware ranking; older builds work with fzf's default ranking
 - `find` (GNU findutils) — walks the roots into the index
-- `xdg-open` (xdg-utils) — opens results with the MIME association
 - `mktemp`, `mv`, `wc`, `head`, `rm`, `date`, `du` — GNU coreutils, standard
   on any Linux desktop. Missing `du`, the usage chart says so; everything
   else still works
@@ -258,9 +257,6 @@ results whenever the index is out of date.
 - `lsblk` (util-linux) — lists mounted USB/removable volumes, only run when
   USB disks are on. Missing, it falls back to `/proc/mounts` and the
   udisks2 layout (`/run/media/<user>/…`, `/media/…`)
-- `gdbus` (glib2) — reveals a result in the file manager. Missing, or with no
-  file manager implementing `FileManager1`, *Show in file manager* opens the
-  containing folder instead
 
 ## Install
 

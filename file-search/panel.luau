@@ -3,7 +3,7 @@
 --
 -- Walks the active roots with `find` into a cache file, then runs
 -- `fzf --filter=<query>` over it on every keystroke. A click or Enter opens the
--- result with xdg-open; right-click raises a context menu (open, reveal, copy
+-- result with noctalia.openPath; right-click raises a context menu (open, reveal, copy
 -- path, copy name). Up/Down move the selection. Tabs: Search (this file) and
 -- Space (space.luau); the usage donut comes from usage.luau.
 --
