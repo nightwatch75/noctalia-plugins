@@ -1,13 +1,7 @@
 --!nonstrict
--- nnotes — bar widget that toggles the nnotes editor panel.
---
--- The panel (panel.luau) publishes its open state on the shared
--- "nnotes_open" state key; the glyph lights up while it is open.
---
--- Click mapping:
---   Left click   — open/close the note panel
---   Right click  — open the notes folder in the file manager
---   Middle click — copy the notes file path to the clipboard
+-- nnotes — bar widget. Left: toggle the panel; right: open the notes folder;
+-- middle: copy the folder path. The glyph lights up while the panel's
+-- "nnotes_open" state is true.
 
 local PANEL_ID = "nightwatch75/nnotes:panel"
 
@@ -20,30 +14,22 @@ end
 local function notesFolder()
     local dir = noctalia.getConfig("notes_folder")
     if dir == nil or dir == "" then
-        dir = (noctalia.getenv("HOME") or "/tmp") .. "/Notes"
+        dir = (noctalia.getenv("HOME") or "/tmp") .. "/Documents/Nnotes"
     else
         dir = noctalia.expandPath(dir)
     end
     return (dir:gsub("/+$", ""))
 end
 
-local function notesFile()
-    local name = noctalia.getConfig("file_name")
-    if name == nil or name == "" then
-        name = "notes.txt"
-    end
-    return notesFolder() .. "/" .. name
-end
-
 local function render()
     barWidget.setGlyph(noctalia.getConfig("glyph"))
-    local file = notesFile()
+    local folder = notesFolder()
     if open then
-        barWidget.setGlyphColor("primary")
-        barWidget.setTooltip(noctalia.tr("tooltip_open", { path = file }))
+        barWidget.setGlyphColor("#38bdf8")
+        barWidget.setTooltip(noctalia.tr("tooltip_open", { path = folder }))
     else
         barWidget.setGlyphColor("on_surface")
-        barWidget.setTooltip(noctalia.tr("tooltip_closed", { path = file }))
+        barWidget.setTooltip(noctalia.tr("tooltip_closed", { path = folder }))
     end
 end
 
@@ -52,7 +38,7 @@ noctalia.state.watch("nnotes_open", function(value)
     render()
 end)
 
--- Periodic re-render keeps the glyph and tooltip in sync with settings changes.
+-- picks up settings changes
 function update()
     render()
 end
@@ -66,7 +52,7 @@ function onRightClick()
 end
 
 function onMiddleClick()
-    noctalia.copyToClipboard(notesFile(), "text/plain")
+    noctalia.copyToClipboard(notesFolder(), "text/plain")
     noctalia.notify(noctalia.tr("title"), noctalia.tr("copied_path"))
 end
 

@@ -1,33 +1,46 @@
 {
-  "title": "nnotes",
-  "tooltip_open": "Notes open — {path}\nClick to close (autosaved)",
-  "tooltip_closed": "Notes — {path}\nClick to open · right-click: folder · middle-click: copy path",
-  "copied_path": "Notes path copied to clipboard",
-  "tip_folder": "Open the notes folder",
-  "tip_copy": "Copy the notes file path",
-  "tip_settings": "Plugin settings",
-  "tip_close": "Close",
-  "editor_placeholder": "Type your notes…",
-  "editing": "Editing…",
-  "saved": "Saved",
+  "cancel": "Cancel",
+  "copied_path": "Notes folder path copied to clipboard",
   "counts": "{words} words · {chars} chars",
+  "delete_confirm": "Delete",
+  "editing": "Editing…",
+  "editor_placeholder": "Type your notes…",
+  "name_placeholder": "Note name",
+  "name_taken": "A note with that name already exists",
+  "no_notes": "No notes found",
   "save_failed": "Could not save the notes file",
+  "saved": "Saved",
+  "search_placeholder": "Search…",
   "settings": {
-    "notes_folder": {
-      "label": "Notes folder",
-      "description": "Where the notes file lives. Defaults to ~/Notes when empty."
-    },
-    "file_name": {
-      "label": "File name",
-      "description": "Single text file the panel edits."
-    },
     "autosave_seconds": {
-      "label": "Autosave (seconds)",
-      "description": "Idle seconds before unsaved changes are written. 0 saves only on close / Ctrl+Enter."
+      "description": "Idle seconds before unsaved changes are written. 0 saves only on close, note switch and Ctrl+Enter.",
+      "label": "Autosave (seconds)"
     },
     "glyph": {
-      "label": "Glyph",
-      "description": "Icon shown on the bar."
+      "description": "Icon shown on the bar.",
+      "label": "Glyph"
+    },
+    "notes_folder": {
+      "description": "Folder holding one .md or .txt file per note. Defaults to ~/Documents/Nnotes when empty.",
+      "label": "Notes folder"
     }
-  }
+  },
+  "sort_date": "Newest first",
+  "sort_manual": "Manual order",
+  "sort_name_az": "Name A–Z",
+  "sort_name_za": "Name Z–A",
+  "tip_close": "Close",
+  "tip_delete": "Delete this note",
+  "tip_delete_pinned": "Unpin the note to delete it",
+  "tip_folder": "Open the notes folder",
+  "tip_grip": "Drag to reorder (manual order)",
+  "tip_new": "New note",
+  "tip_pin": "Pin on top",
+  "tip_save": "Save now",
+  "tip_settings": "Plugin settings",
+  "tip_sort": "Change sort order",
+  "tip_unpin": "Unpin",
+  "title": "nnotes",
+  "tooltip_closed": "Notes — {path}\nClick to open · right-click: folder · middle-click: copy path",
+  "tooltip_open": "Notes open — {path}\nClick to close (autosaved)"
 }

@@ -1,8 +1,9 @@
 # nnotes
 
 A [noctalia](https://github.com/noctalia-dev/noctalia) bar plugin: a one-click scratchpad.
-Click the bar glyph to toggle a floating editor panel on a single text file,
-with autosave. The glyph lights up while the panel is open.
+Click the bar glyph to toggle a floating panel: a notes list on the left, an
+editor on the right. Every note is one `.md` or `.txt` file in a folder, saved
+automatically. The glyph lights up while the panel is open.
 
 > **Note:** this plugin was created as a stopgap while waiting for an official
 > notes plugin, which has since been released by the Noctalia developers and is
@@ -29,21 +30,19 @@ noctalia msg panel-toggle nightwatch75/nnotes:panel
 |--------------|-----------------------------------------------|
 | Left click   | Open/close the notes panel                    |
 | Right click  | Open the notes folder in the file manager     |
-| Middle click | Copy the notes file path to the clipboard     |
+| Middle click | Copy the notes folder path to the clipboard   |
 
-Every bar widget has a built-in middle-click binding that opens its settings,
-which would otherwise swallow this action. This widget frees middle click in
-its manifest (`middle = "none"`), so the panel's ⚙ button is the settings
-route instead.
+Middle click is freed in the manifest (`middle = "none"`); settings open from
+the panel's ⚙ button.
 
 | Key          | Action                                    |
 |--------------|-------------------------------------------|
 | `Ctrl+Enter` | Save now                                  |
 | `Esc`        | Close the panel (noctalia default; saves) |
 
-The panel header carries folder, copy-path, ⚙ and close buttons. The ⚙ button
-opens this plugin's page in *Settings → Plugins*. The same page opens from the
-command line, so it can be bound in your compositor too:
+The editor header has the note name (Enter renames), save, delete, folder, ⚙
+and close buttons. The ⚙ button opens this plugin's settings page, also
+reachable from the command line:
 
 ```sh
 noctalia msg settings-open-plugin nightwatch75/nnotes
@@ -51,6 +50,20 @@ noctalia msg settings-open-plugin nightwatch75/nnotes
 
 ## Features
 
+- The list shows the notes folder. **+** starts a new note; it is created on
+  the first text you type and lands at the top.
+- The sort button under the search box cycles manual order, name A–Z,
+  name Z–A and newest first. In manual order, drag the grip (≡) of a row to
+  reorder. Sort mode and order are saved in `.nnotes.json` inside the notes
+  folder. Pinned notes always stay on top.
+- The pin button keeps a note at the top and disables its delete button until
+  you unpin it.
+- The save button writes the text now and applies a name you typed in the
+  title field (Enter does the same for the name).
+- The search box filters by file name and, when `grep` is installed, by file
+  content.
+- Delete asks for a second click before it removes the file.
+- Switching note, closing the panel and `Ctrl+Enter` all save first.
 - The panel footer shows a live word/character count and a saved/editing
   status.
 - Panel placement (attached/floating), position and open-near-click are the
@@ -60,18 +73,17 @@ noctalia msg settings-open-plugin nightwatch75/nnotes
 
 | Setting | Type | Default | Description |
 | --- | --- | --- | --- |
-| `notes_folder` | `folder` | *(empty)* | Where the notes file lives. Empty = `~/Notes`. |
-| `file_name` | `string` | `notes.txt` | Single text file the panel edits. |
-| `autosave_seconds` | `int` | `5` | Idle seconds before unsaved changes are written (0–300). `0` saves only on close / `Ctrl+Enter`. |
+| `notes_folder` | `folder` | *(empty)* | Folder with one file per note. Empty = `~/Documents/Nnotes`. |
+| `autosave_seconds` | `int` | `5` | Idle seconds before unsaved changes are written (0–300). `0` saves only on close, note switch and `Ctrl+Enter`. |
 | `glyph` (widget) | `glyph` | `notes` | Icon shown on the bar. |
 
 ## Requirements
 
-- noctalia v5.0.0-beta.6 or newer — the first tagged release that accepts
-  `plugin_api = 15` (`noctalia.openSettings()`, the panel's ⚙ button; the
-  manifest gesture default that frees middle click needs 14)
+- noctalia with plugin API 24 or newer (noctalia v5.0.0-beta.9 or newer)
 - `xdg-open` (`xdg-utils`) — opens the notes folder (right-click on the bar
   widget, folder button in the panel)
+- `grep` — content search in the panel (optional; without it search matches
+  file names only)
 
 ## Install
 
