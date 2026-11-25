@@ -131,6 +131,7 @@ shared machines.
 
 ## Notes
 
+- The service re-detects the DNS state right after the machine wakes from suspend (plugin API 48).
 - The switch confirmation is an OSD (plugin API 39) instead of a notification; older hosts get the notification.
 - IPv4 DNS only, like the v4 plugin.
 - Targets the first active wifi/ethernet connection, falling back to the first active

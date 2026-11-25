@@ -614,6 +614,13 @@ function onConfigChanged()
     pollNow()
 end
 
+-- Resume from suspend: the network may have changed while asleep.
+function onResume()
+    if not nmcliMissing then
+        pollNow()
+    end
+end
+
 function update()
     if nmcliMissing then
         return
